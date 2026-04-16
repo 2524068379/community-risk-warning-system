@@ -1,11 +1,3 @@
-declare global {
-  interface Window {
-    BMapGL: any;
-    BMAP_NORMAL_MAP: any;
-    BMAP_SATELLITE_MAP: any;
-  }
-}
-
 let baiduMapLoadingPromise: Promise<any> | null = null;
 
 export async function loadBaiduMapSdk(ak: string) {

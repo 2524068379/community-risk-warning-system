@@ -53,7 +53,7 @@ export function LiveVideoPlayer({ url, type = 'flv', posterText }: LiveVideoPlay
         playerRef.current = player;
         player.attachMediaElement(video);
         player.load();
-        player.play().catch(() => undefined);
+        Promise.resolve(player.play()).catch(() => undefined);
         setStatus('playing');
       } catch (playerError) {
         setError(playerError instanceof Error ? playerError.message : '视频播放器初始化失败');
