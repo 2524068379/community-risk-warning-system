@@ -1,0 +1,88 @@
+export type RiskLevel = 'low' | 'medium' | 'high' | 'offline';
+export type EventStatus = 'pending' | 'processing' | 'done';
+export type StreamType = 'flv' | 'mpegts' | 'hls' | 'mp4';
+
+export interface CameraPoint {
+  id: string;
+  name: string;
+  area: string;
+  riskScore: number;
+  level: RiskLevel;
+  status: 'online' | 'offline';
+  todayEvents: number;
+  lastAlertTime: string;
+  coordinates: [number, number];
+  mapPoint?: {
+    lng: number;
+    lat: number;
+  };
+  streamCover: string;
+  streamUrl?: string;
+  streamType?: StreamType;
+  scene: string;
+}
+
+export interface RiskBreakdown {
+  label: string;
+  value: number;
+}
+
+export interface TrendPoint {
+  time: string;
+  value: number;
+}
+
+export interface VlmAnalysis {
+  riskScore: number;
+  level: 'A' | 'B' | 'C';
+  hasLeash?: boolean;
+  hasBark?: boolean;
+  hasMuzzle?: boolean;
+  hasRisk: boolean;
+  summary: string;
+  confidence: number;
+  evidenceTimeline: string[];
+  breakdown: RiskBreakdown[];
+  trend: TrendPoint[];
+}
+
+export interface RiskEvent {
+  id: string;
+  title: string;
+  cameraId: string;
+  cameraName: string;
+  area: string;
+  eventType: string;
+  riskScore: number;
+  level: 'A' | 'B' | 'C';
+  status: EventStatus;
+  occurredAt: string;
+  summary: string;
+  suggestion: string;
+  snapshot: string;
+  tags: string[];
+  analysis: VlmAnalysis;
+}
+
+export interface DashboardMetric {
+  label: string;
+  value: string | number;
+  extra?: string;
+}
+
+export interface ChatMessageContentText {
+  type: 'text';
+  text: string;
+}
+
+export interface ChatMessageContentImageUrl {
+  type: 'image_url';
+  image_url: {
+    url: string;
+  };
+}
+
+export interface OpenAICompatibleMessage {
+  role: 'system' | 'user' | 'assistant';
+  content: string | (ChatMessageContentText | ChatMessageContentImageUrl)[];
+}
