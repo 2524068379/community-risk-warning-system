@@ -9,7 +9,7 @@ interface VlmAnalysisPanelProps {
 
 export function VlmAnalysisPanel({ analysis, compact }: VlmAnalysisPanelProps) {
   return (
-    <div className="vlm-panel">
+    <div className={`vlm-panel ${compact ? 'compact' : ''}`}>
       <div className="vlm-header">
         <div>
           <div className="vlm-eyebrow">视觉语言模型分析</div>
@@ -37,28 +37,34 @@ export function VlmAnalysisPanel({ analysis, compact }: VlmAnalysisPanelProps) {
           />
         </div>
 
-        <div className="vlm-list-box">
-          <div className="analysis-row">
+        <div className="vlm-insight-grid">
+          <div className="vlm-stat-tile">
             <span>是否存在风险</span>
             <strong>{analysis.hasRisk ? '是' : '否'}</strong>
           </div>
-          <div className="analysis-row">
+          <div className="vlm-stat-tile">
             <span>置信度</span>
             <strong>{Math.round(analysis.confidence * 100)}%</strong>
           </div>
-          <div className="analysis-row">
+          <div className="vlm-stat-tile">
             <span>牵引装置</span>
-            <strong>{typeof analysis.hasLeash === 'boolean' ? (analysis.hasLeash ? '是' : '否') : '待分析'}</strong>
+            <strong>
+              {typeof analysis.hasLeash === 'boolean' ? (analysis.hasLeash ? '是' : '否') : '待分析'}
+            </strong>
           </div>
-          <div className="analysis-row">
+          <div className="vlm-stat-tile">
             <span>异常音频</span>
-            <strong>{typeof analysis.hasBark === 'boolean' ? (analysis.hasBark ? '是' : '否') : '待接入'}</strong>
+            <strong>
+              {typeof analysis.hasBark === 'boolean' ? (analysis.hasBark ? '是' : '否') : '待接入'}
+            </strong>
           </div>
-          <div className="analysis-row">
+          <div className="vlm-stat-tile">
             <span>附加防护</span>
-            <strong>{typeof analysis.hasMuzzle === 'boolean' ? (analysis.hasMuzzle ? '是' : '否') : '待接入'}</strong>
+            <strong>
+              {typeof analysis.hasMuzzle === 'boolean' ? (analysis.hasMuzzle ? '是' : '否') : '待接入'}
+            </strong>
           </div>
-          <div className="analysis-row full-row">
+          <div className="vlm-summary-box">
             <span>模型摘要</span>
             <p>{analysis.summary}</p>
           </div>

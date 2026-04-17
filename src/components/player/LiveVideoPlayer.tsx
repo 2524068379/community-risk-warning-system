@@ -105,13 +105,14 @@ export function LiveVideoPlayer({ url, type = 'flv', posterText }: LiveVideoPlay
 
       <div className="live-player-stage">
         {url ? (
-          <video ref={videoRef} controls muted playsInline className="live-video" />
+          <video ref={videoRef} muted playsInline className="live-video" />
         ) : (
           <Empty
             image={Empty.PRESENTED_IMAGE_SIMPLE}
             description={posterText || '未配置实时视频流地址'}
           />
         )}
+        <div className="live-stage-overlay" />
       </div>
     </div>
   );

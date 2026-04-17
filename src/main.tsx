@@ -15,7 +15,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
         token: {
           colorPrimary: '#2f7bff',
           borderRadius: 14,
-          fontFamily: 'Inter, PingFang SC, Microsoft YaHei, sans-serif'
+          fontFamily: 'Bahnschrift, DIN Alternate, PingFang SC, Microsoft YaHei, sans-serif'
         }
       }}
     >

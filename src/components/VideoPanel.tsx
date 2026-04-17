@@ -37,6 +37,25 @@ export function VideoPanel({ camera, subtitle }: VideoPanelProps) {
           <span>重点区域</span>
         </div>
       </div>
+
+      <div className="video-info-strip">
+        <div className="video-info-pill">
+          <span>所属分区</span>
+          <strong>{camera.area}</strong>
+        </div>
+        <div className="video-info-pill">
+          <span>场景类型</span>
+          <strong>{camera.scene}</strong>
+        </div>
+        <div className="video-info-pill">
+          <span>今日事件</span>
+          <strong>{camera.todayEvents}</strong>
+        </div>
+        <div className="video-info-pill">
+          <span>最近告警</span>
+          <strong>{camera.lastAlertTime.slice(11)}</strong>
+        </div>
+      </div>
     </div>
   );
 }

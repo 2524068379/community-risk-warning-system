@@ -1,4 +1,4 @@
-import { Alert, Button, Input, Segmented, Space, Tag } from 'antd';
+import { Alert, Button, Input, Segmented, Tag } from 'antd';
 import { SearchOutlined } from '@ant-design/icons';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { CameraPoint } from '@/types';
@@ -53,7 +53,6 @@ export function CameraMapPanel({ cameras, activeCameraId, onSelect }: CameraMapP
         const map = new BMapGL.Map(mapRef.current);
         const point = new BMapGL.Point(mapCenterLng, mapCenterLat);
         map.centerAndZoom(point, mapZoom);
-        map.enableScrollWheelZoom(true);
         map.addControl(new BMapGL.ScaleControl());
         map.addControl(new BMapGL.ZoomControl());
         if (mapStyleId) {
@@ -175,9 +174,13 @@ export function CameraMapPanel({ cameras, activeCameraId, onSelect }: CameraMapP
       </div>
 
       <div className="map-tags-row">
-        <Tag color="success" style={{ margin: 0 }}>百度地图 SDK</Tag>
+        <Tag color="success" style={{ margin: 0 }}>
+          百度地图 SDK
+        </Tag>
         <Tag style={{ margin: 0 }}>点位数：{filteredCameras.length}</Tag>
-        <Tag color="processing" style={{ margin: 0 }}>当前选中：{activeCameraId}</Tag>
+        <Tag color="processing" style={{ margin: 0 }}>
+          当前选中：{activeCameraId}
+        </Tag>
       </div>
 
       {mapError ? <Alert type="warning" showIcon message="地图配置提示" description={mapError} /> : null}
