@@ -6,12 +6,21 @@ import { LiveVideoPlayer } from '@/components/player/LiveVideoPlayer';
 interface VideoPanelProps {
   camera: CameraPoint;
   subtitle?: string;
+  density?: 'default' | 'compact';
   showInfoStrip?: boolean;
 }
 
-export function VideoPanel({ camera, subtitle, showInfoStrip = true }: VideoPanelProps) {
+export function VideoPanel({
+  camera,
+  subtitle,
+  density = 'default',
+  showInfoStrip
+}: VideoPanelProps) {
+  const isCompact = density === 'compact';
+  const shouldShowInfoStrip = showInfoStrip ?? !isCompact;
+
   return (
-    <div className={`video-panel ${showInfoStrip ? '' : 'condensed'}`}>
+    <div className={`video-panel ${isCompact ? 'compact' : ''} ${shouldShowInfoStrip ? '' : 'condensed'}`}>
       <div className="video-toolbar">
         <div>
           <div className="video-title">{camera.name}</div>
@@ -39,7 +48,7 @@ export function VideoPanel({ camera, subtitle, showInfoStrip = true }: VideoPane
         </div>
       </div>
 
-      {showInfoStrip ? (
+      {shouldShowInfoStrip ? (
         <div className="video-info-strip">
           <div className="video-info-pill">
             <span>所属分区</span>

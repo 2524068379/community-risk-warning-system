@@ -9,6 +9,7 @@ interface CameraMapPanelProps {
   cameras: CameraPoint[];
   activeCameraId: string;
   onSelect: (cameraId: string) => void;
+  mode?: 'interactive' | 'display';
 }
 
 const mapAk = (import.meta.env.VITE_BAIDU_MAP_AK || '').trim();
@@ -67,7 +68,12 @@ function waitForMapContainerReady(element: HTMLDivElement) {
   });
 }
 
-export function CameraMapPanel({ cameras, activeCameraId, onSelect }: CameraMapPanelProps) {
+export function CameraMapPanel({
+  cameras,
+  activeCameraId,
+  onSelect,
+  mode = 'interactive'
+}: CameraMapPanelProps) {
   const mapRef = useRef<HTMLDivElement | null>(null);
   const instanceRef = useRef<any>(null);
   const markersRef = useRef<Map<string, any>>(new Map());
@@ -75,6 +81,7 @@ export function CameraMapPanel({ cameras, activeCameraId, onSelect }: CameraMapP
   const [mapType, setMapType] = useState<'标准路网' | '卫星图'>('标准路网');
   const [mapError, setMapError] = useState<string>();
   const [mapReady, setMapReady] = useState(false);
+  const isDisplayMode = mode === 'display';
 
   const filteredCameras = useMemo(() => {
     const value = keyword.trim().toLowerCase();
@@ -101,14 +108,21 @@ export function CameraMapPanel({ cameras, activeCameraId, onSelect }: CameraMapP
         const map = new BMapGL.Map(mapRef.current);
         const point = new BMapGL.Point(mapCenterLng, mapCenterLat);
         map.centerAndZoom(point, mapZoom);
-        map.enableScrollWheelZoom();
-        map.addControl(new BMapGL.ScaleControl());
-        map.addControl(new BMapGL.ZoomControl());
         if (window.BMAP_NORMAL_MAP) {
           map.setMapType(window.BMAP_NORMAL_MAP);
         }
         if (mapStyleId) {
           map.setMapStyleV2?.({ styleId: mapStyleId });
+        }
+
+        if (isDisplayMode) {
+          map.disableDragging?.();
+          map.disableScrollWheelZoom?.();
+          map.disableDoubleClickZoom?.();
+        } else {
+          map.enableScrollWheelZoom();
+          map.addControl(new BMapGL.ScaleControl());
+          map.addControl(new BMapGL.ZoomControl());
         }
 
         instanceRef.current = map;
@@ -132,7 +146,7 @@ export function CameraMapPanel({ cameras, activeCameraId, onSelect }: CameraMapP
       instanceRef.current = null;
       setMapReady(false);
     };
-  }, []);
+  }, [isDisplayMode]);
 
   useEffect(() => {
     const map = instanceRef.current;
@@ -197,31 +211,38 @@ export function CameraMapPanel({ cameras, activeCameraId, onSelect }: CameraMapP
       `;
       const infoWindow = new BMapGL.InfoWindow(infoHtml, { width: 260, title: '摄像头详情' });
 
-      marker.addEventListener('click', () => {
-        onSelect(camera.id);
-        map.openInfoWindow(infoWindow, point);
-      });
-      label.addEventListener('click', () => {
-        onSelect(camera.id);
-        map.openInfoWindow(infoWindow, point);
-      });
+      if (!isDisplayMode) {
+        marker.addEventListener('click', () => {
+          onSelect(camera.id);
+          map.openInfoWindow(infoWindow, point);
+        });
+        label.addEventListener('click', () => {
+          onSelect(camera.id);
+          map.openInfoWindow(infoWindow, point);
+        });
+      }
 
       map.addOverlay(marker);
       map.addOverlay(label);
       markersRef.current.set(camera.id, marker);
     });
-  }, [filteredCameras, mapReady, onSelect]);
+  }, [filteredCameras, isDisplayMode, mapReady, onSelect]);
 
   useEffect(() => {
     const map = instanceRef.current;
     if (!mapReady || !map) return;
+
+    if (isDisplayMode) {
+      map.setMapType?.(window.BMAP_NORMAL_MAP);
+      return;
+    }
 
     if (mapType === '卫星图' && window.BMAP_EARTH_MAP) {
       map.setMapType(window.BMAP_EARTH_MAP);
     } else if (window.BMAP_NORMAL_MAP) {
       map.setMapType(window.BMAP_NORMAL_MAP);
     }
-  }, [mapReady, mapType]);
+  }, [isDisplayMode, mapReady, mapType]);
 
   useEffect(() => {
     const map = instanceRef.current;
@@ -241,34 +262,38 @@ export function CameraMapPanel({ cameras, activeCameraId, onSelect }: CameraMapP
   };
 
   return (
-    <div className="map-panel">
-      <div className="map-toolbar">
-        <Input
-          size="small"
-          value={keyword}
-          onChange={(event) => setKeyword(event.target.value)}
-          onPressEnter={handleSearch}
-          prefix={<SearchOutlined />}
-          placeholder="搜索小区、街道或设备 ID"
-          suffix={<Button size="small" type="link" onClick={handleSearch}>定位</Button>}
-        />
-        <Segmented
-          size="small"
-          options={['标准路网', '卫星图']}
-          value={mapType}
-          onChange={(value) => setMapType(value as '标准路网' | '卫星图')}
-        />
-      </div>
+    <div className={`map-panel ${isDisplayMode ? 'display' : 'interactive'}`}>
+      {!isDisplayMode ? (
+        <>
+          <div className="map-toolbar">
+            <Input
+              size="small"
+              value={keyword}
+              onChange={(event) => setKeyword(event.target.value)}
+              onPressEnter={handleSearch}
+              prefix={<SearchOutlined />}
+              placeholder="搜索小区、街道或设备 ID"
+              suffix={<Button size="small" type="link" onClick={handleSearch}>定位</Button>}
+            />
+            <Segmented
+              size="small"
+              options={['标准路网', '卫星图']}
+              value={mapType}
+              onChange={(value) => setMapType(value as '标准路网' | '卫星图')}
+            />
+          </div>
 
-      <div className="map-tags-row">
-        <Tag color="success" style={{ margin: 0 }}>
-          百度地图 SDK
-        </Tag>
-        <Tag style={{ margin: 0 }}>点位数：{filteredCameras.length}</Tag>
-        <Tag color="processing" style={{ margin: 0 }}>
-          当前选中：{activeCameraId}
-        </Tag>
-      </div>
+          <div className="map-tags-row">
+            <Tag color="success" style={{ margin: 0 }}>
+              百度地图 SDK
+            </Tag>
+            <Tag style={{ margin: 0 }}>点位数：{filteredCameras.length}</Tag>
+            <Tag color="processing" style={{ margin: 0 }}>
+              当前选中：{activeCameraId}
+            </Tag>
+          </div>
+        </>
+      ) : null}
 
       {mapError ? <Alert type="warning" showIcon message="地图配置提示" description={mapError} /> : null}
 

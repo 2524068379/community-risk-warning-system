@@ -14,7 +14,7 @@ export function MonitorPage() {
   const activeCamera = cameras.find((item) => item.id === activeCameraId) ?? cameras[0];
 
   return (
-    <div className="page-shell compact-page-shell">
+    <div className="page-shell compact-page-shell monitor-page">
       <PageHeader
         kicker="LIVE MONITOR MATRIX"
         title="监控点位切换中心"
@@ -70,12 +70,12 @@ export function MonitorPage() {
             <VideoPanel
               camera={activeCamera}
               subtitle="点击地图或列表切换当前监控点位"
-              showInfoStrip={false}
+              density="compact"
             />
           </SectionCard>
 
           <SectionCard className="section-fill" title="VLM 实时分析">
-            <VlmAnalysisPanel analysis={analysis} variant="compact" />
+            <VlmAnalysisPanel analysis={analysis} variant="full" />
           </SectionCard>
         </div>
       </div>

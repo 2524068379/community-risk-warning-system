@@ -1,5 +1,4 @@
 import { Button, Space, Tag } from 'antd';
-import { MetricCard } from '@/components/MetricCard';
 import { PageHeader } from '@/components/PageHeader';
 import { SectionCard } from '@/components/SectionCard';
 import { VideoPanel } from '@/components/VideoPanel';
@@ -39,15 +38,23 @@ export function OverviewPage() {
         }
       />
 
-      <div className="metrics-grid">
+      <div className="overview-status-strip">
         {dashboardMetrics.map((item) => (
-          <MetricCard key={item.label} {...item} />
+          <div key={item.label} className="overview-status-item">
+            <span>{item.label}</span>
+            <strong>{item.value}</strong>
+            <small>{item.extra}</small>
+          </div>
         ))}
       </div>
 
       <div className="overview-stage">
         <SectionCard className="section-fill section-emphasis" title="重点监控总览">
-          <VideoPanel camera={activeCamera} subtitle="默认播放当前风险最高的监控点位" />
+          <VideoPanel
+            camera={activeCamera}
+            subtitle="默认播放当前风险最高的监控点位"
+            density="compact"
+          />
         </SectionCard>
 
         <div className="overview-side-stack">
@@ -57,6 +64,7 @@ export function OverviewPage() {
                 cameras={cameras}
                 activeCameraId={activeCameraId}
                 onSelect={setActiveCamera}
+                mode="display"
               />
 
               <div className="overview-camera-summary">
@@ -72,7 +80,7 @@ export function OverviewPage() {
           </SectionCard>
 
           <SectionCard className="section-fill" title="VLM 实时研判">
-            <VlmAnalysisPanel analysis={analysis} variant="compact" />
+            <VlmAnalysisPanel analysis={analysis} variant="full" />
           </SectionCard>
         </div>
       </div>

@@ -13,7 +13,7 @@ export function AlertsPage() {
     events.find((item) => item.id === selectedEventId) ?? events[0];
 
   return (
-    <div className="page-shell compact-page-shell">
+    <div className="page-shell compact-page-shell alerts-page">
       <PageHeader
         kicker="ALERT DISPATCH BOARD"
         title="重点预警处置面板"
