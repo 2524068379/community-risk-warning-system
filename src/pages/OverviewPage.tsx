@@ -18,7 +18,6 @@ export function OverviewPage() {
       <PageHeader
         kicker="COMMUNITY RISK COMMAND"
         title="风险总览指挥台"
-        description="聚焦当前最高风险点位，用一个主画面串联视频、地图与模型结论。"
         className="overview-topbar"
         titleRowClassName="overview-title-row"
         descriptionClassName="overview-intro"

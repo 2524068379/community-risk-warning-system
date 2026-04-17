@@ -16,6 +16,56 @@ const mapStyleId = import.meta.env.VITE_BAIDU_MAP_STYLE_ID;
 const mapCenterLng = Number(import.meta.env.VITE_BAIDU_MAP_CENTER_LNG || 118.796877);
 const mapCenterLat = Number(import.meta.env.VITE_BAIDU_MAP_CENTER_LAT || 32.060255);
 const mapZoom = Number(import.meta.env.VITE_BAIDU_MAP_ZOOM || 16);
+const MAP_READY_WAIT_TIMEOUT = 3000;
+
+function waitForMapContainerReady(element: HTMLDivElement) {
+  if (element.clientWidth > 0 && element.clientHeight > 0) {
+    return Promise.resolve();
+  }
+
+  return new Promise<void>((resolve) => {
+    let settled = false;
+    let timeoutId: number | undefined;
+    let observer: ResizeObserver | null = null;
+
+    const finalize = () => {
+      if (settled) return;
+      settled = true;
+
+      if (timeoutId) {
+        window.clearTimeout(timeoutId);
+      }
+
+      observer?.disconnect();
+      resolve();
+    };
+
+    timeoutId = window.setTimeout(finalize, MAP_READY_WAIT_TIMEOUT);
+
+    if ('ResizeObserver' in window) {
+      observer = new ResizeObserver(() => {
+        if (element.clientWidth > 0 && element.clientHeight > 0) {
+          finalize();
+        }
+      });
+      observer.observe(element);
+      return;
+    }
+
+    const poll = () => {
+      if (settled) return;
+
+      if (element.clientWidth > 0 && element.clientHeight > 0) {
+        finalize();
+        return;
+      }
+
+      requestAnimationFrame(poll);
+    };
+
+    requestAnimationFrame(poll);
+  });
+}
 
 export function CameraMapPanel({ cameras, activeCameraId, onSelect }: CameraMapPanelProps) {
   const mapRef = useRef<HTMLDivElement | null>(null);
@@ -43,6 +93,8 @@ export function CameraMapPanel({ cameras, activeCameraId, onSelect }: CameraMapP
 
       try {
         setMapError(undefined);
+        await waitForMapContainerReady(mapRef.current);
+
         const BMapGL = await loadBaiduMapSdk(mapAk);
         if (disposed || !mapRef.current) return;
 
@@ -61,6 +113,11 @@ export function CameraMapPanel({ cameras, activeCameraId, onSelect }: CameraMapP
 
         instanceRef.current = map;
         setMapReady(true);
+
+        requestAnimationFrame(() => {
+          map.checkResize?.();
+          map.centerAndZoom(point, mapZoom);
+        });
       } catch (error) {
         setMapError(error instanceof Error ? error.message : '百度地图初始化失败');
       }
@@ -76,6 +133,30 @@ export function CameraMapPanel({ cameras, activeCameraId, onSelect }: CameraMapP
       setMapReady(false);
     };
   }, []);
+
+  useEffect(() => {
+    const map = instanceRef.current;
+    const element = mapRef.current;
+    if (!mapReady || !map || !element || !('ResizeObserver' in window)) return;
+
+    const resizeMap = () => {
+      const center = map.getCenter?.();
+      const zoom = map.getZoom?.();
+
+      map.checkResize?.();
+
+      if (center && typeof zoom === 'number') {
+        map.centerAndZoom(center, zoom);
+      }
+    };
+
+    const observer = new ResizeObserver(() => {
+      resizeMap();
+    });
+
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [mapReady]);
 
   useEffect(() => {
     const map = instanceRef.current;
