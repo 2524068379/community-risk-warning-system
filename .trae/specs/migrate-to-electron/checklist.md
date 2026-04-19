@@ -1,0 +1,14 @@
+- [x] `electron` 和 `electron-vite` 等依赖已正确安装在 devDependencies
+- [x] `electron/main.ts` 主进程入口文件存在，能创建 BrowserWindow 并加载渲染进程
+- [x] `electron/preload.ts` 预加载脚本存在，通过 `contextBridge` 暴露 `electronAPI`
+- [x] 主进程中内嵌了 Express HTTP 服务，提供 `/api/health` 和 `/api/qwen/chat/completions` 端点
+- [x] `electron.vite.config.ts` 包含 main / preload / renderer 三部分配置
+- [x] `package.json` 的 `main` 字段指向正确的编译后主进程入口 `./dist/main/main.cjs`
+- [x] `package.json` 的 scripts 包含 `dev`（electron-vite dev）、`build`（electron-vite build）、`package`（electron-builder）
+- [x] `package.json` 包含 `build` 配置段，配置了 Windows NSIS 打包参数
+- [x] 前端 HTTP 服务在 Electron 环境下能通过 preload 暴露的 API 地址正确请求
+- [x] `.gitignore` 包含 `dist-electron/`、`release/`、`out/` 等 Electron 构建产物
+- [x] `.github/workflows/build.yml` 存在，配置了 tag 触发构建发布和 PR 触发构建验证
+- [ ] `npm run dev` 能正常启动 Electron 开发模式，窗口正常显示
+- [x] `npm run build` 构建无 TypeScript 和 Vite 编译错误
+- [x] `npm run package` 能生成 Windows NSIS 安装程序（已验证生成 `险封·社区风险预警平台 Setup 0.2.0.exe`）

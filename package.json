@@ -2,13 +2,15 @@
   "name": "community-risk-warning-system",
   "private": true,
   "version": "0.2.0",
+  "main": "./dist/main/main.cjs",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "dev:server": "node server/index.js",
-    "dev:all": "concurrently \"npm run dev\" \"npm run dev:server\"",
-    "build": "tsc -b && vite build",
-    "preview": "vite preview"
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "preview": "electron-vite preview",
+    "package": "electron-builder --win",
+    "dev:web": "vite",
+    "dev:server": "node server/index.js"
   },
   "dependencies": {
     "@ant-design/icons": "^6.0.0",
@@ -24,12 +26,43 @@
     "zustand": "^5.0.7"
   },
   "devDependencies": {
+    "@electron-toolkit/preload": "^3.0.2",
+    "@electron-toolkit/utils": "^4.0.0",
+    "@types/express": "^5.0.6",
     "@types/node": "^25.6.0",
     "@types/react": "^19.1.9",
     "@types/react-dom": "^19.1.7",
     "@vitejs/plugin-react": "^5.0.0",
     "concurrently": "^9.1.2",
+    "electron": "^41.2.1",
+    "electron-builder": "^26.8.1",
+    "electron-vite": "^5.0.0",
     "typescript": "^5.8.3",
     "vite": "^7.0.4"
+  },
+  "build": {
+    "appId": "com.community-risk-warning.app",
+    "productName": "险封·社区风险预警平台",
+    "directories": {
+      "output": "dist-electron"
+    },
+    "files": [
+      "dist/main/**/*",
+      "dist/preload/**/*",
+      "dist/renderer/**/*"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true
+    }
   }
 }

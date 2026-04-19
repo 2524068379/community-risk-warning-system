@@ -7,3 +7,6 @@ dist
 .DS_Store
 
 .env.server
+dist-electron
+release
+out
