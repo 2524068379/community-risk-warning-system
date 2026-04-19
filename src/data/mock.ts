@@ -1,4 +1,4 @@
-import type { CameraPoint, DashboardMetric, RiskEvent, TrendPoint, VlmAnalysis } from '@/types';
+import type { CameraPoint, DashboardMetric, EquipmentStats, EventTypeStat, RiskEvent, RiskLevelStat, TrendPoint, VlmAnalysis } from '@/types';
 
 const demoStreamUrl = import.meta.env.VITE_DEMO_STREAM_URL || '';
 const demoStreamType = (import.meta.env.VITE_DEMO_STREAM_TYPE || 'flv') as CameraPoint['streamType'];
@@ -235,4 +235,26 @@ export const events: RiskEvent[] = [
       trend: commonTrend
     }
   }
+];
+
+export const equipmentStats: EquipmentStats[] = [
+  { label: '在线设备', value: 128, icon: '📹', color: '#22c55e' },
+  { label: '离线设备', value: 6, icon: '📴', color: '#64748b' },
+  { label: '高风险点位', value: 2, icon: '⚠️', color: '#ef4444' },
+  { label: '今日事件', value: 42, icon: '📋', color: '#f59e0b' }
+];
+
+export const riskLevelStats: RiskLevelStat[] = [
+  { level: '高风险', count: 2, color: '#ef4444', percent: 33 },
+  { level: '中风险', count: 2, color: '#f59e0b', percent: 33 },
+  { level: '低风险', count: 1, color: '#22c55e', percent: 17 },
+  { level: '离线', count: 1, color: '#64748b', percent: 17 }
+];
+
+export const eventTypeStats: EventTypeStat[] = [
+  { type: '消防风险', count: 18, color: '#ef4444' },
+  { type: '治安风险', count: 23, color: '#f59e0b' },
+  { type: '救助预警', count: 16, color: '#3b82f6' },
+  { type: '设备异常', count: 20, color: '#8b5cf6' },
+  { type: '环境风险', count: 11, color: '#06b6d4' }
 ];

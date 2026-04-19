@@ -86,3 +86,23 @@ export interface OpenAICompatibleMessage {
   role: 'system' | 'user' | 'assistant';
   content: string | (ChatMessageContentText | ChatMessageContentImageUrl)[];
 }
+
+export interface EquipmentStats {
+  label: string;
+  value: number;
+  icon: string;
+  color: string;
+}
+
+export interface RiskLevelStat {
+  level: string;
+  count: number;
+  color: string;
+  percent: number;
+}
+
+export interface EventTypeStat {
+  type: string;
+  count: number;
+  color: string;
+}
