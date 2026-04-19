@@ -198,6 +198,32 @@ a {
   background: rgba(255, 255, 255, 0.1);
 }
 
+.header-metrics-strip {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.header-metric-item {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.header-metric-item strong {
+  font-size: 15px;
+  line-height: 1;
+  color: var(--text-main);
+  font-variant-numeric: tabular-nums;
+}
+
+.header-metric-item span {
+  font-size: 10px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
 .header-bell {
   width: 30px;
   height: 30px;
@@ -231,7 +257,7 @@ a {
   min-height: 0;
   height: 100%;
   display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
   gap: var(--panel-gap);
 }
 
@@ -319,51 +345,6 @@ a {
   color: var(--text-soft);
   font-size: 12px;
   line-height: 1.4;
-}
-
-.overview-status-strip {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: var(--panel-gap);
-  min-height: 0;
-}
-
-.overview-status-item {
-  min-width: 0;
-  padding: 10px 12px;
-  border-radius: 14px;
-  display: grid;
-  gap: 2px;
-  background:
-    linear-gradient(180deg, rgba(14, 27, 49, 0.92), rgba(9, 18, 33, 0.96));
-  border: 1px solid rgba(101, 164, 255, 0.14);
-  box-shadow: var(--panel-shadow);
-  position: relative;
-  overflow: hidden;
-}
-
-.overview-status-item::before {
-  content: '';
-  position: absolute;
-  left: 14px;
-  right: 14px;
-  top: 0;
-  height: 2px;
-  border-radius: 999px;
-  background: linear-gradient(90deg, transparent, rgba(96, 180, 255, 0.85), transparent);
-}
-
-.overview-status-item span,
-.overview-status-item small {
-  color: var(--text-muted);
-  font-size: 10px;
-  line-height: 1.35;
-}
-
-.overview-status-item strong {
-  color: #fff;
-  font-size: clamp(18px, 1.35vw, 24px);
-  line-height: 1.15;
 }
 
 .metrics-grid {
@@ -459,16 +440,14 @@ a {
 
 .overview-stage {
   display: grid;
-  grid-template-columns: minmax(0, 0.96fr) minmax(0, 1.04fr);
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr) auto;
   gap: var(--panel-gap);
   min-height: 0;
 }
 
-.overview-side-stack {
-  min-height: 0;
-  display: grid;
-  grid-template-rows: minmax(0, 0.34fr) minmax(0, 0.66fr);
-  gap: var(--panel-gap);
+.overview-map-row {
+  grid-column: 1 / -1;
 }
 
 .overview-map-stack,
@@ -705,8 +684,8 @@ a {
 .vlm-panel {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto auto;
-  gap: 6px;
-  padding: 8px;
+  gap: 8px;
+  padding: 10px;
   border-radius: 14px;
   background:
     radial-gradient(circle at top right, rgba(47, 123, 255, 0.12), transparent 24%),
@@ -721,8 +700,8 @@ a {
 
 .vlm-main-grid {
   display: grid;
-  grid-template-columns: 168px minmax(0, 1fr);
-  gap: 8px;
+  grid-template-columns: 180px minmax(0, 1fr);
+  gap: 10px;
   min-height: 0;
 }
 
@@ -740,7 +719,7 @@ a {
   align-items: center;
   justify-content: center;
   gap: 4px;
-  padding: 8px;
+  padding: 12px;
   border-radius: 12px;
   background: rgba(255, 255, 255, 0.04);
   min-width: 0;
@@ -788,7 +767,7 @@ a {
   font-size: 11px;
   line-height: 1.45;
   display: -webkit-box;
-  -webkit-line-clamp: 3;
+  -webkit-line-clamp: 5;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
@@ -817,7 +796,7 @@ a {
 .trend-line {
   position: relative;
   margin-top: 8px;
-  min-height: 56px;
+  min-height: 72px;
   display: flex;
   align-items: end;
   justify-content: space-between;
@@ -976,16 +955,9 @@ a {
 
 .monitor-stage {
   display: grid;
-  grid-template-columns: minmax(0, 0.38fr) minmax(0, 0.62fr);
+  grid-template-columns: minmax(0, 0.42fr) minmax(0, 0.58fr);
   gap: var(--panel-gap);
   min-height: 0;
-}
-
-.monitor-detail-stack {
-  min-height: 0;
-  display: grid;
-  grid-template-rows: minmax(0, 0.42fr) minmax(0, 0.58fr);
-  gap: var(--panel-gap);
 }
 
 .alert-list-item {
@@ -1325,6 +1297,10 @@ a {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .header-metrics-strip {
+    display: none;
+  }
+
   .camera-card-score {
     font-size: 24px;
   }
@@ -1346,11 +1322,6 @@ a {
 
   .header-clock {
     font-size: 16px;
-  }
-
-  .overview-status-strip,
-  .metrics-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .overview-topbar {
@@ -1376,9 +1347,8 @@ a {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .overview-side-stack,
-  .monitor-detail-stack {
-    grid-template-rows: auto auto;
+  .overview-stage {
+    grid-template-rows: minmax(0, 1fr) auto auto;
   }
 
   .vlm-main-grid {

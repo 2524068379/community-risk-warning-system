@@ -5,11 +5,10 @@ import { SectionCard } from '@/components/SectionCard';
 import { CameraListPanel } from '@/components/CameraListPanel';
 import { CameraMapPanel } from '@/components/CameraMapPanel';
 import { VideoPanel } from '@/components/VideoPanel';
-import { VlmAnalysisPanel } from '@/components/VlmAnalysisPanel';
 import { useAppStore } from '@/store/useAppStore';
 
 export function MonitorPage() {
-  const { cameras, activeCameraId, analysis, setActiveCamera } = useAppStore();
+  const { cameras, activeCameraId, setActiveCamera } = useAppStore();
   const [viewMode, setViewMode] = useState<'map' | 'list'>('map');
   const activeCamera = cameras.find((item) => item.id === activeCameraId) ?? cameras[0];
 
@@ -18,7 +17,7 @@ export function MonitorPage() {
       <PageHeader
         kicker="LIVE MONITOR MATRIX"
         title="监控点位切换中心"
-        description="通过地图或点位矩阵单击切换当前监控对象，单屏查看实时视频与 VLM 分析结果。"
+        description="通过地图或点位矩阵单击切换当前监控对象，单屏查看实时视频。"
         actions={
           <>
           <Tag color="processing" style={{ margin: 0 }}>
@@ -65,19 +64,13 @@ export function MonitorPage() {
           )}
         </SectionCard>
 
-        <div className="monitor-detail-stack">
-          <SectionCard className="section-fill" title="单点实时监控详情">
-            <VideoPanel
-              camera={activeCamera}
-              subtitle="点击地图或列表切换当前监控点位"
-              density="compact"
-            />
-          </SectionCard>
-
-          <SectionCard className="section-fill" title="VLM 实时分析">
-            <VlmAnalysisPanel analysis={analysis} variant="full" />
-          </SectionCard>
-        </div>
+        <SectionCard className="section-fill" title="单点实时监控详情">
+          <VideoPanel
+            camera={activeCamera}
+            subtitle="点击地图或列表切换当前监控点位"
+            density="compact"
+          />
+        </SectionCard>
       </div>
     </div>
   );

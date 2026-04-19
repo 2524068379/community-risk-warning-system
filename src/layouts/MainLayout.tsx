@@ -5,6 +5,7 @@ import { Avatar, Badge, Tag } from 'antd';
 import { useEffect, useState } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { appPages } from '@/router/pages';
+import { dashboardMetrics } from '@/data/mock';
 
 function formatTime(date: Date) {
   const h = String(date.getHours()).padStart(2, '0');
@@ -59,6 +60,15 @@ export function MainLayout() {
         </nav>
 
         <div className="header-right">
+          <div className="header-metrics-strip">
+            {dashboardMetrics.map((item) => (
+              <div key={item.label} className="header-metric-item">
+                <strong>{item.value}</strong>
+                <span>{item.label}</span>
+              </div>
+            ))}
+          </div>
+          <div className="header-divider" />
           <div className="header-status-pod">
             <span className="header-status-label">运行状态</span>
             <Tag color="success" style={{ margin: 0 }}>

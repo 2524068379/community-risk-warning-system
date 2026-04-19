@@ -1,0 +1,8 @@
+- [x] OverviewPage 地图从左侧堆叠移出，横跨底部全宽
+- [x] OverviewPage 上部保持视频（左）+ VLM（右）双栏布局
+- [x] 地图面板宽高比显著改善（不再为 4:1 长条形）
+- [x] MonitorPage 中"VLM 实时分析"面板已移除
+- [x] MonitorPage 视频监控独占右侧全部高度
+- [x] MonitorPage 左侧监控选择区功能不受影响
+- [x] 在 2560×1440 分辨率下所有组件无堆叠、无溢出
+- [x] TypeScript 编译和 Vite 构建均通过
