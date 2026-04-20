@@ -4,7 +4,7 @@ const BAIDU_MAP_LOAD_TIMEOUT = 15000;
 
 let baiduMapLoadingPromise: Promise<any> | null = null;
 
-function isMapNamespaceReady(BMapGL: any) {
+function isMapNamespaceReady(BMapGL?: BaiduMapNamespace) {
   return Boolean(
     BMapGL &&
       typeof BMapGL.Map === 'function' &&
@@ -13,12 +13,12 @@ function isMapNamespaceReady(BMapGL: any) {
   );
 }
 
-function getMapNamespace() {
+function getMapNamespace(): BaiduMapNamespace | null {
   if (!isMapNamespaceReady(window.BMapGL)) {
     return null;
   }
 
-  return window.BMapGL;
+  return window.BMapGL ?? null;
 }
 
 function getAkConfigError(rawAk: string) {

@@ -10,7 +10,11 @@
     "preview": "electron-vite preview",
     "package": "electron-builder --win",
     "dev:web": "vite",
-    "dev:server": "node server/index.js"
+    "dev:server": "node server/index.js",
+    "dev:all": "concurrently \"npm run dev:web\" \"npm run dev:server\"",
+    "typecheck": "tsc -p tsconfig.app.json --noEmit --pretty false --tsBuildInfoFile node_modules/.cache/tsconfig.app.typecheck.tsbuildinfo && tsc -p tsconfig.node.json --noEmit --pretty false --tsBuildInfoFile node_modules/.cache/tsconfig.node.typecheck.tsbuildinfo && tsc -p electron/tsconfig.json --noEmit --pretty false --tsBuildInfoFile node_modules/.cache/electron.typecheck.tsbuildinfo",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@ant-design/icons": "^6.0.0",
@@ -38,7 +42,8 @@
     "electron-builder": "^26.8.1",
     "electron-vite": "^5.0.0",
     "typescript": "^5.8.3",
-    "vite": "^7.0.4"
+    "vite": "^7.0.4",
+    "vitest": "^4.1.4"
   },
   "overrides": {
     "cacache": {
@@ -60,7 +65,9 @@
       "target": [
         {
           "target": "zip",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         }
       ]
     }

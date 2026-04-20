@@ -1,10 +1,11 @@
 import { useEffect, useRef } from 'react';
 import type { CameraPoint } from '@/types';
-import { riskColorMap, riskLevelTextMap } from '@/utils/risk';
+import { riskColorMap } from '@/utils/risk';
 import { buildMarkerSvg } from '@/services/map/baiduMap';
+import { buildCameraInfoHtml } from '@/services/map/cameraInfoWindow';
 
 interface UseCameraMarkersOptions {
-  map: any;
+  map: BaiduMapInstance | null;
   mapReady: boolean;
   cameras: CameraPoint[];
   interactive?: boolean;
@@ -14,7 +15,7 @@ interface UseCameraMarkersOptions {
 }
 
 export function useCameraMarkers(options: UseCameraMarkersOptions) {
-  const markersRef = useRef<Map<string, any>>(new Map());
+  const markersRef = useRef<Map<string, BaiduMapMarker>>(new Map());
 
   useEffect(() => {
     const map = options.map;
@@ -44,15 +45,7 @@ export function useCameraMarkers(options: UseCameraMarkersOptions) {
         fontSize: '12px'
       });
 
-      const infoHtml = `
-        <div style="min-width:220px;padding:4px 2px;line-height:1.8;">
-          <div style="font-weight:700;font-size:15px;color:#0f172a;">${camera.name}</div>
-          <div>设备 ID：${camera.id}</div>
-          <div>区域：${camera.area} · ${camera.scene}</div>
-          <div>今日风险事件：${camera.todayEvents}</div>
-          <div>风险等级：${riskLevelTextMap[camera.level]}</div>
-        </div>
-      `;
+      const infoHtml = buildCameraInfoHtml(camera);
       const infoWindow = new BMapGL.InfoWindow(infoHtml, { width: 260, title: '摄像头详情' });
 
       if (options.interactive) {

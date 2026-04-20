@@ -13,14 +13,15 @@ interface AppState {
   markEventStatus: (eventId: string, status: RiskEvent['status']) => void;
 }
 
-const firstCamera = cameras[0];
+const firstEvent = events[0];
+const firstCamera = cameras.find((camera) => camera.id === firstEvent?.cameraId) ?? cameras[0];
 
 export const useAppStore = create<AppState>((set, get) => ({
   cameras,
   events,
   activeCameraId: firstCamera.id,
-  selectedEventId: events[0]?.id,
-  analysis: defaultAnalysis,
+  selectedEventId: firstEvent?.id,
+  analysis: firstEvent?.analysis ?? defaultAnalysis,
   setActiveCamera: (cameraId) => {
     const matchedEvent = get().events.find((eventItem) => eventItem.cameraId === cameraId);
 

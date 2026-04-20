@@ -64,7 +64,7 @@ export interface UseBaiduMapOptions {
 
 export function useBaiduMap(options: UseBaiduMapOptions) {
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const instanceRef = useRef<any>(null);
+  const instanceRef = useRef<BaiduMapInstance | null>(null);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string>();
 
@@ -159,11 +159,11 @@ export function useBaiduMap(options: UseBaiduMapOptions) {
     }
 
     if (options.mapType === '卫星图' && window.BMAP_EARTH_MAP) {
-      map.setMapType(window.BMAP_EARTH_MAP);
+      map.setMapType?.(window.BMAP_EARTH_MAP);
     } else if (window.BMAP_NORMAL_MAP) {
-      map.setMapType(window.BMAP_NORMAL_MAP);
+      map.setMapType?.(window.BMAP_NORMAL_MAP);
     }
   }, [ready, options.interactive, options.mapType]);
 
-  return { containerRef, instance: instanceRef, ready, error };
+  return { containerRef, instance: instanceRef.current, ready, error };
 }
