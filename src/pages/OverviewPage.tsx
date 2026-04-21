@@ -1,10 +1,7 @@
-import { useMemo } from 'react';
-import { Tag } from 'antd';
 import { CameraMapPanel } from '@/components/CameraMapPanel';
 import { VlmAnalysisPanel } from '@/components/VlmAnalysisPanel';
 import { VideoPanel } from '@/components/VideoPanel';
 import { useAppStore } from '@/store/useAppStore';
-import { riskGradeColorMap } from '@/utils/risk';
 import {
   PieChart,
   Pie,
@@ -17,21 +14,15 @@ import {
 } from 'recharts';
 
 export function OverviewPage() {
-  const { cameras, activeCameraId, analysis, events, selectedEventId, setActiveCamera, selectEvent } =
-    useAppStore();
+  const { cameras, activeCameraId, analysis, setActiveCamera } = useAppStore();
 
   const activeCamera = cameras.find((c) => c.id === activeCameraId) || cameras[0];
-
-  const sortedEvents = useMemo(
-    () => [...events].sort((a, b) => b.riskScore - a.riskScore),
-    [events]
-  );
 
   return (
     <div className="overview-grid">
       {/* LEFT COLUMN */}
       <div className="overview-left">
-        <div className="panel" style={{ padding: 0, flex: 1, minHeight: 0 }}>
+        <div className="panel" style={{ padding: 0, flex: 2, minHeight: 0 }}>
           {activeCamera && <VideoPanel camera={activeCamera} showInfoStrip={false} />}
         </div>
 
@@ -43,8 +34,8 @@ export function OverviewPage() {
         </div>
       </div>
 
-      {/* CENTER COLUMN */}
-      <div className="overview-center">
+      {/* RIGHT COLUMN */}
+      <div className="overview-right">
         <div className="panel" style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
           <div className="panel-title">主监控地图 (显示摄像头位置)</div>
           <div className="map-container">
@@ -124,42 +115,6 @@ export function OverviewPage() {
                 </ResponsiveContainer>
               </div>
             </div>
-          </div>
-        </div>
-      </div>
-
-      {/* RIGHT COLUMN */}
-      <div className="overview-right">
-        <div className="panel" style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
-          <div className="panel-title">重点预警</div>
-          <div className="overview-alert-list">
-            {sortedEvents.map((event, index) => (
-              <div
-                key={event.id}
-                className={`overview-alert-item${selectedEventId === event.id ? ' active' : ''}`}
-                onClick={() => {
-                  selectEvent(event.id);
-                  setActiveCamera(event.cameraId);
-                }}
-              >
-                <span className={`overview-alert-rank${index < 3 ? ' top-3' : ''}`}>
-                  {index + 1}
-                </span>
-                <div className="overview-alert-info">
-                  <div className="overview-alert-title">{event.title}</div>
-                  <div className="overview-alert-meta">
-                    <Tag
-                      color={riskGradeColorMap[event.level]}
-                      style={{ marginRight: 4, fontSize: 10, lineHeight: '16px', padding: '0 4px' }}
-                    >
-                      {event.level}级
-                    </Tag>
-                    {event.cameraName} · {event.area}
-                  </div>
-                </div>
-                <span className="overview-alert-score">{event.riskScore}</span>
-              </div>
-            ))}
           </div>
         </div>
       </div>

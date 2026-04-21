@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx tsc *)",
+      "Bash(npx vite *)",
+      "Read(//dev/**)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:5173)",
+      "Bash(npx playwright *)",
+      "Bash(node -e ' *)",
+      "Bash(npm ls *)",
+      "Bash(npm install *)"
+    ]
+  }
+}

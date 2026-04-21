@@ -172,19 +172,12 @@ a {
 
 .overview-grid {
   display: grid;
-  grid-template-columns: 3fr 4fr 3fr;
+  grid-template-columns: 1fr 1fr;
   gap: var(--panel-gap);
   height: 100%;
 }
 
 .overview-left {
-  display: flex;
-  flex-direction: column;
-  gap: var(--panel-gap);
-  min-height: 0;
-}
-
-.overview-center {
   display: flex;
   flex-direction: column;
   gap: var(--panel-gap);
@@ -979,73 +972,3 @@ a {
   background: var(--accent-cyan);
 }
 
-.overview-alert-list {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  overflow-y: auto;
-  flex: 1;
-  min-height: 0;
-  margin-top: 8px;
-}
-
-.overview-alert-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 12px;
-  border-radius: 6px;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid transparent;
-  cursor: pointer;
-  transition: 0.2s;
-}
-
-.overview-alert-item:hover {
-  background: rgba(0, 195, 255, 0.06);
-  border-color: rgba(0, 195, 255, 0.15);
-}
-
-.overview-alert-item.active {
-  background: rgba(0, 195, 255, 0.1);
-  border-color: rgba(0, 195, 255, 0.25);
-}
-
-.overview-alert-rank {
-  font-size: 14px;
-  font-weight: 700;
-  min-width: 24px;
-  text-align: center;
-}
-
-.overview-alert-rank.top-3 {
-  color: var(--accent-orange);
-}
-
-.overview-alert-info {
-  flex: 1;
-  min-width: 0;
-}
-
-.overview-alert-title {
-  font-size: 12px;
-  color: #fff;
-  font-weight: 600;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.overview-alert-meta {
-  font-size: 10px;
-  color: var(--text-muted);
-  margin-top: 2px;
-}
-
-.overview-alert-score {
-  font-size: 18px;
-  font-weight: 700;
-  color: var(--accent-orange);
-  min-width: 36px;
-  text-align: right;
-}
