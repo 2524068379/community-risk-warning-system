@@ -169,11 +169,14 @@ export function createOllamaProxyRoutes(app) {
 
   app.get('/api/ollama/status', async (_req, res) => {
     try {
-      const r = await fetch(`${OLLAMA_BASE}/api/tags`, { signal: AbortSignal.timeout(2000) });
-      const data = await r.json();
-      res.json({ ready: true, models: data.models?.map((m) => m.name) ?? [] });
+      const r = await fetch(`${OLLAMA_BASE}/health`, { signal: AbortSignal.timeout(3000) });
+      if (r.ok || r.status === 503) {
+        res.json({ ready: true });
+      } else {
+        res.json({ ready: false });
+      }
     } catch {
-      res.json({ ready: false, models: [] });
+      res.json({ ready: false });
     }
   });
 }

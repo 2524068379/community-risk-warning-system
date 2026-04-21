@@ -10,3 +10,9 @@ dist
 dist-electron
 release
 out
+
+# VLM model files (large binaries, downloaded via npm run download-model)
+resources/vlm/*.gguf
+resources/vlm/*.exe
+resources/vlm/*.dll
+resources/vlm/*.zip

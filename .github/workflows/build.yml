@@ -33,6 +33,40 @@ jobs:
             Set-Content -Path '.env' -Value $envContent -NoNewline
           }
 
+      - name: Cache VLM model files
+        id: cache-vlm
+        uses: actions/cache@v4
+        with:
+          path: resources/vlm
+          key: vlm-qwen3.5-4b-q4km-mmproj-v1
+
+      - name: Download VLM model files
+        if: steps.cache-vlm.outputs.cache-hit != 'true'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path resources/vlm
+
+          Write-Host "Downloading llama-server (CUDA build)..."
+          $llamaUrl = "https://github.com/ggml-org/llama.cpp/releases/download/b8864/llama-b8864-bin-win-cuda-12.4-x64.zip"
+          $cudartUrl = "https://github.com/ggml-org/llama.cpp/releases/download/b8864/cudart-llama-bin-win-cuda-12.4-x64.zip"
+
+          curl -L -o resources/vlm/llama.zip $llamaUrl
+          curl -L -o resources/vlm/cudart.zip $cudartUrl
+
+          Expand-Archive -Path resources/vlm/llama.zip -DestinationPath resources/vlm -Force
+          Expand-Archive -Path resources/vlm/cudart.zip -DestinationPath resources/vlm -Force
+
+          Remove-Item resources/vlm/llama.zip, resources/vlm/cudart.zip
+
+          Write-Host "Downloading Qwen3.5-4B Q4_K_M model (~2.55 GB)..."
+          curl -L -o "resources/vlm/Qwen3.5-4B-Q4_K_M.gguf" "https://huggingface.co/unsloth/Qwen3.5-4B-GGUF/resolve/main/Qwen3.5-4B-Q4_K_M.gguf"
+
+          Write-Host "Downloading mmproj vision encoder (~644 MB)..."
+          curl -L -o "resources/vlm/mmproj-BF16.gguf" "https://huggingface.co/unsloth/Qwen3.5-4B-GGUF/resolve/main/mmproj-BF16.gguf"
+
+          Write-Host "VLM files downloaded:"
+          Get-ChildItem resources/vlm | Format-Table Name, Length
+
       - name: Build
         run: npm run build
 

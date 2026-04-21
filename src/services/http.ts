@@ -46,7 +46,7 @@ const apiBaseResolver = createApiBaseResolver({
 })
 
 export const http = axios.create({
-  timeout: 15000
+  timeout: 120000
 })
 
 http.interceptors.request.use(async (config) => {

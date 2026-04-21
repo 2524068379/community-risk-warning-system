@@ -1,7 +1,8 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useAppStore } from '@/store/useAppStore'
 import { analyzeFrameWithOllama } from '@/services/llm/ollamaClient'
 import { useFrameCapture } from './useFrameCapture'
+import { http } from '@/services/http'
 
 interface VlmAnalysisOptions {
   videoRef: React.RefObject<HTMLVideoElement | null>
@@ -9,6 +10,15 @@ interface VlmAnalysisOptions {
   scene: string
   enabled?: boolean
   captureIntervalMs?: number
+}
+
+async function checkVlmServerReady(): Promise<boolean> {
+  try {
+    const res = await http.get('/api/ollama/status', { timeout: 3000 })
+    return res.data?.ready === true
+  } catch {
+    return false
+  }
 }
 
 export function useVlmAnalysis(options: VlmAnalysisOptions) {
@@ -20,15 +30,34 @@ export function useVlmAnalysis(options: VlmAnalysisOptions) {
     captureIntervalMs = 5000
   } = options
 
+  const [serverReady, setServerReady] = useState(false)
+  const analyzingRef = useRef(false)
+
+  const shouldCapture = enabled && serverReady
+
   const { frameDataUrl, markConsumed } = useFrameCapture(videoRef, {
     intervalMs: captureIntervalMs,
     quality: 0.7,
     maxWidth: 640,
     maxHeight: 480,
-    enabled
+    enabled: shouldCapture
   })
 
-  const analyzingRef = useRef(false)
+  useEffect(() => {
+    if (!enabled) return
+
+    const check = async () => {
+      const ready = await checkVlmServerReady()
+      if (ready) {
+        setServerReady(true)
+        useAppStore.getState().setVlmStatus('idle')
+      }
+    }
+
+    check()
+    const id = setInterval(check, 5000)
+    return () => clearInterval(id)
+  }, [enabled])
 
   useEffect(() => {
     if (!frameDataUrl || analyzingRef.current) return

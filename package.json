@@ -8,6 +8,7 @@
     "dev": "electron-vite dev",
     "build": "electron-vite build",
     "preview": "electron-vite preview",
+    "download-model": "node scripts/download-model.js",
     "package": "electron-builder --win",
     "dev:web": "vite",
     "dev:server": "node server/index.js",
@@ -83,9 +84,9 @@
     },
     "extraResources": [
       {
-        "from": "resources/ollama",
-        "to": "ollama",
-        "filter": ["**/*"]
+        "from": "resources/vlm",
+        "to": "vlm",
+        "filter": ["**/*.exe", "**/*.dll", "**/*.gguf"]
       }
     ]
   }
