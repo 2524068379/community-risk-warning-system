@@ -65,7 +65,9 @@ export function createQwenProxyApp(config = loadQwenProxyConfig()) {
       credentials: config.corsOrigin !== true
     })
   );
-  app.use(express.json({ limit: '20mb' }));
+  app.use(express.json({ limit: '50mb' }));
+
+  createOllamaProxyRoutes(app);
 
   app.get('/api/health', (_req, res) => {
     res.json({
@@ -126,4 +128,52 @@ export function createQwenProxyApp(config = loadQwenProxyConfig()) {
   });
 
   return app;
+}
+
+export function createOllamaProxyRoutes(app) {
+  const OLLAMA_BASE = 'http://127.0.0.1:11434';
+
+  app.post('/api/ollama/chat/completions', async (req, res) => {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 120000);
+
+    try {
+      const response = await fetch(`${OLLAMA_BASE}/v1/chat/completions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(req.body),
+        signal: controller.signal
+      });
+
+      const text = await response.text();
+      let payload;
+      try {
+        payload = JSON.parse(text);
+      } catch {
+        payload = { raw: text };
+      }
+
+      return res.status(response.status).json(payload);
+    } catch (error) {
+      const isAbort = error instanceof Error && error.name === 'AbortError';
+      return res.status(isAbort ? 504 : 500).json({
+        error: {
+          message: isAbort ? 'Ollama 推理超时' : error instanceof Error ? error.message : '代理请求失败',
+          type: isAbort ? 'timeout' : 'proxy_error'
+        }
+      });
+    } finally {
+      clearTimeout(timer);
+    }
+  });
+
+  app.get('/api/ollama/status', async (_req, res) => {
+    try {
+      const r = await fetch(`${OLLAMA_BASE}/api/tags`, { signal: AbortSignal.timeout(2000) });
+      const data = await r.json();
+      res.json({ ready: true, models: data.models?.map((m) => m.name) ?? [] });
+    } catch {
+      res.json({ ready: false, models: [] });
+    }
+  });
 }

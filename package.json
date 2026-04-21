@@ -80,6 +80,13 @@
           ]
         }
       ]
-    }
+    },
+    "extraResources": [
+      {
+        "from": "resources/ollama",
+        "to": "ollama",
+        "filter": ["**/*"]
+      }
+    ]
   }
 }

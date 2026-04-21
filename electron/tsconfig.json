@@ -13,5 +13,5 @@
       "@/*": ["src/*"]
     }
   },
-  "include": ["main.ts", "preload.ts"]
+  "include": ["main.ts", "preload.ts", "ollamaManager.ts"]
 }

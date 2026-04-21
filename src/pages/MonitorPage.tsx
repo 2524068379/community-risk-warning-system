@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Tag } from 'antd';
 import { useLocalCamera } from '@/hooks/useLocalCamera';
 import { useAppStore } from '@/store/useAppStore';
+import { useVlmAnalysis } from '@/hooks/useVlmAnalysis';
 import { riskColorMap, riskLevelTextMap } from '@/utils/risk';
 
 export function MonitorPage() {
@@ -9,7 +10,7 @@ export function MonitorPage() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [timestamp, setTimestamp] = useState(() => new Date().toLocaleString());
 
-  const { cameras, activeCameraId, setActiveCamera } = useAppStore();
+  const { cameras, activeCameraId, setActiveCamera, vlmStatus, vlmError, detectionBoxes } = useAppStore();
   const activeCamera = cameras.find((c) => c.id === activeCameraId);
 
   useEffect(() => {
@@ -18,12 +19,28 @@ export function MonitorPage() {
     }
   }, [stream]);
 
+  useVlmAnalysis({
+    videoRef,
+    cameraId: activeCamera?.id ?? 'LOCAL',
+    scene: activeCamera?.scene ?? '本地摄像头',
+    enabled: !!stream
+  });
+
   useEffect(() => {
     const timer = setInterval(() => {
       setTimestamp(new Date().toLocaleString());
     }, 1000);
     return () => clearInterval(timer);
   }, []);
+
+  const statusText = vlmStatus === 'analyzing' ? '分析中'
+    : vlmStatus === 'ready' ? 'VLM 在线'
+    : vlmStatus === 'error' ? 'VLM 异常'
+    : '等待连接';
+  const statusColor = vlmStatus === 'ready' ? 'success'
+    : vlmStatus === 'analyzing' ? 'processing'
+    : vlmStatus === 'error' ? 'error'
+    : 'default';
 
   return (
     <div className="monitor-layout">
@@ -36,9 +53,12 @@ export function MonitorPage() {
               {activeCamera?.name ?? '本地摄像头'} · {activeCamera?.area ?? ''}
             </div>
           </div>
-          <Tag color={activeCamera?.status === 'online' ? 'success' : 'default'}>
-            {activeCamera?.status === 'online' ? '在线' : '离线'}
-          </Tag>
+          <div style={{ display: 'flex', gap: 4 }}>
+            <Tag color={activeCamera?.status === 'online' ? 'success' : 'default'}>
+              {activeCamera?.status === 'online' ? '在线' : '离线'}
+            </Tag>
+            <Tag color={statusColor} style={{ fontSize: 11 }}>{statusText}</Tag>
+          </div>
         </div>
 
         <div className="monitor-video-stage">
@@ -65,6 +85,25 @@ export function MonitorPage() {
               <span className="monitor-video-overlay-time">{timestamp}</span>
             </div>
           )}
+          {vlmStatus === 'error' && vlmError && (
+            <div style={{ position: 'absolute', bottom: 40, left: 8, right: 8, background: 'rgba(244,63,94,0.15)', border: '1px solid rgba(244,63,94,0.3)', borderRadius: 4, padding: '4px 8px', fontSize: 11, color: '#f43f5e' }}>
+              {vlmError}
+            </div>
+          )}
+          {detectionBoxes.map((box, i) => (
+            <div
+              key={i}
+              className={`detection-box ${box.risk ? 'danger-box' : 'notice-box'}`}
+              style={{
+                top: `${box.y * 100}%`,
+                left: `${box.x * 100}%`,
+                width: `${box.width * 100}%`,
+                height: `${box.height * 100}%`
+              }}
+            >
+              <span>{box.label} {Math.round(box.confidence * 100)}%</span>
+            </div>
+          ))}
         </div>
       </div>
 

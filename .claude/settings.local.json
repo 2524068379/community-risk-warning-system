@@ -12,7 +12,11 @@
       "Bash(npm run *)",
       "Bash(npm view *)",
       "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\('version:', d.get\\('version'\\)\\); print\\('deps:', list\\(d.get\\('dependencies',{}\\).keys\\(\\)\\)\\)\")",
-      "Bash(node *)"
+      "Bash(node *)",
+      "WebSearch",
+      "mcp__web-reader__webReader",
+      "mcp__zread__get_repo_structure",
+      "Bash(npm test *)"
     ]
   }
 }

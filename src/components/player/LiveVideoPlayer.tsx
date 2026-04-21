@@ -1,6 +1,6 @@
 import { Alert, Button, Empty, Space, Tag } from 'antd';
 import mpegts from 'mpegts.js';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import type { StreamType } from '@/types';
 import { mediaEventToPlayerStatus, type LivePlayerStatus } from '@/components/player/playbackStatus';
 
@@ -10,12 +10,15 @@ interface LiveVideoPlayerProps {
   posterText?: string;
 }
 
-export function LiveVideoPlayer({ url, type = 'flv', posterText }: LiveVideoPlayerProps) {
+export const LiveVideoPlayer = forwardRef<HTMLVideoElement, LiveVideoPlayerProps>(
+  function LiveVideoPlayer({ url, type = 'flv', posterText }, forwardedRef) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const playerRef = useRef<mpegts.Player | null>(null);
   const [error, setError] = useState<string>();
   const [status, setStatus] = useState<LivePlayerStatus>('idle');
   const [retryToken, setRetryToken] = useState(0);
+
+  useImperativeHandle(forwardedRef, () => videoRef.current!);
 
   const supportText = useMemo(() => {
     if (type === 'flv' || type === 'mpegts') {
@@ -147,4 +150,5 @@ export function LiveVideoPlayer({ url, type = 'flv', posterText }: LiveVideoPlay
       </div>
     </div>
   );
-}
+  }
+);

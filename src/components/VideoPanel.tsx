@@ -2,6 +2,7 @@ import { Space, Tag } from 'antd';
 import type { CameraPoint } from '@/types';
 import { riskColorMap, riskLevelTextMap } from '@/utils/risk';
 import { LiveVideoPlayer } from '@/components/player/LiveVideoPlayer';
+import { useAppStore } from '@/store/useAppStore';
 
 interface VideoPanelProps {
   camera: CameraPoint;
@@ -18,6 +19,7 @@ export function VideoPanel({
 }: VideoPanelProps) {
   const isCompact = density === 'compact';
   const shouldShowInfoStrip = showInfoStrip ?? !isCompact;
+  const detectionBoxes = useAppStore((s) => s.detectionBoxes);
 
   return (
     <div className={`video-panel ${isCompact ? 'compact' : ''} ${shouldShowInfoStrip ? '' : 'condensed'}`}>
@@ -40,12 +42,20 @@ export function VideoPanel({
           type={camera.streamType}
           posterText={`当前点位：${camera.streamCover}。后续可替换为真实 ${String(camera.streamType || 'flv').toUpperCase()} 实时流。`}
         />
-        <div className="detection-box danger-box">
-          <span>疑似风险目标 92%</span>
-        </div>
-        <div className="detection-box notice-box">
-          <span>重点区域</span>
-        </div>
+        {detectionBoxes.map((box, i) => (
+          <div
+            key={i}
+            className={`detection-box ${box.risk ? 'danger-box' : 'notice-box'}`}
+            style={{
+              top: `${box.y * 100}%`,
+              left: `${box.x * 100}%`,
+              width: `${box.width * 100}%`,
+              height: `${box.height * 100}%`
+            }}
+          >
+            <span>{box.label} {Math.round(box.confidence * 100)}%</span>
+          </div>
+        ))}
       </div>
 
       {shouldShowInfoStrip ? (

@@ -4,6 +4,7 @@ import path from 'node:path'
 import fs from 'node:fs'
 import dotenv from 'dotenv'
 import { createQwenProxyApp, loadQwenProxyConfig } from '../server/qwenProxy.js'
+import { startOllama, stopOllama, isOllamaReady, getOllamaBaseUrl, isGpuAvailable } from './ollamaManager.js'
 
 const baseDir = app.isPackaged ? path.dirname(app.getPath('exe')) : app.getAppPath()
 
@@ -34,6 +35,12 @@ ipcMain.handle('get-api-base', () => {
   return `http://localhost:${apiPort}`
 })
 
+ipcMain.handle('get-ollama-status', () => ({
+  ready: isOllamaReady(),
+  baseUrl: getOllamaBaseUrl(),
+  gpu: isGpuAvailable()
+}))
+
 let mainWindow: BrowserWindow | null = null
 
 function createWindow(): void {
@@ -57,11 +64,13 @@ function createWindow(): void {
   }
 }
 
-app.on('ready', () => {
+app.on('ready', async () => {
   createWindow()
+  await startOllama()
 })
 
-app.on('window-all-closed', () => {
+app.on('window-all-closed', async () => {
+  await stopOllama()
   httpServer.close()
   app.quit()
 })

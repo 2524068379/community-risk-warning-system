@@ -106,3 +106,13 @@ export interface EventTypeStat {
   count: number;
   color: string;
 }
+
+export interface DetectionBox {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  label: string;
+  confidence: number;
+  risk: boolean;
+}

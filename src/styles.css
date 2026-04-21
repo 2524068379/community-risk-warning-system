@@ -1231,10 +1231,6 @@ a {
 }
 
 .detection-box.danger-box {
-  top: 15%;
-  left: 10%;
-  width: 30%;
-  height: 45%;
   border-color: #f43f5e;
   color: #f43f5e;
   display: flex;
@@ -1243,8 +1239,6 @@ a {
 }
 
 .detection-box.notice-box {
-  bottom: 20%;
-  right: 15%;
   border-color: var(--accent-orange);
   color: var(--accent-orange);
   background: rgba(255, 140, 0, 0.08);

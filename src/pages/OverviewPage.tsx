@@ -1,8 +1,10 @@
 import { useRef, useEffect } from 'react';
+import { Tag } from 'antd';
 import { CameraMapPanel } from '@/components/CameraMapPanel';
 import { VlmAnalysisPanel } from '@/components/VlmAnalysisPanel';
 import { useAppStore } from '@/store/useAppStore';
 import { useLocalCamera } from '@/hooks/useLocalCamera';
+import { useVlmAnalysis } from '@/hooks/useVlmAnalysis';
 import {
   PieChart,
   Pie,
@@ -29,8 +31,16 @@ function renderPieLabel({ cx, cy, midAngle, outerRadius, name, percent }: any) {
   );
 }
 
+const vlmStatusConfig: Record<string, { color: string; text: string }> = {
+  idle: { color: 'default', text: '等待连接' },
+  loading: { color: 'processing', text: '加载模型...' },
+  analyzing: { color: 'processing', text: '分析中...' },
+  ready: { color: 'success', text: 'VLM 在线' },
+  error: { color: 'error', text: 'VLM 异常' }
+};
+
 export function OverviewPage() {
-  const { cameras, activeCameraId, analysis, setActiveCamera } = useAppStore();
+  const { cameras, activeCameraId, analysis, setActiveCamera, vlmStatus } = useAppStore();
   const { stream, loading, error } = useLocalCamera();
   const videoRef = useRef<HTMLVideoElement>(null);
 
@@ -39,6 +49,17 @@ export function OverviewPage() {
       videoRef.current.srcObject = stream;
     }
   }, [stream]);
+
+  const activeCamera = cameras.find((c) => c.id === activeCameraId);
+
+  useVlmAnalysis({
+    videoRef,
+    cameraId: activeCamera?.id ?? 'LOCAL',
+    scene: activeCamera?.scene ?? '本地摄像头',
+    enabled: !!stream
+  });
+
+  const statusCfg = vlmStatusConfig[vlmStatus] ?? vlmStatusConfig.idle;
 
   return (
     <div className="overview-grid">
@@ -49,6 +70,7 @@ export function OverviewPage() {
             <div className="video-title">视频监控</div>
             <div className="video-subtitle">本地摄像头实时画面</div>
           </div>
+          <Tag color={statusCfg.color} style={{ fontSize: 11 }}>{statusCfg.text}</Tag>
         </div>
         <div className="video-frame real-video-frame">
           {loading && (
@@ -71,7 +93,10 @@ export function OverviewPage() {
 
       {/* 右上：VLM 实时数据 */}
       <div className="panel">
-        <div className="panel-title">VLM 实时数据</div>
+        <div className="panel-title" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <span>VLM 实时数据</span>
+          <Tag color={statusCfg.color} style={{ fontSize: 10 }}>{statusCfg.text}</Tag>
+        </div>
         <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
           <VlmAnalysisPanel analysis={analysis} variant="compact" />
         </div>
@@ -133,7 +158,7 @@ export function OverviewPage() {
                   <Tooltip
                     contentStyle={{ background: 'rgba(8, 15, 29, 0.9)', border: '1px solid rgba(0, 195, 255, 0.2)' }}
                     itemStyle={{ color: '#fff' }}
-                    formatter={(value: number) => [`${value}%`, '占比']}
+                    formatter={(value) => [`${value}%`, '占比']}
                   />
                 </PieChart>
               </ResponsiveContainer>
