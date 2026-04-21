@@ -1,0 +1,17 @@
+version: 2
+updates:
+  - package-ecosystem: "npm"
+    # 扫描项目根目录的 package.json
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    # 自定义依赖更新 PR 的标签
+    labels:
+      - "dependencies"
+      - "dependabot"
+    # （可选）如果有需要忽略更新的特定包，可以在这里配置
+    # ignore:
+    #   - dependency-name: "example-package"
+    commit-message:
+      prefix: "chore"
+      include: "scope"

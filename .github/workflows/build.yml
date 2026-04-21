@@ -35,7 +35,7 @@ jobs:
 
       - name: Cache VLM model files
         id: cache-vlm
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: resources/vlm
           key: vlm-qwen3.5-4b-q4km-mmproj-v1

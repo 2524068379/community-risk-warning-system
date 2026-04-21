@@ -150,7 +150,19 @@ export function createOllamaProxyRoutes(app) {
       try {
         payload = JSON.parse(text);
       } catch {
+        console.error('[ollama-proxy] Non-JSON response:', text.slice(0, 500));
         payload = { raw: text };
+      }
+
+      if (payload?.choices?.[0]?.message?.content) {
+        const content = payload.choices[0].message.content;
+        console.log('[ollama-proxy] Model output length:', content.length);
+        if (content.length < 500) {
+          console.log('[ollama-proxy] Model output:', content);
+        } else {
+          console.log('[ollama-proxy] Model output (first 300):', content.slice(0, 300));
+          console.log('[ollama-proxy] Model output (last 200):', content.slice(-200));
+        }
       }
 
       return res.status(response.status).json(payload);

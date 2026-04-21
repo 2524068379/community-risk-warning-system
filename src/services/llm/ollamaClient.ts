@@ -4,32 +4,15 @@ import type { VlmAnalysis, DetectionBox } from '@/types'
 const OLLAMA_PROXY_PATH = '/api/ollama/chat/completions'
 const OLLAMA_MODEL = 'qwen3.5:4b-q4_K_M'
 
-const SYSTEM_PROMPT = `你是一个社区安全监控视觉语言模型。你的任务是分析社区摄像头画面，识别潜在的安全风险。
+const SYSTEM_PROMPT = `/no_think
+你是社区安全监控系统。分析摄像头画面，返回纯JSON，不要任何其他文字。
 
-你需要检测以下风险类型：
-1. 消防风险：消防通道堵塞、电动车违规停放/充电、易燃物品堆放
-2. 治安风险：可疑徘徊、异常聚集、非法闯入、财物安全隐患
-3. 救助预警：人员摔倒、长时间倒地、求助信号、老人/儿童异常情况
-4. 环境风险：积水、路面损坏、照明故障、设施损坏
-5. 设备异常：摄像头遮挡、画面异常、信号丢失前兆
+检测：消防(通道堵塞/电动车违规)、治安(徘徊/聚集/闯入)、救助(摔倒/求助)、环境(积水/损坏)、设备(遮挡/异常)。
 
-你必须严格按照以下JSON格式返回分析结果，不要添加任何其他文字说明：
-{
-  "hasRisk": true或false,
-  "riskScore": 0到100的整数,
-  "level": "A"或"B"或"C"，其中A为高危、B为中危、C为低危或正常,
-  "confidence": 0.0到1.0的浮点数,
-  "summary": "一句话风险摘要，不超过50字",
-  "evidenceTimeline": ["HH:MM:SS 事件描述"],
-  "breakdown": [{"label":"风险类别名","value":占比百分比整数}],
-  "detectionBoxes": [{"x":0.0到1.0,"y":0.0到1.0,"width":0.0到1.0,"height":0.0到1.0,"label":"标注说明","confidence":0.0到1.0,"risk":true或false}]
-}
+直接返回JSON，不要思考过程，不要markdown标记：
+{"hasRisk":false,"riskScore":0,"level":"C","confidence":0.0,"summary":"","evidenceTimeline":[],"breakdown":[{"label":"正常","value":100}],"detectionBoxes":[]}
 
-注意：
-- 如果画面正常无风险，riskScore应低于30，level为C，hasRisk为false
-- breakdown的value总和应为100
-- detectionBox坐标为归一化比例(0到1)，表示在画面中的相对位置
-- 仅返回JSON，不要包含markdown代码块标记`
+正常画面：riskScore<30,level=C,hasRisk=false。风险画面按实际填写。detectionBox坐标0-1归一化。breakdown的value总和100。`
 
 function buildUserPrompt(cameraId: string, scene: string): string {
   const now = new Date().toLocaleTimeString('zh-CN', { hour12: false })
@@ -51,20 +34,48 @@ function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value))
 }
 
-function parseVlmResponse(raw: string): { analysis: VlmAnalysis; boxes: DetectionBox[] } {
-  let jsonStr = raw.trim()
+function stripThinkTags(text: string): string {
+  return text.replace(/<think\b[^>]*>[\s\S]*?<\/think>/gi, '').trim()
+}
 
-  const fenceMatch = jsonStr.match(/```(?:json)?\s*([\s\S]*?)```/)
+function extractJson(raw: string): string | null {
+  let text = raw.trim()
+
+  // Strip <think/> blocks (Qwen3 reasoning)
+  text = stripThinkTags(text)
+
+  // Try markdown code fence
+  const fenceMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/)
   if (fenceMatch) {
-    jsonStr = fenceMatch[1].trim()
+    text = fenceMatch[1].trim()
   }
 
-  const braceStart = jsonStr.indexOf('{')
-  const braceEnd = jsonStr.lastIndexOf('}')
-  if (braceStart !== -1 && braceEnd > braceStart) {
-    jsonStr = jsonStr.slice(braceStart, braceEnd + 1)
+  // Find balanced outermost { }
+  let depth = 0
+  let start = -1
+  for (let i = 0; i < text.length; i++) {
+    if (text[i] === '{') {
+      if (depth === 0) start = i
+      depth++
+    } else if (text[i] === '}') {
+      depth--
+      if (depth === 0 && start !== -1) {
+        return text.slice(start, i + 1)
+      }
+    }
   }
 
+  // Fallback: first { to last }
+  const first = text.indexOf('{')
+  const last = text.lastIndexOf('}')
+  if (first !== -1 && last > first) {
+    return text.slice(first, last + 1)
+  }
+
+  return null
+}
+
+function parseVlmResponse(raw: string): { analysis: VlmAnalysis; boxes: DetectionBox[] } {
   const fallback: VlmAnalysis = {
     riskScore: 0,
     level: 'C',
@@ -74,6 +85,12 @@ function parseVlmResponse(raw: string): { analysis: VlmAnalysis; boxes: Detectio
     evidenceTimeline: [],
     breakdown: [{ label: '解析失败', value: 100 }],
     trend: []
+  }
+
+  const jsonStr = extractJson(raw)
+  if (!jsonStr) {
+    console.warn('[vlm-parser] No JSON found in response, raw length:', raw.length, 'first 200:', raw.slice(0, 200))
+    return { analysis: fallback, boxes: [] }
   }
 
   try {
@@ -97,7 +114,8 @@ function parseVlmResponse(raw: string): { analysis: VlmAnalysis; boxes: Detectio
       : []
 
     return { analysis, boxes }
-  } catch {
+  } catch (e) {
+    console.warn('[vlm-parser] JSON parse failed:', e instanceof Error ? e.message : e, 'jsonStr:', jsonStr.slice(0, 300))
     return { analysis: fallback, boxes: [] }
   }
 }
@@ -128,5 +146,6 @@ export async function analyzeFrameWithOllama(
   })
 
   const content = response.data?.choices?.[0]?.message?.content ?? ''
+  console.log('[vlm-client] Raw response length:', content.length, 'first 200:', content.slice(0, 200))
   return parseVlmResponse(content)
 }
