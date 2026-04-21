@@ -9,7 +9,10 @@
       "Bash(node -e ' *)",
       "Bash(npm ls *)",
       "Bash(npm install *)",
-      "Bash(npm run *)"
+      "Bash(npm run *)",
+      "Bash(npm view *)",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\('version:', d.get\\('version'\\)\\); print\\('deps:', list\\(d.get\\('dependencies',{}\\).keys\\(\\)\\)\\)\")",
+      "Bash(node *)"
     ]
   }
 }

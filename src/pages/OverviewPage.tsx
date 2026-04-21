@@ -7,12 +7,27 @@ import {
   PieChart,
   Pie,
   Cell,
+  Legend,
   LineChart,
   Line,
   XAxis,
   Tooltip,
   ResponsiveContainer
 } from 'recharts';
+
+const RISK_COLORS = ['#00c3ff', '#3b82f6', '#ff8c00', '#f43f5e'];
+const RADIAN = Math.PI / 180;
+
+function renderPieLabel({ cx, cy, midAngle, outerRadius, name, percent }: any) {
+  const radius = outerRadius * 1.35;
+  const x = cx + radius * Math.cos(-midAngle * RADIAN);
+  const y = cy + radius * Math.sin(-midAngle * RADIAN);
+  return (
+    <text x={x} y={y} fill="rgba(255,255,255,0.85)" textAnchor="middle" dominantBaseline="central" fontSize={11}>
+      {name} {(percent * 100).toFixed(0)}%
+    </text>
+  );
+}
 
 export function OverviewPage() {
   const { cameras, activeCameraId, analysis, setActiveCamera } = useAppStore();
@@ -90,22 +105,35 @@ export function OverviewPage() {
                     data={analysis.breakdown}
                     cx="50%"
                     cy="50%"
-                    innerRadius="50%"
-                    outerRadius="80%"
-                    paddingAngle={5}
+                    innerRadius="42%"
+                    outerRadius="68%"
+                    paddingAngle={3}
                     dataKey="value"
+                    nameKey="label"
                     stroke="none"
+                    label={renderPieLabel}
+                    labelLine={false}
                   >
-                    {analysis.breakdown.map((entry, index) => (
-                      <Cell
-                        key={`cell-${index}`}
-                        fill={['#00c3ff', '#3b82f6', '#ff8c00', '#f43f5e'][index % 4]}
-                      />
+                    {analysis.breakdown.map((_, index) => (
+                      <Cell key={`cell-${index}`} fill={RISK_COLORS[index % RISK_COLORS.length]} />
                     ))}
                   </Pie>
+                  <text x="50%" y="44%" textAnchor="middle" dominantBaseline="central" fill="#fff" fontSize={22} fontWeight={700}>
+                    {analysis.riskScore}
+                  </text>
+                  <text x="50%" y="56%" textAnchor="middle" dominantBaseline="central" fill="rgba(255,255,255,0.45)" fontSize={10}>
+                    风险评分
+                  </text>
+                  <Legend
+                    verticalAlign="bottom"
+                    iconType="circle"
+                    iconSize={8}
+                    formatter={(value: string) => <span style={{ color: 'rgba(255,255,255,0.65)', fontSize: 11 }}>{value}</span>}
+                  />
                   <Tooltip
                     contentStyle={{ background: 'rgba(8, 15, 29, 0.9)', border: '1px solid rgba(0, 195, 255, 0.2)' }}
                     itemStyle={{ color: '#fff' }}
+                    formatter={(value: number) => [`${value}%`, '占比']}
                   />
                 </PieChart>
               </ResponsiveContainer>

@@ -1,3 +1,0 @@
-- [x] `src/router/index.tsx` 使用 `createHashRouter` 而非 `createBrowserRouter`
-- [x] `npm run typecheck` 通过，无类型错误（仅有与本次修改无关的 vitest 类型声明问题）
-- [x] `npm run build` 构建成功

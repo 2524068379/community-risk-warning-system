@@ -1,6 +1,0 @@
-- [x] CI workflow (`build.yml`) 在 `npm run build` 之前从 GitHub Secrets 创建 `.env` 文件
-- [x] `electron/main.ts` 中 `dotenv.config()` 使用基于 exe 目录的绝对路径加载 `.env.server`
-- [x] `.env.server` 不存在时应用能正常启动，不崩溃
-- [x] `package.json` 的 `build.files` 包含 `.env.server.example`
-- [x] `npm run typecheck` 通过（electron 部分无错误，其余为已有 vitest 声明问题）
-- [x] `npm run build` 构建成功

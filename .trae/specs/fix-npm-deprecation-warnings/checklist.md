@@ -1,4 +1,0 @@
-- [x] electron-builder 已更新到最新稳定版本
-- [x] package.json 中已添加 overrides 配置覆盖 glob@10（替换为 glob@13）
-- [x] `npm install` 不再出现任何弃用警告
-- [x] `npm run build` 构建成功无错误

@@ -1,8 +1,0 @@
-- [x] Header 中新增的内联指标条（在线设备数、今日风险事件、待处置工单、平均预警时延）可见且与现有 header 元素在同一行排列
-- [x] OverviewPage 中 overview-status-strip 整行已被移除，页面不再显示独立的指标卡片行
-- [x] OverviewPage 左侧视频面板占据约 45% 宽度，右侧占据约 55% 宽度
-- [x] OverviewPage 右侧 VLM 面板高度约占 60%，完整展示所有 full variant 内容（风险分数、洞察、构成、趋势、时间轴）
-- [x] OverviewPage 右侧地图面板高度约占 40%，以静态 display 模式展示，无交互控件
-- [x] 所有组件无堆叠、无溢出、无遮挡，在 2560×1440 分辨率下显示正常
-- [x] MonitorPage 和 AlertsPage 在新样式下布局正常，无异常
-- [x] 页面在 1440px 以下宽度仍然有合理的响应式降级

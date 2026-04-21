@@ -49,6 +49,14 @@
   "overrides": {
     "cacache": {
       "glob": "^13.0.0"
+    },
+    "@electron/asar": "^4.2.0",
+    "electron": {
+      "@electron/get": "^4.0.3"
+    },
+    "global-agent": "^4.1.3",
+    "temp": {
+      "rimraf": "^6.0.0"
     }
   },
   "build": {
