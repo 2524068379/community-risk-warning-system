@@ -38,7 +38,7 @@ jobs:
         uses: actions/cache@v5
         with:
           path: resources/vlm
-          key: vlm-qwen3.5-4b-q4km-mmproj-v1
+          key: vlm-jackrong-qwen3.5-4b-q4km-mmproj-v2
 
       - name: Download VLM model files
         if: steps.cache-vlm.outputs.cache-hit != 'true'
@@ -58,11 +58,11 @@ jobs:
 
           Remove-Item resources/vlm/llama.zip, resources/vlm/cudart.zip
 
-          Write-Host "Downloading Qwen3.5-4B Q4_K_M model (~2.55 GB)..."
-          curl -L -o "resources/vlm/Qwen3.5-4B-Q4_K_M.gguf" "https://huggingface.co/unsloth/Qwen3.5-4B-GGUF/resolve/main/Qwen3.5-4B-Q4_K_M.gguf"
+          Write-Host "Downloading Jackrong/Qwen3.5-4B-Claude-4.6-Opus-Reasoning-Distilled-v2-GGUF Q4_K_M model (~2.55 GB)..."
+          curl -L -o "resources/vlm/Qwen3.5-4B.Q4_K_M.gguf" "https://huggingface.co/Jackrong/Qwen3.5-4B-Claude-4.6-Opus-Reasoning-Distilled-v2-GGUF/resolve/main/Qwen3.5-4B.Q4_K_M.gguf"
 
           Write-Host "Downloading mmproj vision encoder (~644 MB)..."
-          curl -L -o "resources/vlm/mmproj-BF16.gguf" "https://huggingface.co/unsloth/Qwen3.5-4B-GGUF/resolve/main/mmproj-BF16.gguf"
+          curl -L -o "resources/vlm/mmproj-BF16.gguf" "https://huggingface.co/Jackrong/Qwen3.5-4B-Claude-4.6-Opus-Reasoning-Distilled-v2-GGUF/resolve/main/mmproj-BF16.gguf"
 
           Write-Host "VLM files downloaded:"
           Get-ChildItem resources/vlm | Format-Table Name, Length
