@@ -2,9 +2,9 @@ import { describe, expect, it } from 'vitest';
 import {
   buildQwenRequestBody,
   isAllowedCorsOrigin,
-  loadQwenProxyConfig,
-  resolveOllamaHealthStatus
+  loadQwenProxyConfig
 } from './qwenProxy.js';
+import { resolveOllamaHealthStatus } from './ollamaHealthStatus.js';
 
 describe('qwenProxy', () => {
   it('normalizes config from environment variables', () => {

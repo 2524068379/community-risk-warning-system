@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { resolveOllamaHealthStatus } from './ollamaManager'
+import { resolveOllamaHealthStatus } from '../server/ollamaHealthStatus.js'
 
 describe('resolveOllamaHealthStatus', () => {
   it('marks 2xx health responses as ready', () => {

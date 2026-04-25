@@ -1,5 +1,6 @@
 import express from 'express';
 import cors from 'cors';
+import { resolveOllamaHealthStatus } from './ollamaHealthStatus.js';
 
 function parseCorsOrigin(rawOrigin = 'http://localhost:5173') {
   const trimmed = rawOrigin.trim();
@@ -54,18 +55,6 @@ export function buildQwenRequestBody(body = {}, defaultModel) {
   }
 
   return requestBody;
-}
-
-export function resolveOllamaHealthStatus(statusCode) {
-  if (statusCode >= 200 && statusCode < 300) {
-    return { ready: true, status: 'ready', gpu: 'unknown' };
-  }
-
-  if (statusCode === 503) {
-    return { ready: false, status: 'loading', gpu: 'unknown' };
-  }
-
-  return { ready: false, status: 'error', gpu: 'unknown' };
 }
 
 export function createQwenProxyApp(config = loadQwenProxyConfig()) {

@@ -2,6 +2,12 @@ import { app } from 'electron'
 import { spawn, type ChildProcess } from 'node:child_process'
 import path from 'node:path'
 import fs from 'node:fs'
+import {
+  GPU_AVAILABILITY_UNKNOWN,
+  resolveOllamaHealthStatus,
+  type GpuAvailability,
+  type OllamaRuntimeStatus
+} from '../server/ollamaHealthStatus.js'
 
 const VLM_PORT = 11434
 const VLM_BASE = `http://127.0.0.1:${VLM_PORT}`
@@ -12,15 +18,6 @@ let serverProcess: ChildProcess | null = null
 let ready = false
 let status: OllamaRuntimeStatus = 'starting'
 
-export type OllamaRuntimeStatus = 'starting' | 'loading' | 'ready' | 'error'
-export type GpuAvailability = 'unknown'
-
-export interface OllamaHealthStatus {
-  ready: boolean
-  status: OllamaRuntimeStatus
-  gpu: GpuAvailability
-}
-
 export function getOllamaBaseUrl(): string {
   return VLM_BASE
 }
@@ -30,23 +27,11 @@ export function isOllamaReady(): boolean {
 }
 
 export function isGpuAvailable(): GpuAvailability {
-  return 'unknown'
+  return GPU_AVAILABILITY_UNKNOWN
 }
 
 export function getOllamaRuntimeStatus(): OllamaRuntimeStatus {
   return status
-}
-
-export function resolveOllamaHealthStatus(statusCode: number): OllamaHealthStatus {
-  if (statusCode >= 200 && statusCode < 300) {
-    return { ready: true, status: 'ready', gpu: 'unknown' }
-  }
-
-  if (statusCode === 503) {
-    return { ready: false, status: 'loading', gpu: 'unknown' }
-  }
-
-  return { ready: false, status: 'error', gpu: 'unknown' }
 }
 
 async function checkReady(): Promise<boolean> {
