@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import {
   buildQwenRequestBody,
   isAllowedCorsOrigin,
-  loadQwenProxyConfig
+  loadQwenProxyConfig,
+  parseProxyResponseText
 } from './qwenProxy.js';
 import { resolveOllamaHealthStatus } from './ollamaHealthStatus.js';
 
@@ -55,5 +56,15 @@ describe('qwenProxy', () => {
     expect(resolveOllamaHealthStatus(200)).toEqual({ ready: true, status: 'ready', gpu: 'unknown' });
     expect(resolveOllamaHealthStatus(503)).toEqual({ ready: false, status: 'loading', gpu: 'unknown' });
     expect(resolveOllamaHealthStatus(500)).toEqual({ ready: false, status: 'error', gpu: 'unknown' });
+  });
+
+  it('parses upstream JSON responses', () => {
+    expect(parseProxyResponseText('{"choices":[{"message":{"content":"ok"}}]}')).toEqual({
+      choices: [{ message: { content: 'ok' } }]
+    });
+  });
+
+  it('keeps non-JSON upstream responses in a raw payload', () => {
+    expect(parseProxyResponseText('service unavailable')).toEqual({ raw: 'service unavailable' });
   });
 });

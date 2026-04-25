@@ -57,6 +57,15 @@ export function buildQwenRequestBody(body = {}, defaultModel) {
   return requestBody;
 }
 
+export function parseProxyResponseText(text, onInvalidJson) {
+  try {
+    return JSON.parse(text);
+  } catch {
+    onInvalidJson?.(text);
+    return { raw: text };
+  }
+}
+
 export function createQwenProxyApp(config = loadQwenProxyConfig()) {
   const app = express();
 
@@ -105,13 +114,7 @@ export function createQwenProxyApp(config = loadQwenProxyConfig()) {
       });
 
       const text = await response.text();
-      let payload;
-
-      try {
-        payload = JSON.parse(text);
-      } catch {
-        payload = { raw: text };
-      }
+      const payload = parseProxyResponseText(text);
 
       return res.status(response.status).json(payload);
     } catch (error) {
@@ -147,13 +150,9 @@ export function createOllamaProxyRoutes(app) {
       });
 
       const text = await response.text();
-      let payload;
-      try {
-        payload = JSON.parse(text);
-      } catch {
-        console.error('[ollama-proxy] Non-JSON response:', text.slice(0, 500));
-        payload = { raw: text };
-      }
+      const payload = parseProxyResponseText(text, (rawText) => {
+        console.error('[ollama-proxy] Non-JSON response:', rawText.slice(0, 500));
+      });
 
       if (payload?.choices?.[0]?.message?.content) {
         const content = payload.choices[0].message.content;
