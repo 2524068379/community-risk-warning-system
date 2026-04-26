@@ -22,7 +22,7 @@
   "dependencies": {
     "@ant-design/icons": "^6.0.0",
     "antd": "^6.3.6",
-    "axios": "^1.11.0",
+    "axios": "^1.15.2",
     "cors": "^2.8.5",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
