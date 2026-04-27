@@ -86,9 +86,9 @@ export function OverviewPage() {
 
       {/* 右上：VLM 实时数据 */}
       <div className="panel">
-        <div className="panel-title" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div className="panel-title">
           <span>VLM 实时数据</span>
-          <Tag color={statusCfg.color} style={{ fontSize: 10 }}>{statusCfg.text}</Tag>
+          <Tag color={statusCfg.color} style={{ marginLeft: 'auto', fontSize: 10 }}>{statusCfg.text}</Tag>
         </div>
         <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
           <VlmAnalysisPanel analysis={analysis} variant="compact" />

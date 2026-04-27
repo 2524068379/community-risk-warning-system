@@ -30,22 +30,54 @@ export function VlmAnalysisPanel({ analysis, variant = 'full' }: VlmAnalysisPane
 
   const isCompact = variant === 'compact';
 
-  return (
-    <div className={`vlm-panel ${variant !== 'full' ? variant : ''}`}>
-      {!isCompact && (
-        <div className="vlm-header">
-          <div>
-            <div className="vlm-eyebrow">视觉语言模型分析</div>
-            <div className="vlm-title">{variant === 'summary' ? 'VLM 风险摘要' : 'VLM 实时数据板块'}</div>
+  if (isCompact) {
+    return (
+      <div className="vlm-panel compact">
+        <div className="vlm-compact-scorebar">
+          <div className="vlm-compact-score-block">
+            <span className="vlm-compact-score-num" style={{ color: riskGradeColorMap[analysis.level] }}>
+              {analysis.riskScore}
+            </span>
+            <span className="vlm-score-label">综合风险分</span>
           </div>
-          <Space size={4}>
+          <div className="vlm-compact-tags">
             <Tag color={riskGradeColorMap[analysis.level]}>等级 {analysis.level}</Tag>
             <Tag color={analysis.hasRisk ? 'error' : 'success'}>
               {analysis.hasRisk ? '存在风险' : '风险可控'}
             </Tag>
-          </Space>
+          </div>
         </div>
-      )}
+
+        <div className="vlm-insight-grid">
+          {visibleItems.map((item) => (
+            <div key={item.label} className="vlm-stat-tile">
+              <span>{item.label}</span>
+              <strong>{item.value}</strong>
+            </div>
+          ))}
+          <div className="vlm-summary-box">
+            <span>模型摘要</span>
+            <p>{analysis.summary}</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className={`vlm-panel ${variant !== 'full' ? variant : ''}`}>
+      <div className="vlm-header">
+        <div>
+          <div className="vlm-eyebrow">视觉语言模型分析</div>
+          <div className="vlm-title">{variant === 'summary' ? 'VLM 风险摘要' : 'VLM 实时数据板块'}</div>
+        </div>
+        <Space size={4}>
+          <Tag color={riskGradeColorMap[analysis.level]}>等级 {analysis.level}</Tag>
+          <Tag color={analysis.hasRisk ? 'error' : 'success'}>
+            {analysis.hasRisk ? '存在风险' : '风险可控'}
+          </Tag>
+        </Space>
+      </div>
 
       <div className="vlm-main-grid">
         <div className="vlm-score-box">
@@ -54,19 +86,11 @@ export function VlmAnalysisPanel({ analysis, variant = 'full' }: VlmAnalysisPane
           <Progress
             type="dashboard"
             percent={analysis.riskScore}
-            size={variant === 'full' ? 110 : variant === 'compact' ? 92 : 84}
+            size={variant === 'full' ? 110 : 84}
             strokeColor={riskGradeColorMap[analysis.level]}
             trailColor="rgba(255,255,255,0.06)"
             format={() => `${analysis.level}级`}
           />
-          {isCompact && (
-            <Space size={4} style={{ marginTop: 4 }}>
-              <Tag color={riskGradeColorMap[analysis.level]}>等级 {analysis.level}</Tag>
-              <Tag color={analysis.hasRisk ? 'error' : 'success'}>
-                {analysis.hasRisk ? '存在风险' : '风险可控'}
-              </Tag>
-            </Space>
-          )}
         </div>
 
         <div className="vlm-insight-grid">
