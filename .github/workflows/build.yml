@@ -104,7 +104,25 @@ jobs:
 
       - name: Package
         if: env.IS_DEPENDABOT_PR != 'true'
-        run: npm run package
+        shell: pwsh
+        run: |
+          $env:ELECTRON_MIRROR = "https://npmmirror.com/mirrors/electron/"
+          $maxAttempts = 3
+          for ($i = 1; $i -le $maxAttempts; $i++) {
+            Write-Host "Package attempt $i of $maxAttempts..."
+            npm run package
+            if ($LASTEXITCODE -eq 0) {
+              Write-Host "Package succeeded on attempt $i"
+              break
+            }
+            if ($i -lt $maxAttempts) {
+              Write-Host "Package failed, retrying in 30 seconds..."
+              Start-Sleep -Seconds 30
+            } else {
+              Write-Host "Package failed after $maxAttempts attempts"
+              exit 1
+            }
+          }
 
       - name: Create VLM model package
         if: env.IS_DEPENDABOT_PR != 'true'
