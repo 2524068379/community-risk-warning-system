@@ -205,7 +205,10 @@ export function OverviewPage() {
                   <Tooltip
                     contentStyle={{ background: 'rgba(8, 15, 29, 0.9)', border: '1px solid rgba(0, 195, 255, 0.2)' }}
                     itemStyle={{ color: '#00c3ff' }}
-                    formatter={(value: number) => [`${value}`, `风险评分${value >= HIGH_RISK_THRESHOLD ? ' (高危)' : ''}`]}
+                    formatter={(value) => {
+                      const v = Number(value ?? 0);
+                      return [`${v}`, `风险评分${v >= HIGH_RISK_THRESHOLD ? ' (高危)' : ''}`];
+                    }}
                   />
                   <ReferenceLine
                     y={HIGH_RISK_THRESHOLD}
