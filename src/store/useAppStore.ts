@@ -36,10 +36,7 @@ const waitingAnalysis: VlmAnalysis = {
     { label: '持续时长', value: 25 },
     { label: '历史重复性', value: 25 }
   ],
-  trend: [
-    { time: '--:--', value: 0 },
-    { time: '--:--', value: 0 }
-  ]
+  trend: []
 };
 
 const firstEvent = events[0];

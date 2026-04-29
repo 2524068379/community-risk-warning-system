@@ -186,6 +186,11 @@ export function OverviewPage() {
               风险趋势折线图
             </div>
             <div style={{ flex: 1, minHeight: 0, paddingRight: 10 }}>
+              {analysis.trend.length === 0 ? (
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'rgba(255,255,255,0.35)', fontSize: 12 }}>
+                  等待数据…
+                </div>
+              ) : (
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={analysis.trend}>
                   <XAxis
@@ -219,6 +224,7 @@ export function OverviewPage() {
                   />
                 </LineChart>
               </ResponsiveContainer>
+              )}
             </div>
           </div>
         </div>

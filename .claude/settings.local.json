@@ -38,7 +38,8 @@
       "Bash(pip install *)",
       "Bash(python *)",
       "Bash(antiword \"C:/Users/XuYuXuan/Downloads/github/community-risk-warning-system/结项/附件2：江苏警官学院大学生创新创业训练计划结题报告申请表.doc\")",
-      "Bash(npx vitest *)"
+      "Bash(npx vitest *)",
+      "Skill(glm-plan-usage:usage-query-skill)"
     ]
   }
 }
