@@ -116,3 +116,9 @@ export interface DetectionBox {
   confidence: number;
   risk: boolean;
 }
+
+export interface DetectionResult {
+  label: string
+  score: number
+  bbox: [number, number, number, number]
+}
