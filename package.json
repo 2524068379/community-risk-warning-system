@@ -21,6 +21,8 @@
   },
   "dependencies": {
     "@ant-design/icons": "^6.0.0",
+    "@tensorflow-models/coco-ssd": "^2.2.3",
+    "@tensorflow/tfjs": "^4.22.0",
     "antd": "^6.3.6",
     "axios": "^1.15.2",
     "cors": "^2.8.5",
@@ -89,7 +91,10 @@
       {
         "from": "resources/vlm",
         "to": "vlm",
-        "filter": ["**/*.exe", "**/*.dll"]
+        "filter": [
+          "**/*.exe",
+          "**/*.dll"
+        ]
       }
     ]
   }

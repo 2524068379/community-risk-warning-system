@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { cameras, events } from '@/data/mock';
-import type { CameraPoint, RiskEvent, VlmAnalysis, DetectionBox, TrendPoint } from '@/types';
+import type { CameraPoint, RiskEvent, VlmAnalysis, DetectionBox, TrendPoint, DetectionResult } from '@/types';
 
 export type VlmStatus = 'idle' | 'loading' | 'analyzing' | 'ready' | 'error';
 
@@ -16,11 +16,15 @@ interface AppState {
   vlmError: string | null;
   detectionBoxes: DetectionBox[];
   analysisTimestamp: number | null;
+  detectorStatus: 'idle' | 'loading' | 'ready' | 'error';
+  detectedObjects: DetectionResult[];
   setActiveCamera: (cameraId: string) => void;
   selectEvent: (eventId?: string) => void;
   markEventStatus: (eventId: string, status: RiskEvent['status']) => void;
   setAnalysis: (analysis: VlmAnalysis, boxes: DetectionBox[]) => void;
   setVlmStatus: (status: VlmStatus, error?: string) => void;
+  setDetectorStatus: (status: 'idle' | 'loading' | 'ready' | 'error') => void;
+  setDetectedObjects: (objects: DetectionResult[]) => void;
 }
 
 const waitingAnalysis: VlmAnalysis = {
@@ -47,6 +51,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   vlmError: null,
   detectionBoxes: [],
   analysisTimestamp: null,
+  detectorStatus: 'idle' as const,
+  detectedObjects: [],
 
   setActiveCamera: (cameraId) => {
     set({
@@ -87,5 +93,8 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({
       vlmStatus: status,
       vlmError: error ?? null
-    })
+    }),
+
+  setDetectorStatus: (detectorStatus) => set({ detectorStatus }),
+  setDetectedObjects: (detectedObjects) => set({ detectedObjects })
 }));
