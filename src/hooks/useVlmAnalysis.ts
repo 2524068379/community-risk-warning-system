@@ -5,7 +5,7 @@ import { useFrameCapture } from './useFrameCapture'
 import { detect, getDetectorStatus } from '@/services/detection/objectDetector'
 import { http } from '@/services/http'
 import { OLLAMA_STATUS_ROUTE } from '../../shared/apiRoutes.js'
-import type { DetectionResult } from '@/types'
+import type { DetectionResult, VlmAnalysis } from '@/types'
 
 interface VlmAnalysisOptions {
   videoRef: React.RefObject<HTMLVideoElement | null>
@@ -37,6 +37,18 @@ async function checkVlmServerReady(): Promise<boolean> {
 
 let globalServerReady = false
 const FALLBACK_INTERVAL_MS = 20000
+const FAIL_THRESHOLD = 3
+
+const connectingAnalysis: VlmAnalysis = {
+  riskScore: 0,
+  level: 'C',
+  hasRisk: false,
+  confidence: 0,
+  summary: '正在连接 VLM 服务…',
+  evidenceTimeline: [],
+  breakdown: [],
+  trend: []
+}
 
 export function useVlmAnalysis(options: VlmAnalysisOptions) {
   const {
@@ -52,6 +64,7 @@ export function useVlmAnalysis(options: VlmAnalysisOptions) {
   const analyzingRef = useRef(false)
   const lastVlmTimeRef = useRef(0)
   const detectorFailedRef = useRef(false)
+  const failCountRef = useRef(0)
 
   const shouldCapture = enabled && serverReady
 
@@ -71,7 +84,21 @@ export function useVlmAnalysis(options: VlmAnalysisOptions) {
       if (ready) {
         globalServerReady = true
         setServerReady(true)
+        failCountRef.current = 0
         useAppStore.getState().setVlmStatus('idle')
+      } else {
+        failCountRef.current++
+        if (failCountRef.current === 1) {
+          useAppStore.getState().setVlmStatus('loading')
+          useAppStore.setState({
+            analysis: { ...useAppStore.getState().analysis, summary: connectingAnalysis.summary }
+          })
+        } else if (failCountRef.current >= FAIL_THRESHOLD) {
+          useAppStore.getState().setVlmStatus(
+            'error',
+            'VLM 服务未连接，请确保后端服务已启动且模型已加载'
+          )
+        }
       }
     }
 
