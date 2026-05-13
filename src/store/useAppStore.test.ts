@@ -12,7 +12,9 @@ describe('useAppStore', () => {
       vlmStatus: 'idle',
       vlmError: null,
       detectionBoxes: [],
-      analysisTimestamp: null
+      analysisTimestamp: null,
+      detectorStatus: 'idle',
+      detectedObjects: []
     });
   });
 
@@ -86,5 +88,24 @@ describe('useAppStore', () => {
     useAppStore.getState().setVlmStatus('error', 'Connection failed');
     expect(useAppStore.getState().vlmStatus).toBe('error');
     expect(useAppStore.getState().vlmError).toBe('Connection failed');
+  });
+
+  it('updates detector status', () => {
+    useAppStore.getState().setDetectorStatus('loading');
+    expect(useAppStore.getState().detectorStatus).toBe('loading');
+
+    useAppStore.getState().setDetectorStatus('ready');
+    expect(useAppStore.getState().detectorStatus).toBe('ready');
+
+    useAppStore.getState().setDetectorStatus('error');
+    expect(useAppStore.getState().detectorStatus).toBe('error');
+  });
+
+  it('updates detected objects', () => {
+    const objects = [
+      { label: 'person', score: 0.8, bbox: [10, 20, 30, 40] as [number, number, number, number] }
+    ];
+    useAppStore.getState().setDetectedObjects(objects);
+    expect(useAppStore.getState().detectedObjects).toEqual(objects);
   });
 });
