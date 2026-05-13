@@ -2,8 +2,10 @@ import { useEffect, useRef, useState } from 'react'
 import { useAppStore } from '@/store/useAppStore'
 import { analyzeFrameWithOllama } from '@/services/llm/ollamaClient'
 import { useFrameCapture } from './useFrameCapture'
+import { detect, getDetectorStatus } from '@/services/detection/objectDetector'
 import { http } from '@/services/http'
 import { OLLAMA_STATUS_ROUTE } from '../../shared/apiRoutes.js'
+import type { DetectionResult } from '@/types'
 
 interface VlmAnalysisOptions {
   videoRef: React.RefObject<HTMLVideoElement | null>
@@ -11,6 +13,7 @@ interface VlmAnalysisOptions {
   scene: string
   enabled?: boolean
   captureIntervalMs?: number
+  fallbackIntervalMs?: number
 }
 
 interface FinalizeVlmFrameOptions {
@@ -33,6 +36,7 @@ async function checkVlmServerReady(): Promise<boolean> {
 }
 
 let globalServerReady = false
+const FALLBACK_INTERVAL_MS = 20000
 
 export function useVlmAnalysis(options: VlmAnalysisOptions) {
   const {
@@ -40,15 +44,18 @@ export function useVlmAnalysis(options: VlmAnalysisOptions) {
     cameraId,
     scene,
     enabled = true,
-    captureIntervalMs = 5000
+    captureIntervalMs = 2000,
+    fallbackIntervalMs = FALLBACK_INTERVAL_MS
   } = options
 
   const [serverReady, setServerReady] = useState(globalServerReady)
   const analyzingRef = useRef(false)
+  const lastVlmTimeRef = useRef(0)
+  const detectorFailedRef = useRef(false)
 
   const shouldCapture = enabled && serverReady
 
-  const { frameDataUrl, markConsumed } = useFrameCapture(videoRef, {
+  const { frameDataUrl, hasChanged, markConsumed } = useFrameCapture(videoRef, {
     intervalMs: captureIntervalMs,
     quality: 0.7,
     maxWidth: 640,
@@ -81,6 +88,39 @@ export function useVlmAnalysis(options: VlmAnalysisOptions) {
 
     ;(async () => {
       try {
+        if (!hasChanged) return
+
+        let shouldSendVlm = false
+        let detections: DetectionResult[] = []
+
+        if (detectorFailedRef.current) {
+          shouldSendVlm = true
+        } else {
+          try {
+            const video = videoRef.current
+            if (video && video.readyState >= 2) {
+              detections = await detect(video)
+            }
+            useAppStore.getState().setDetectorStatus(getDetectorStatus())
+            useAppStore.getState().setDetectedObjects(detections)
+          } catch {
+            detectorFailedRef.current = true
+            useAppStore.getState().setDetectorStatus('error')
+          }
+
+          if (detections.length > 0) {
+            shouldSendVlm = true
+          } else {
+            const now = Date.now()
+            if (now - lastVlmTimeRef.current >= fallbackIntervalMs) {
+              shouldSendVlm = true
+            }
+          }
+        }
+
+        if (!shouldSendVlm) return
+
+        lastVlmTimeRef.current = Date.now()
         useAppStore.getState().setVlmStatus('analyzing')
         const result = await analyzeFrameWithOllama(frameDataUrl, cameraId, scene)
         if (!cancelled) {
@@ -107,5 +147,5 @@ export function useVlmAnalysis(options: VlmAnalysisOptions) {
     return () => {
       cancelled = true
     }
-  }, [frameDataUrl, cameraId, scene, markConsumed])
+  }, [frameDataUrl, cameraId, scene, markConsumed, hasChanged, fallbackIntervalMs, videoRef])
 }
