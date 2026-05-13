@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { computeFrameDiff, toGrayscale } from '@/utils/frameDiff'
 
 interface FrameCaptureOptions {
   intervalMs?: number
@@ -6,6 +7,7 @@ interface FrameCaptureOptions {
   maxWidth?: number
   maxHeight?: number
   enabled?: boolean
+  frameDiffThreshold?: number
 }
 
 interface FrameCaptureResult {
@@ -13,35 +15,48 @@ interface FrameCaptureResult {
   isProcessing: boolean
   captureCount: number
   error: string | null
+  hasChanged: boolean
   markConsumed: () => void
 }
+
+const DIFF_WIDTH = 160
+const DIFF_HEIGHT = 120
 
 export function useFrameCapture(
   videoRef: React.RefObject<HTMLVideoElement | null>,
   options: FrameCaptureOptions = {}
 ): FrameCaptureResult {
   const {
-    intervalMs = 5000,
+    intervalMs = 2000,
     quality = 0.7,
     maxWidth = 640,
     maxHeight = 480,
-    enabled = true
+    enabled = true,
+    frameDiffThreshold = 0.05
   } = options
 
   const [frameDataUrl, setFrameDataUrl] = useState<string | null>(null)
   const [isProcessing, setIsProcessing] = useState(false)
   const [captureCount, setCaptureCount] = useState(0)
   const [error, setError] = useState<string | null>(null)
+  const [hasChanged, setHasChanged] = useState(false)
 
   const isProcessingRef = useRef(false)
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
+  const diffCanvasRef = useRef<HTMLCanvasElement | null>(null)
+  const prevGrayRef = useRef<Uint8ClampedArray | null>(null)
   const enabledRef = useRef(enabled)
   enabledRef.current = enabled
 
   useEffect(() => {
     canvasRef.current = document.createElement('canvas')
+    const diffCanvas = document.createElement('canvas')
+    diffCanvas.width = DIFF_WIDTH
+    diffCanvas.height = DIFF_HEIGHT
+    diffCanvasRef.current = diffCanvas
     return () => {
       canvasRef.current = null
+      diffCanvasRef.current = null
     }
   }, [])
 
@@ -56,11 +71,25 @@ export function useFrameCapture(
     const id = setInterval(() => {
       const video = videoRef.current
       const canvas = canvasRef.current
-      if (!video || !canvas || !enabledRef.current) return
+      const diffCanvas = diffCanvasRef.current
+      if (!video || !canvas || !diffCanvas || !enabledRef.current) return
       if (video.readyState < 2) return
       if (isProcessingRef.current) return
 
       try {
+        const diffCtx = diffCanvas.getContext('2d')
+        if (!diffCtx) return
+
+        diffCtx.drawImage(video, 0, 0, DIFF_WIDTH, DIFF_HEIGHT)
+        const imageData = diffCtx.getImageData(0, 0, DIFF_WIDTH, DIFF_HEIGHT)
+        const gray = toGrayscale(imageData.data)
+
+        const changed = prevGrayRef.current
+          ? computeFrameDiff(gray, prevGrayRef.current) >= frameDiffThreshold
+          : true
+        prevGrayRef.current = gray
+        setHasChanged(changed)
+
         const vw = video.videoWidth
         const vh = video.videoHeight
         if (!vw || !vh) return
@@ -88,7 +117,7 @@ export function useFrameCapture(
     }, intervalMs)
 
     return () => clearInterval(id)
-  }, [enabled, intervalMs, quality, maxWidth, maxHeight, videoRef])
+  }, [enabled, intervalMs, quality, maxWidth, maxHeight, frameDiffThreshold, videoRef])
 
-  return { frameDataUrl, isProcessing, captureCount, error, markConsumed }
+  return { frameDataUrl, isProcessing, captureCount, error, hasChanged, markConsumed }
 }
