@@ -33,4 +33,16 @@ describe('createApiBaseResolver', () => {
     await expect(resolver.getApiBase()).resolves.toBe('http://localhost:8787');
     expect(calls).toBe(0);
   });
+
+  it('does not cache an Electron API base before the proxy port is assigned', async () => {
+    const bases = ['http://127.0.0.1:0', 'http://127.0.0.1:4567'];
+    const resolver = createApiBaseResolver({
+      electronApi: {
+        getApiBase: async () => bases.shift()
+      }
+    });
+
+    await expect(resolver.getApiBase()).resolves.toBeUndefined();
+    await expect(resolver.getApiBase()).resolves.toBe('http://127.0.0.1:4567');
+  });
 });

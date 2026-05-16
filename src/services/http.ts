@@ -1,7 +1,7 @@
 import axios from 'axios'
 
 interface ElectronApi {
-  getApiBase: () => Promise<string>
+  getApiBase: () => Promise<string | undefined>
   getOllamaStatus: () => Promise<{ ready: boolean; status: string; baseUrl: string; gpu: 'unknown' }>
 }
 
@@ -16,8 +16,23 @@ interface ApiBaseResolverOptions {
   electronApi?: ElectronApi
 }
 
+function normalizeApiBase(base?: string): string | undefined {
+  if (!base) return undefined
+
+  try {
+    const url = new URL(base)
+    if ((url.protocol === 'http:' || url.protocol === 'https:') && url.port !== '0') {
+      return base
+    }
+  } catch {
+    return undefined
+  }
+
+  return undefined
+}
+
 export function createApiBaseResolver(options: ApiBaseResolverOptions) {
-  let cachedBase = options.envBase || undefined
+  let cachedBase = normalizeApiBase(options.envBase)
   let pendingBase: Promise<string | undefined> | undefined
 
   return {
@@ -31,8 +46,10 @@ export function createApiBaseResolver(options: ApiBaseResolverOptions) {
       }
 
       pendingBase ??= options.electronApi.getApiBase().then((base) => {
-        cachedBase = base || undefined
+        cachedBase = normalizeApiBase(base)
         return cachedBase
+      }).finally(() => {
+        pendingBase = undefined
       })
 
       return pendingBase
