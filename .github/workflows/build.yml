@@ -57,26 +57,70 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force -Path resources/vlm
 
+          $headers = @{ 'User-Agent' = 'curl/8.19.0' }
+          $progressPreference = 'SilentlyContinue'
+
           Write-Host "Downloading llama-server (CUDA build)..."
           $llamaUrl = "https://github.com/ggml-org/llama.cpp/releases/download/b8864/llama-b8864-bin-win-cuda-12.4-x64.zip"
           $cudartUrl = "https://github.com/ggml-org/llama.cpp/releases/download/b8864/cudart-llama-bin-win-cuda-12.4-x64.zip"
 
-          curl -L -o resources/vlm/llama.zip $llamaUrl
-          curl -L -o resources/vlm/cudart.zip $cudartUrl
+          $retryCount = 3
+          foreach ($url in @($llamaUrl, $cudartUrl)) {
+            $fileName = Split-Path $url -Leaf
+            $success = $false
+            for ($i = 0; $i -lt $retryCount; $i++) {
+              try {
+                $response = Invoke-WebRequest -Uri $url -Headers $headers -UseBasicParsing -TimeoutSec 300 -ErrorAction Stop
+                [System.IO.File]::WriteAllBytes("resources/vlm/$fileName", $response.Content)
+                Write-Host "Downloaded: $fileName ($(($response.Content).Length) bytes)"
+                $success = $true
+                break
+              } catch {
+                Write-Host "Download attempt $($i+1) failed for $fileName : $_"
+                if ($i -lt ($retryCount - 1)) { Start-Sleep -Seconds 5 }
+              }
+            }
+            if (-not $success) { throw "Failed to download $fileName after $retryCount attempts" }
+          }
 
-          Expand-Archive -Path resources/vlm/llama.zip -DestinationPath resources/vlm -Force
-          Expand-Archive -Path resources/vlm/cudart.zip -DestinationPath resources/vlm -Force
+          Write-Host "Extracting llama-server..."
+          Expand-Archive -Path resources/vlm/llama-b8864-bin-win-cuda-12.4-x64.zip -DestinationPath resources/vlm -Force
+          Expand-Archive -Path resources/vlm/cudart-llama-bin-win-cuda-12.4-x64.zip -DestinationPath resources/vlm -Force
 
-          Remove-Item resources/vlm/llama.zip, resources/vlm/cudart.zip
+          Remove-Item resources/vlm/llama-b8864-bin-win-cuda-12.4-x64.zip, resources/vlm/cudart-llama-bin-win-cuda-12.4-x64.zip -Force -ErrorAction SilentlyContinue
 
-          Write-Host "Downloading Jackrong/Qwen3.5-4B-Claude-4.6-Opus-Reasoning-Distilled-v2-GGUF Q4_K_M model (~2.55 GB)..."
-          curl -L -o "resources/vlm/Qwen3.5-4B.Q4_K_M.gguf" "https://huggingface.co/Jackrong/Qwen3.5-4B-Claude-4.6-Opus-Reasoning-Distilled-v2-GGUF/resolve/main/Qwen3.5-4B.Q4_K_M.gguf"
+          Write-Host "Downloading Qwen3.5-4B.Q4_K_M.gguf (~2.55 GB)..."
+          $modelUrl = "https://huggingface.co/Jackrong/Qwen3.5-4B-Claude-4.6-Opus-Reasoning-Distilled-v2-GGUF/resolve/main/Qwen3.5-4B.Q4_K_M.gguf"
+          for ($i = 0; $i -lt $retryCount; $i++) {
+            try {
+              $response = Invoke-WebRequest -Uri $modelUrl -Headers $headers -UseBasicParsing -TimeoutSec 600 -ErrorAction Stop
+              [System.IO.File]::WriteAllBytes("resources/vlm/Qwen3.5-4B.Q4_K_M.gguf", $response.Content)
+              Write-Host "Model downloaded ($(($response.Content).Length) bytes)"
+              break
+            } catch {
+              Write-Host "Download attempt $($i+1) failed: $_"
+              if ($i -lt ($retryCount - 1)) { Start-Sleep -Seconds 10 }
+              else { throw "Failed to download model after $retryCount attempts" }
+            }
+          }
 
-          Write-Host "Downloading mmproj vision encoder (~644 MB)..."
-          curl -L -o "resources/vlm/mmproj-BF16.gguf" "https://huggingface.co/Jackrong/Qwen3.5-4B-Claude-4.6-Opus-Reasoning-Distilled-v2-GGUF/resolve/main/mmproj-BF16.gguf"
+          Write-Host "Downloading mmproj-BF16.gguf (~644 MB)..."
+          $mmprojUrl = "https://huggingface.co/Jackrong/Qwen3.5-4B-Claude-4.6-Opus-Reasoning-Distilled-v2-GGUF/resolve/main/mmproj-BF16.gguf"
+          for ($i = 0; $i -lt $retryCount; $i++) {
+            try {
+              $response = Invoke-WebRequest -Uri $mmprojUrl -Headers $headers -UseBasicParsing -TimeoutSec 300 -ErrorAction Stop
+              [System.IO.File]::WriteAllBytes("resources/vlm/mmproj-BF16.gguf", $response.Content)
+              Write-Host "mmproj downloaded ($(($response.Content).Length) bytes)"
+              break
+            } catch {
+              Write-Host "Download attempt $($i+1) failed: $_"
+              if ($i -lt ($retryCount - 1)) { Start-Sleep -Seconds 10 }
+              else { throw "Failed to download mmproj after $retryCount attempts" }
+            }
+          }
 
           Write-Host "VLM files downloaded:"
-          Get-ChildItem resources/vlm | Format-Table Name, Length
+          Get-ChildItem resources/vlm | Where-Object { $_.Extension -in '.exe', '.dll', '.gguf' } | Format-Table Name, Length
 
       - name: Verify VLM model file hashes
         if: env.IS_DEPENDABOT_PR != 'true'
@@ -135,12 +179,15 @@ jobs:
           本压缩包包含视觉语言模型文件：
             - Qwen3.5-4B.Q4_K_M.gguf   (主模型 ~2.55 GB)
             - mmproj-BF16.gguf           (视觉编码器 ~644 MB)
+            - llama-server.exe            (CUDA 推理服务器)
+            - ggml-cuda.dll, cublas*.dll  (CUDA 依赖库)
 
           解压位置
           --------
-          将两个 .gguf 文件解压到应用程序的 resources\vlm\ 目录下。
+          将压缩包内所有文件解压到应用程序的 resources\vlm\ 目录下。
 
           完整路径应类似：
+            <应用安装目录>\resources\vlm\llama-server.exe
             <应用安装目录>\resources\vlm\Qwen3.5-4B.Q4_K_M.gguf
             <应用安装目录>\resources\vlm\mmproj-BF16.gguf
 
@@ -153,38 +200,45 @@ jobs:
 
           New-Item -ItemType Directory -Force -Path dist-models
 
-          $vlmFiles = @("Qwen3.5-4B.Q4_K_M.gguf", "mmproj-BF16.gguf")
-          $allExist = $true
-          foreach ($f in $vlmFiles) {
-            $path = "resources/vlm/$f"
+          $vlmFiles = @("Qwen3.5-4B.Q4_K_M.gguf", "mmproj-BF16.gguf", "llama-server.exe")
+          $supportingFiles = @("ggml-cuda.dll", "cublas64_12.dll", "cublasLt64_12.dll", "cudart64_12.dll", "llama.dll", "ggml.dll", "ggml-base.dll", "ggml-common.dll", "llama-common.dll", "libomp140.x86_64.dll")
+          $allRequiredFiles = $vlmFiles + $supportingFiles
+
+          $missingFiles = @()
+          foreach ($f in $allRequiredFiles) {
+            $path = "resources/vlm\$f"
             if (-not (Test-Path $path)) {
-              Write-Host "Missing VLM file: $path"
-              $allExist = $false
+              Write-Host "Missing: $path"
+              $missingFiles += $f
             } else {
               Write-Host "Found: $path ($(Get-Item $path).Length) bytes"
             }
           }
 
-          if (-not $allExist) {
-            Write-Host "ERROR: Not all VLM files found, cannot create model package"
+          if ($missingFiles.Count -gt 0) {
+            Write-Host "ERROR: Missing required VLM files: $($missingFiles -join ', ')"
             exit 1
           }
 
-          Copy-Item "resources/vlm/Qwen3.5-4B.Q4_K_M.gguf" -Destination "dist-models/"
-          Copy-Item "resources/vlm/mmproj-BF16.gguf" -Destination "dist-models/"
+          Write-Host "Copying required files to dist-models..."
+          foreach ($f in $allRequiredFiles) {
+            Copy-Item "resources/vlm\$f" -Destination "dist-models/" -Force
+          }
           Set-Content -Path "dist-models/README-解压说明.txt" -Value $modelReadme -Encoding UTF8
 
           Write-Host "Creating vlm-models.zip..."
-          7z a -tzip "dist-models/vlm-models.zip" "dist-models/Qwen3.5-4B.Q4_K_M.gguf" "dist-models/mmproj-BF16.gguf" "dist-models/README-解压说明.txt"
+          $filesToZip = @("dist-models/Qwen3.5-4B.Q4_K_M.gguf", "dist-models/mmproj-BF16.gguf", "dist-models/llama-server.exe") + ($supportingFiles | ForEach-Object { "dist-models/$_" }) + @("dist-models/README-解压说明.txt")
+          7z a -tzip "dist-models/vlm-models.zip" $filesToZip
 
           Write-Host "Cleaning up intermediate files..."
-          Remove-Item "dist-models/Qwen3.5-4B.Q4_K_M.gguf" -Force -ErrorAction SilentlyContinue
-          Remove-Item "dist-models/mmproj-BF16.gguf" -Force -ErrorAction SilentlyContinue
-          Remove-Item "dist-models/README-解压说明.txt" -Force -ErrorAction SilentlyContinue
+          foreach ($f in ($allRequiredFiles + @("README-解压说明.txt"))) {
+            Remove-Item "dist-models/$f" -Force -ErrorAction SilentlyContinue
+          }
 
           $zipPath = "dist-models/vlm-models.zip"
           if (Test-Path $zipPath) {
-            Write-Host "Model package created: $zipPath ($(Get-Item $zipPath).Length) bytes"
+            $zipSize = (Get-Item $zipPath).Length
+            Write-Host "Model package created: $zipPath ($([Math]::Round($zipSize/1MB, 2)) MB)"
           } else {
             Write-Host "ERROR: Failed to create model package"
             exit 1
