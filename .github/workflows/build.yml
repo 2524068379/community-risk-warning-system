@@ -201,7 +201,7 @@ jobs:
           New-Item -ItemType Directory -Force -Path dist-models
 
           $vlmFiles = @("Qwen3.5-4B.Q4_K_M.gguf", "mmproj-BF16.gguf", "llama-server.exe")
-          $supportingFiles = @("ggml-cuda.dll", "cublas64_12.dll", "cublasLt64_12.dll", "cudart64_12.dll", "llama.dll", "ggml.dll", "ggml-base.dll", "ggml-common.dll", "llama-common.dll", "libomp140.x86_64.dll")
+          $supportingFiles = @("ggml-cuda.dll", "cublas64_12.dll", "cublasLt64_12.dll", "cudart64_12.dll", "llama.dll", "ggml.dll", "ggml-base.dll", "llama-common.dll", "libomp140.x86_64.dll")
           $allRequiredFiles = $vlmFiles + $supportingFiles
 
           $missingFiles = @()
