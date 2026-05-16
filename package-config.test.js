@@ -11,15 +11,11 @@ describe('package configuration', () => {
     expect(packageJson.build.win.icon).toBe('build/icon.ico');
   });
 
-  it('packages the VLM executable, CUDA libraries, and GGUF models with the Windows app', () => {
-    const vlmResources = packageJson.build.extraResources.find(
+  it('does NOT package VLM files with the Windows app — they are distributed separately', () => {
+    const vlmResources = packageJson.build.extraResources?.find(
       (entry) => entry.from === 'resources/vlm' && entry.to === 'vlm'
     );
-
-    expect(vlmResources).toBeTruthy();
-    expect(vlmResources.filter).toEqual(
-      expect.arrayContaining(['**/*.exe', '**/*.dll', VLM_MODEL_FILE, VLM_MMPROJ_FILE])
-    );
+    expect(vlmResources).toBeUndefined();
   });
 
   it('keeps the local VLM resource download script available', () => {

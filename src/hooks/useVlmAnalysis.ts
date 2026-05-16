@@ -98,6 +98,12 @@ export function useVlmAnalysis(options: VlmAnalysisOptions) {
             'error',
             'VLM 服务未连接，请确保后端服务已启动且模型已加载'
           )
+          useAppStore.setState({
+            analysis: {
+              ...useAppStore.getState().analysis,
+              summary: 'VLM 服务连接失败，请检查后端服务状态'
+            }
+          })
         }
       }
     }

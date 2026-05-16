@@ -86,19 +86,9 @@
             "x64"
           ]
         }
-      ]
+      ],
+      "artifactName": "${productName}-${version}-portable.${ext}"
     },
-    "extraResources": [
-      {
-        "from": "resources/vlm",
-        "to": "vlm",
-        "filter": [
-          "**/*.exe",
-          "**/*.dll",
-          "Qwen3.5-4B.Q4_K_M.gguf",
-          "mmproj-BF16.gguf"
-        ]
-      }
-    ]
+    "asar": true
   }
 }

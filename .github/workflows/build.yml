@@ -152,12 +152,43 @@ jobs:
           "@
 
           New-Item -ItemType Directory -Force -Path dist-models
+
+          $vlmFiles = @("Qwen3.5-4B.Q4_K_M.gguf", "mmproj-BF16.gguf")
+          $allExist = $true
+          foreach ($f in $vlmFiles) {
+            $path = "resources/vlm/$f"
+            if (-not (Test-Path $path)) {
+              Write-Host "Missing VLM file: $path"
+              $allExist = $false
+            } else {
+              Write-Host "Found: $path ($(Get-Item $path).Length) bytes"
+            }
+          }
+
+          if (-not $allExist) {
+            Write-Host "ERROR: Not all VLM files found, cannot create model package"
+            exit 1
+          }
+
           Copy-Item "resources/vlm/Qwen3.5-4B.Q4_K_M.gguf" -Destination "dist-models/"
           Copy-Item "resources/vlm/mmproj-BF16.gguf" -Destination "dist-models/"
           Set-Content -Path "dist-models/README-解压说明.txt" -Value $modelReadme -Encoding UTF8
 
-          7z a -tzip "dist-models/vlm-models.zip" ".\dist-models\Qwen3.5-4B.Q4_K_M.gguf" ".\dist-models\mmproj-BF16.gguf" ".\dist-models\README-解压说明.txt"
-          Remove-Item "dist-models/Qwen3.5-4B.Q4_K_M.gguf", "dist-models/mmproj-BF16.gguf", "dist-models/README-解压说明.txt"
+          Write-Host "Creating vlm-models.zip..."
+          7z a -tzip "dist-models/vlm-models.zip" "dist-models/Qwen3.5-4B.Q4_K_M.gguf" "dist-models/mmproj-BF16.gguf" "dist-models/README-解压说明.txt"
+
+          Write-Host "Cleaning up intermediate files..."
+          Remove-Item "dist-models/Qwen3.5-4B.Q4_K_M.gguf" -Force -ErrorAction SilentlyContinue
+          Remove-Item "dist-models/mmproj-BF16.gguf" -Force -ErrorAction SilentlyContinue
+          Remove-Item "dist-models/README-解压说明.txt" -Force -ErrorAction SilentlyContinue
+
+          $zipPath = "dist-models/vlm-models.zip"
+          if (Test-Path $zipPath) {
+            Write-Host "Model package created: $zipPath ($(Get-Item $zipPath).Length) bytes"
+          } else {
+            Write-Host "ERROR: Failed to create model package"
+            exit 1
+          }
 
       - name: Upload portable zip
         if: env.IS_DEPENDABOT_PR != 'true'
