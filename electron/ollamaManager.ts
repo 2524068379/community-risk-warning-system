@@ -69,8 +69,10 @@ function findVlmResources(): { serverExe: string; modelDir: string } | null {
   let baseDir: string
 
   if (app.isPackaged) {
-    baseDir = process.resourcesPath
+    // 打包后：相对于 exe 所在的目录去寻找
+    baseDir = path.join(path.dirname(app.getPath('exe')), 'resources')
   } else {
+    // 开发环境：项目根目录下的 resources
     baseDir = path.join(app.getAppPath(), 'resources')
   }
 
