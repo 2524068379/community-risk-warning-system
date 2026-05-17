@@ -168,6 +168,31 @@ jobs:
             }
           }
 
+      - name: Verify portable package excludes VLM model files
+        if: env.IS_DEPENDABOT_PR != 'true'
+        shell: pwsh
+        run: |
+          $portableZip = Get-ChildItem -Path dist-electron -Filter *.zip | Select-Object -First 1
+          if (-not $portableZip) {
+            Write-Host "ERROR: No portable zip found in dist-electron"
+            exit 1
+          }
+
+          $listing = 7z l $portableZip.FullName
+          if ($LASTEXITCODE -ne 0) {
+            exit $LASTEXITCODE
+          }
+
+          $modelFiles = @("Qwen3.5-4B.Q4_K_M.gguf", "mmproj-BF16.gguf")
+          foreach ($f in $modelFiles) {
+            if ($listing -match [regex]::Escape($f)) {
+              Write-Host "ERROR: Portable app package must not include VLM model file: $f"
+              exit 1
+            }
+          }
+
+          Write-Host "Portable package excludes VLM model files: $($portableZip.Name)"
+
       - name: Create VLM model package
         if: env.IS_DEPENDABOT_PR != 'true'
         shell: pwsh

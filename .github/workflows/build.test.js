@@ -24,4 +24,19 @@ describe('build workflow', () => {
     expect(workflow).toContain("if: env.IS_DEPENDABOT_PR == 'true'");
     expect(workflow).toContain('Skipping VLM download and Windows packaging for Dependabot pull requests.');
   });
+
+  it('verifies the portable app excludes VLM model files before uploading artifacts', () => {
+    const workflow = fs.readFileSync(new URL('./build.yml', import.meta.url), 'utf8');
+
+    const packageIndex = workflow.indexOf('- name: Package');
+    const verifyIndex = workflow.indexOf('- name: Verify portable package excludes VLM model files');
+    const uploadIndex = workflow.indexOf('- name: Upload portable zip');
+
+    expect(packageIndex).toBeGreaterThan(-1);
+    expect(verifyIndex).toBeGreaterThan(packageIndex);
+    expect(verifyIndex).toBeLessThan(uploadIndex);
+    expect(workflow).toContain('Portable app package must not include VLM model file');
+    expect(workflow).toContain('Qwen3.5-4B.Q4_K_M.gguf');
+    expect(workflow).toContain('mmproj-BF16.gguf');
+  });
 });

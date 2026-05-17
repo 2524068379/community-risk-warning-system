@@ -15,11 +15,12 @@ describe('package configuration', () => {
     const vlmResources = packageJson.build.extraResources?.find(
       (entry) => entry.from === 'resources/vlm' && entry.to === 'vlm'
     );
-    expect(vlmResources).toEqual({
-      from: 'resources/vlm',
-      to: 'vlm',
-      filter: ['**/*']
-    });
+
+    expect(vlmResources?.filter).toEqual(expect.arrayContaining([
+      '**/*',
+      `!${VLM_MODEL_FILE}`,
+      `!${VLM_MMPROJ_FILE}`
+    ]));
   });
 
   it('keeps the local VLM resource download script available', () => {
