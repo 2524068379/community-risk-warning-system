@@ -7,6 +7,34 @@ import { http } from '@/services/http'
 import { OLLAMA_STATUS_ROUTE } from '../../shared/apiRoutes.js'
 import type { DetectionResult, VlmAnalysis } from '@/types'
 
+type VlmConnectionRuntimeStatus = 'starting' | 'loading' | 'ready' | 'error'
+type VlmConnectionSource = 'electron' | 'proxy'
+type VlmStatusHttpGet = (
+  url: string,
+  config: { timeout: number }
+) => Promise<{ data?: { ready?: boolean; status?: unknown } }>
+
+interface ElectronApi {
+  getApiBase: () => Promise<string | undefined>
+  getOllamaStatus: () => Promise<{
+    ready: boolean
+    status: string
+    baseUrl: string
+    gpu: 'unknown'
+  }>
+}
+
+interface VlmConnectionStatus {
+  ready: boolean
+  status: VlmConnectionRuntimeStatus
+  source: VlmConnectionSource
+}
+
+interface CheckVlmConnectionStatusOptions {
+  electronApi?: ElectronApi
+  httpGet?: VlmStatusHttpGet
+}
+
 interface VlmAnalysisOptions {
   videoRef: React.RefObject<HTMLVideoElement | null>
   cameraId: string
@@ -26,12 +54,45 @@ export function finalizeVlmFrame(options: FinalizeVlmFrameOptions): void {
   options.releaseAnalysisLock()
 }
 
-async function checkVlmServerReady(): Promise<boolean> {
+function normalizeRuntimeStatus(status: unknown, ready: boolean): VlmConnectionRuntimeStatus {
+  if (status === 'starting' || status === 'loading' || status === 'ready' || status === 'error') {
+    return status
+  }
+
+  return ready ? 'ready' : 'error'
+}
+
+export async function checkVlmConnectionStatus(
+  options: CheckVlmConnectionStatusOptions = {}
+): Promise<VlmConnectionStatus> {
+  const electronApi = options.electronApi
+    ?? (typeof window === 'undefined' ? undefined : window.electronAPI)
+  const httpGet = options.httpGet ?? ((url, config) => http.get(url, config))
+
+  if (electronApi) {
+    try {
+      const status = await electronApi.getOllamaStatus()
+      const ready = status.ready === true
+      return {
+        ready,
+        status: normalizeRuntimeStatus(status.status, ready),
+        source: 'electron'
+      }
+    } catch {
+      // Fall back to the proxy status endpoint in browser-like test/dev contexts.
+    }
+  }
+
   try {
-    const res = await http.get(OLLAMA_STATUS_ROUTE, { timeout: 3000 })
-    return res.data?.ready === true
+    const res = await httpGet(OLLAMA_STATUS_ROUTE, { timeout: 3000 })
+    const ready = res.data?.ready === true
+    return {
+      ready,
+      status: normalizeRuntimeStatus(res.data?.status, ready),
+      source: 'proxy'
+    }
   } catch {
-    return false
+    return { ready: false, status: 'error', source: 'proxy' }
   }
 }
 
@@ -80,12 +141,18 @@ export function useVlmAnalysis(options: VlmAnalysisOptions) {
     if (!enabled) return
 
     const check = async () => {
-      const ready = await checkVlmServerReady()
-      if (ready) {
+      const connection = await checkVlmConnectionStatus()
+      if (connection.ready) {
         globalServerReady = true
         setServerReady(true)
         failCountRef.current = 0
         useAppStore.getState().setVlmStatus('idle')
+      } else if (connection.status === 'starting' || connection.status === 'loading') {
+        failCountRef.current = 0
+        useAppStore.getState().setVlmStatus('loading')
+        useAppStore.setState({
+          analysis: { ...useAppStore.getState().analysis, summary: connectingAnalysis.summary }
+        })
       } else {
         failCountRef.current++
         if (failCountRef.current === 1) {

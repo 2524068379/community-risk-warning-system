@@ -89,6 +89,13 @@
       ],
       "artifactName": "${productName}-${version}-portable.${ext}"
     },
-    "asar": true
+    "asar": true,
+    "extraResources": [
+      {
+        "from": "resources/vlm",
+        "to": "vlm",
+        "filter": ["**/*"]
+      }
+    ]
   }
 }

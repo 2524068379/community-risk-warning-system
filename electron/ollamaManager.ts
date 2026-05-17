@@ -2,6 +2,7 @@ import { app } from 'electron'
 import { spawn, type ChildProcess } from 'node:child_process'
 import path from 'node:path'
 import fs from 'node:fs'
+import { resolveVlmResourceDir } from './vlmResourcePath'
 import {
   GPU_AVAILABILITY_UNKNOWN,
   resolveOllamaHealthStatus,
@@ -66,17 +67,11 @@ async function waitForReady(timeoutMs: number): Promise<void> {
 }
 
 function findVlmResources(): { serverExe: string; modelDir: string } | null {
-  let baseDir: string
-
-  if (app.isPackaged) {
-    // 打包后：相对于 exe 所在的目录去寻找
-    baseDir = path.join(path.dirname(app.getPath('exe')), 'resources')
-  } else {
-    // 开发环境：项目根目录下的 resources
-    baseDir = path.join(app.getAppPath(), 'resources')
-  }
-
-  const modelDir = path.join(baseDir, 'vlm')
+  const modelDir = resolveVlmResourceDir({
+    isPackaged: app.isPackaged,
+    exePath: app.getPath('exe'),
+    appPath: app.getAppPath()
+  })
   const cudaExe = path.join(modelDir, 'llama-server.exe')
 
   if (fs.existsSync(cudaExe)) {
@@ -97,7 +92,7 @@ export async function startOllama(): Promise<void> {
 
   const resources = findVlmResources()
   if (!resources) {
-    console.warn('[vlm] llama-server.exe not found in resources, VLM features disabled')
+    console.warn('[vlm] llama-server.exe not found in resources\\vlm, VLM features disabled')
     console.warn('[vlm] Run: node scripts/download-model.js')
     status = 'error'
     return

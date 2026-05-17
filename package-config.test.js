@@ -11,11 +11,15 @@ describe('package configuration', () => {
     expect(packageJson.build.win.icon).toBe('build/icon.ico');
   });
 
-  it('does NOT package VLM files with the Windows app — they are distributed separately', () => {
+  it('packages VLM runtime resources under resources\\vlm next to the Windows exe', () => {
     const vlmResources = packageJson.build.extraResources?.find(
       (entry) => entry.from === 'resources/vlm' && entry.to === 'vlm'
     );
-    expect(vlmResources).toBeUndefined();
+    expect(vlmResources).toEqual({
+      from: 'resources/vlm',
+      to: 'vlm',
+      filter: ['**/*']
+    });
   });
 
   it('keeps the local VLM resource download script available', () => {
