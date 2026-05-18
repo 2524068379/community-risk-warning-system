@@ -21,18 +21,18 @@
     "prepackage": "npm run download-model"
   },
   "dependencies": {
-    "@ant-design/icons": "^6.2.2",
+    "@ant-design/icons": "^6.2.3",
     "@tensorflow-models/coco-ssd": "^2.2.3",
     "@tensorflow/tfjs": "^4.22.0",
-    "antd": "^6.3.7",
-    "axios": "^1.16.0",
+    "antd": "^6.4.2",
+    "axios": "^1.16.1",
     "cors": "^2.8.5",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
     "mpegts.js": "^1.8.0",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
-    "react-router-dom": "^7.15.0",
+    "react-router-dom": "^7.15.1",
     "recharts": "^3.8.1",
     "zustand": "^5.0.13"
   },
