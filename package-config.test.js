@@ -38,4 +38,22 @@ describe('package configuration', () => {
     expect(script).toContain('VLM_MMPROJ_URL');
     expect(script).toContain('VLM_MMPROJ_SHA256');
   });
+
+  it('keeps generated TypeScript and Vite artifacts out of source control', () => {
+    const ignoredArtifacts = [
+      'tsconfig.app.tsbuildinfo',
+      'tsconfig.node.tsbuildinfo',
+      'vite.config.js',
+      'vite.config.d.ts'
+    ];
+    const gitignore = readFileSync('.gitignore', 'utf8');
+
+    expect(gitignore).toContain('*.tsbuildinfo');
+    expect(gitignore).toContain('vite.config.js');
+    expect(gitignore).toContain('vite.config.d.ts');
+
+    for (const artifact of ignoredArtifacts) {
+      expect(existsSync(artifact)).toBe(false);
+    }
+  });
 });
