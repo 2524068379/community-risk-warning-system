@@ -9,7 +9,6 @@ permissions:
 jobs:
   dependabot:
     runs-on: windows-latest
-    # 只有当 PR 的发起者是 dependabot 时才触发
     if: github.event.pull_request.user.login == 'dependabot[bot]'
     steps:
       - name: Dependabot metadata
@@ -18,10 +17,18 @@ jobs:
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
 
-      - name: Enable auto-merge for Dependabot PRs
-        # 仅对 minor 和 patch 更新进行自动合并
-        if: steps.metadata.outputs.update-type == 'version-update:semver-minor' || steps.metadata.outputs.update-type == 'version-update:semver-patch'
+      - name: Auto-merge minor and patch updates
+        if: >-
+          steps.metadata.outputs.update-type == 'version-update:semver-minor' ||
+          steps.metadata.outputs.update-type == 'version-update:semver-patch'
         run: gh pr merge --auto --merge "$env:PR_URL"
         env:
-          PR_URL: ${{github.event.pull_request.html_url}}
-          GH_TOKEN: ${{secrets.GITHUB_TOKEN}}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Label major updates for review
+        if: steps.metadata.outputs.update-type == 'version-update:semver-major'
+        run: gh pr edit "$env:PR_URL" --add-label "needs-review" --add-label "dependencies"
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

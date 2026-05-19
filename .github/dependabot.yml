@@ -1,53 +1,68 @@
 version: 2
 
 updates:
+  # npm: 每天检查，小版本自动合并，大版本推送 PR 等待审批
   - package-ecosystem: 'npm'
     directory: '/'
     schedule:
-      interval: 'weekly'
-      day: 'monday'
+      interval: 'daily'
       time: '09:00'
       timezone: 'Asia/Shanghai'
     rebase-strategy: auto
-    open-pull-requests-limit: 6
+    open-pull-requests-limit: 10
     cooldown:
-      semver-major-days: 14
-      semver-minor-days: 3
-      semver-patch-days: 2
+      semver-major-days: 7
+      semver-minor-days: 1
+      semver-patch-days: 1
     commit-message:
       prefix: 'chore'
       prefix-development: 'chore(dev)'
       include: 'scope'
     groups:
-      npm-production:
+      # 小版本合并为一个 PR，由 CI 自动合并
+      npm-production-minor-patch:
         dependency-type: 'production'
         update-types:
           - 'minor'
           - 'patch'
-      npm-development:
+      npm-development-minor-patch:
         dependency-type: 'development'
         update-types:
           - 'minor'
           - 'patch'
+      # 大版本单独 PR，不自动合并，等待人工审批
+      npm-production-major:
+        dependency-type: 'production'
+        update-types:
+          - 'major'
+      npm-development-major:
+        dependency-type: 'development'
+        update-types:
+          - 'major'
 
+  # GitHub Actions: 每天检查，小版本自动合并
   - package-ecosystem: 'github-actions'
     directory: '/'
     schedule:
-      interval: 'weekly'
-      day: 'monday'
+      interval: 'daily'
       time: '09:30'
       timezone: 'Asia/Shanghai'
     rebase-strategy: auto
-    open-pull-requests-limit: 3
+    open-pull-requests-limit: 5
     cooldown:
-      default-days: 3
+      default-days: 1
     commit-message:
       prefix: 'ci'
       include: 'scope'
     groups:
-      github-actions-non-major:
+      github-actions-minor-patch:
         patterns:
           - '*'
         update-types:
           - 'minor'
           - 'patch'
+      github-actions-major:
+        patterns:
+          - '*'
+        update-types:
+          - 'major'
