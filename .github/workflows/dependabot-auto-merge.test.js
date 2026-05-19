@@ -24,4 +24,13 @@ describe('dependabot auto-merge workflow', () => {
     const majorBlock = workflow.split('Label major updates')[1];
     expect(majorBlock).not.toContain('gh pr merge');
   });
+
+  it('creates labels before applying them to avoid missing label errors', () => {
+    expect(workflow).toContain('gh label create');
+    expect(workflow).toContain('--force');
+    // Label creation must come before label application
+    const createIdx = workflow.indexOf('Ensure labels exist');
+    const applyIdx = workflow.indexOf('Label major updates');
+    expect(createIdx).toBeLessThan(applyIdx);
+  });
 });

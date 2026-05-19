@@ -26,6 +26,14 @@ jobs:
           PR_URL: ${{ github.event.pull_request.html_url }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Ensure labels exist
+        if: steps.metadata.outputs.update-type == 'version-update:semver-major'
+        run: |
+          gh label create "needs-review" --description "需要人工审核" --color "FBCA04" --force
+          gh label create "dependencies" --description "依赖更新" --color "0366D6" --force
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Label major updates for review
         if: steps.metadata.outputs.update-type == 'version-update:semver-major'
         run: gh pr edit "$env:PR_URL" --add-label "needs-review" --add-label "dependencies"
