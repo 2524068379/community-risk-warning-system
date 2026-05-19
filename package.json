@@ -45,13 +45,13 @@
     "@types/node": "^25.8.0",
     "@types/react": "^19.1.9",
     "@types/react-dom": "^19.1.7",
-    "@vitejs/plugin-react": "^5.0.0",
+    "@vitejs/plugin-react": "^6.0.1",
     "concurrently": "^9.1.2",
-    "electron": "^41.6.1",
+    "electron": "^42.0.1",
     "electron-builder": "^26.8.1",
     "electron-vite": "^5.0.0",
-    "typescript": "^5.8.3",
-    "vite": "^7.0.4",
+    "typescript": "^6.0.3",
+    "vite": "^8.0.12",
     "vitest": "^4.1.6"
   },
   "overrides": {
