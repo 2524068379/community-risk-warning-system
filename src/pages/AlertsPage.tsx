@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Tag, Badge } from 'antd';
 import { useAppStore } from '@/store/useAppStore';
 
@@ -18,12 +18,14 @@ export function AlertsPage() {
   const { events, selectedEventId, selectEvent } = useAppStore();
   const [filter, setFilter] = useState<string>('全部');
 
-  const filteredEvents = [...events]
-    .sort((a, b) => b.riskScore - a.riskScore)
-    .filter((event) => {
-      if (filter === '全部') return true;
-      return `${event.level}级` === filter;
-    });
+  const filteredEvents = useMemo(() => {
+    return [...events]
+      .sort((a, b) => b.riskScore - a.riskScore)
+      .filter((event) => {
+        if (filter === '全部') return true;
+        return `${event.level}级` === filter;
+      });
+  }, [events, filter]);
 
   const selectedEvent = events.find((event) => event.id === selectedEventId);
 

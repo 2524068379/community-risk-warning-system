@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { Progress, Space, Tag } from 'antd';
 import type { VlmAnalysis } from '@/types';
 import { riskGradeColorMap } from '@/utils/risk';
@@ -8,7 +9,7 @@ interface VlmAnalysisPanelProps {
 }
 
 export function VlmAnalysisPanel({ analysis, variant = 'full' }: VlmAnalysisPanelProps) {
-  const insightItems = [
+  const insightItems = useMemo(() => [
     { label: '是否存在风险', value: analysis.hasRisk ? '是' : '否' },
     { label: '置信度', value: `${Math.round(analysis.confidence * 100)}%` },
     {
@@ -23,7 +24,7 @@ export function VlmAnalysisPanel({ analysis, variant = 'full' }: VlmAnalysisPane
       label: '人员跌倒',
       value: typeof analysis.hasFallen === 'boolean' ? (analysis.hasFallen ? '是' : '否') : '待分析'
     }
-  ];
+  ], [analysis.hasRisk, analysis.confidence, analysis.hasLoitering, analysis.hasGathering, analysis.hasFallen]);
 
   const visibleItems =
     variant === 'full' ? insightItems : variant === 'compact' ? insightItems.slice(0, 4) : insightItems.slice(0, 3);

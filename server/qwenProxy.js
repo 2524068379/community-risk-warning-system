@@ -1,5 +1,6 @@
 import express from 'express';
 import cors from 'cors';
+import compression from 'compression';
 import { resolveOllamaHealthStatus } from './ollamaHealthStatus.js';
 import {
   API_HEALTH_ROUTE,
@@ -78,7 +79,8 @@ export function loadQwenProxyConfig(env = process.env) {
     qwenApiKey: env.QWEN_API_KEY || '',
     qwenModel: env.QWEN_MODEL || DEFAULT_VLM_MODEL_ALIAS,
     qwenTimeout: parseInteger(env.QWEN_TIMEOUT, 60000),
-    requestBodyLimit: env.REQUEST_BODY_LIMIT || '8mb',
+    ollamaTimeout: parseInteger(env.OLLAMA_TIMEOUT, 120000),
+    requestBodyLimit: env.REQUEST_BODY_LIMIT || '2mb',
     chatRequestsPerMinute: parseInteger(env.CHAT_REQUESTS_PER_MINUTE, 30, 0),
     maxChatMessages: parseInteger(env.MAX_CHAT_MESSAGES, 16),
     maxChatTokens: parseInteger(env.MAX_CHAT_TOKENS, 2048),
@@ -175,6 +177,21 @@ function createChatRateLimiter(config) {
   const windowMs = 60_000;
   const buckets = new Map();
 
+  // 每 5 分钟清理一次过期 bucket，防止内存泄漏
+  const cleanupInterval = setInterval(() => {
+    const now = Date.now();
+    for (const [key, bucket] of buckets) {
+      if (now - bucket.startedAt >= windowMs) {
+        buckets.delete(key);
+      }
+    }
+  }, 300_000);
+
+  // 允许 Node.js 正常退出，不因定时器阻塞
+  if (cleanupInterval.unref) {
+    cleanupInterval.unref();
+  }
+
   return (req, res, next) => {
     const now = Date.now();
     const key = req.ip || req.socket?.remoteAddress || 'unknown';
@@ -203,6 +220,8 @@ export function createQwenProxyApp(config = loadQwenProxyConfig()) {
   const app = express();
   const chatRateLimiter = createChatRateLimiter(config);
   const chatPayloadValidator = createChatPayloadValidator(config);
+
+  app.use(compression());
 
   app.use(
     cors({
@@ -265,6 +284,17 @@ export function createQwenProxyApp(config = loadQwenProxyConfig()) {
     }
   });
 
+  // 全局错误处理，避免 Express 返回 HTML 500 页面
+  app.use((err, _req, res, _next) => {
+    console.error('[ollama-proxy] Unhandled error:', err);
+    res.status(500).json({
+      error: {
+        message: err instanceof Error ? err.message : 'Internal server error',
+        type: 'internal_error'
+      }
+    });
+  });
+
   return app;
 }
 
@@ -275,7 +305,7 @@ export function createOllamaProxyRoutes(app, config = loadQwenProxyConfig(), cha
 
   app.post(OLLAMA_CHAT_COMPLETIONS_ROUTE, rateLimiter, payloadValidator, async (req, res) => {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 120000);
+    const timer = setTimeout(() => controller.abort(), config.ollamaTimeout);
 
     try {
       const response = await fetch(`${OLLAMA_BASE}/v1/chat/completions`, {

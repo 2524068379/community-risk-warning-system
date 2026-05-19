@@ -35,7 +35,7 @@ export function MonitorPage() {
   useEffect(() => {
     const timer = setInterval(() => {
       setTimestamp(new Date().toLocaleString());
-    }, 1000);
+    }, 5000);
     return () => clearInterval(timer);
   }, []);
 

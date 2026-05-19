@@ -8,6 +8,7 @@ declare global {
 
   interface BaiduMapInstance {
     centerAndZoom(point: BaiduMapPoint, zoom: number): void;
+    destroy(): void;
     setMapType?(mapType: unknown): void;
     setMapStyleV2?(style: { styleId: string }): void;
     disableDragging?(): void;

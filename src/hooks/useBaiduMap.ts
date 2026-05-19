@@ -119,7 +119,12 @@ export function useBaiduMap(options: UseBaiduMapOptions) {
 
     return () => {
       disposed = true;
-      instanceRef.current?.clearOverlays?.();
+      if (instanceRef.current) {
+        instanceRef.current.clearOverlays?.();
+        if (typeof instanceRef.current.destroy === 'function') {
+          instanceRef.current.destroy();
+        }
+      }
       instanceRef.current = null;
       setReady(false);
     };

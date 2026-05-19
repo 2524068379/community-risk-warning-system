@@ -43,6 +43,9 @@ const httpServer = server.listen(0, proxyConfig.host, () => {
   console.log(`Qwen proxy server is running at http://${proxyConfig.host}:${apiPort}`)
 })
 
+// 设置 5 分钟超时，防止慢客户端无限占用连接
+httpServer.timeout = 300_000
+
 ipcMain.handle('get-api-base', () => {
   return `http://${proxyConfig.host}:${apiPort}`
 })
@@ -83,6 +86,16 @@ app.on('ready', async () => {
 
 app.on('window-all-closed', async () => {
   await stopOllama()
-  httpServer.close()
+
+  // 等待 in-flight 请求完成，最多 5 秒
+  await new Promise<void>((resolve) => {
+    const forceExit = setTimeout(() => resolve(), 5000)
+    forceExit.unref()
+    httpServer.close(() => {
+      clearTimeout(forceExit)
+      resolve()
+    })
+  })
+
   app.quit()
 })

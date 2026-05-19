@@ -26,6 +26,7 @@
     "@tensorflow/tfjs": "^4.22.0",
     "antd": "^6.4.2",
     "axios": "^1.16.1",
+    "compression": "^1.8.1",
     "cors": "^2.8.5",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
@@ -39,6 +40,7 @@
   "devDependencies": {
     "@electron-toolkit/preload": "^3.0.2",
     "@electron-toolkit/utils": "^4.0.0",
+    "@types/compression": "^1.8.1",
     "@types/express": "^5.0.6",
     "@types/node": "^25.8.0",
     "@types/react": "^19.1.9",

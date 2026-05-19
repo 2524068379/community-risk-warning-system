@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { Space, Tag } from 'antd';
 import type { CameraPoint } from '@/types';
 import { riskColorMap, riskLevelTextMap } from '@/utils/risk';
@@ -16,7 +17,7 @@ interface VideoPanelProps {
   showInfoStrip?: boolean;
 }
 
-export function VideoPanel({
+export const VideoPanel = memo(function VideoPanel({
   camera,
   subtitle,
   density = 'default',
@@ -80,4 +81,4 @@ export function VideoPanel({
       ) : null}
     </div>
   );
-}
+});

@@ -16,6 +16,9 @@ let serverProcess: ChildProcess | null = null
 let ready = false
 let status: OllamaRuntimeStatus = 'starting'
 let runtimeConfig: VlmRuntimeConfig | null = null
+let restartAttempts = 0
+const MAX_RESTART_ATTEMPTS = 3
+const RESTART_DELAY_MS = 3000
 
 function getVlmRuntimeConfig(): VlmRuntimeConfig {
   runtimeConfig ??= loadVlmRuntimeConfig(process.env)
@@ -154,12 +157,29 @@ export async function startOllama(): Promise<void> {
 
     serverProcess.on('exit', (code) => {
       console.log('[vlm] Process exited with code', code)
+      serverProcess = null
       ready = false
-      status = 'error'
+
+      if (code !== 0 && restartAttempts < MAX_RESTART_ATTEMPTS) {
+        restartAttempts++
+        console.log(`[vlm] Restarting in ${RESTART_DELAY_MS}ms (attempt ${restartAttempts}/${MAX_RESTART_ATTEMPTS})...`)
+        status = 'starting'
+        setTimeout(() => {
+          if (!serverProcess) {
+            startOllama().catch((err) => {
+              console.error('[vlm] Restart failed:', err)
+              status = 'error'
+            })
+          }
+        }, RESTART_DELAY_MS).unref()
+      } else {
+        status = 'error'
+      }
     })
 
     await waitForReady(vlmConfig.startupTimeoutMs)
     ready = true
+    restartAttempts = 0
     status = 'ready'
     console.log('[vlm] Ready')
   } catch (err) {

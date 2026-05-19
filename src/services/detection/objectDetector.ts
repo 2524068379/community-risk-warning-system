@@ -1,5 +1,3 @@
-import * as tf from '@tensorflow/tfjs'
-import * as cocoSsd from '@tensorflow-models/coco-ssd'
 import type { DetectionResult } from '@/types'
 
 type DetectorStatus = 'idle' | 'loading' | 'ready' | 'error'
@@ -27,7 +25,7 @@ export function filterDetections(
     }))
 }
 
-let model: cocoSsd.ObjectDetection | null = null
+let model: import('@tensorflow-models/coco-ssd').ObjectDetection | null = null
 let status: DetectorStatus = 'idle'
 
 export function getDetectorStatus(): DetectorStatus {
@@ -41,6 +39,10 @@ export async function detect(
     if (status === 'loading') return []
     status = 'loading'
     try {
+      const [tf, cocoSsd] = await Promise.all([
+        import('@tensorflow/tfjs'),
+        import('@tensorflow-models/coco-ssd')
+      ])
       await tf.ready()
       model = await cocoSsd.load({ base: 'lite_mobilenet_v2' })
       status = 'ready'
