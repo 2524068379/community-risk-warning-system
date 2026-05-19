@@ -24,7 +24,7 @@
     "@ant-design/icons": "^6.2.3",
     "@tensorflow-models/coco-ssd": "^2.2.3",
     "@tensorflow/tfjs": "^4.22.0",
-    "antd": "^6.4.2",
+    "antd": "^6.4.3",
     "axios": "^1.16.1",
     "compression": "^1.8.1",
     "cors": "^2.8.5",
