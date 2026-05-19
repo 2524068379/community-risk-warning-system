@@ -22,6 +22,7 @@ interface AppState {
   selectEvent: (eventId?: string) => void;
   markEventStatus: (eventId: string, status: RiskEvent['status']) => void;
   setAnalysis: (analysis: VlmAnalysis, boxes: DetectionBox[]) => void;
+  setAnalysisSummary: (summary: string) => void;
   setVlmStatus: (status: VlmStatus, error?: string) => void;
   setDetectorStatus: (status: 'idle' | 'loading' | 'ready' | 'error') => void;
   setDetectedObjects: (objects: DetectionResult[]) => void;
@@ -88,6 +89,11 @@ export const useAppStore = create<AppState>((set, get) => ({
       analysisTimestamp: Date.now()
     });
   },
+
+  setAnalysisSummary: (summary) =>
+    set((state) => ({
+      analysis: { ...state.analysis, summary }
+    })),
 
   setVlmStatus: (status, error) =>
     set({

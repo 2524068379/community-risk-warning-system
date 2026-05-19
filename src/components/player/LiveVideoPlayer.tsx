@@ -102,6 +102,9 @@ export const LiveVideoPlayer = forwardRef<HTMLVideoElement, LiveVideoPlayerProps
       return;
     }
 
+    video.pause();
+    video.removeAttribute('src');
+    video.load();
     video.src = url;
     video.play().catch((playError) => {
       setError(playError instanceof Error ? playError.message : '视频播放启动失败');

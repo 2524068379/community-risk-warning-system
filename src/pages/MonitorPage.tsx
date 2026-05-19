@@ -12,18 +12,12 @@ import {
 } from '@/utils/detectionBoxView';
 
 export function MonitorPage() {
-  const { stream, loading, error } = useLocalCamera();
   const videoRef = useRef<HTMLVideoElement>(null);
+  const { stream, loading, error } = useLocalCamera(videoRef);
   const [timestamp, setTimestamp] = useState(() => new Date().toLocaleString());
 
   const { cameras, activeCameraId, setActiveCamera, vlmStatus, vlmError, detectionBoxes } = useAppStore();
   const activeCamera = cameras.find((c) => c.id === activeCameraId);
-
-  useEffect(() => {
-    if (videoRef.current && stream) {
-      videoRef.current.srcObject = stream;
-    }
-  }, [stream]);
 
   useVlmAnalysis({
     videoRef,

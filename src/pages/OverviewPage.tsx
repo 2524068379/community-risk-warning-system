@@ -1,4 +1,4 @@
-import { useRef, useEffect } from 'react';
+import { useRef } from 'react';
 import { Tag } from 'antd';
 import { CameraMapPanel } from '@/components/CameraMapPanel';
 import { VlmAnalysisPanel } from '@/components/VlmAnalysisPanel';
@@ -54,14 +54,8 @@ function renderPieLabel({ cx, cy, midAngle, outerRadius, name, percent }: any) {
 
 export function OverviewPage() {
   const { cameras, activeCameraId, analysis, analysisTimestamp, setActiveCamera, vlmStatus } = useAppStore();
-  const { stream, loading, error } = useLocalCamera();
   const videoRef = useRef<HTMLVideoElement>(null);
-
-  useEffect(() => {
-    if (videoRef.current && stream) {
-      videoRef.current.srcObject = stream;
-    }
-  }, [stream]);
+  const { stream, loading, error } = useLocalCamera(videoRef);
 
 
   const activeCamera = cameras.find((c) => c.id === activeCameraId);

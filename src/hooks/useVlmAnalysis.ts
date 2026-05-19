@@ -96,7 +96,6 @@ export async function checkVlmConnectionStatus(
   }
 }
 
-let globalServerReady = false
 const FALLBACK_INTERVAL_MS = 20000
 const FAIL_THRESHOLD = 3
 
@@ -121,7 +120,7 @@ export function useVlmAnalysis(options: VlmAnalysisOptions) {
     fallbackIntervalMs = FALLBACK_INTERVAL_MS
   } = options
 
-  const [serverReady, setServerReady] = useState(globalServerReady)
+  const [serverReady, setServerReady] = useState(false)
   const analyzingRef = useRef(false)
   const lastVlmTimeRef = useRef(0)
   const detectorFailedRef = useRef(false)
@@ -143,34 +142,24 @@ export function useVlmAnalysis(options: VlmAnalysisOptions) {
     const check = async () => {
       const connection = await checkVlmConnectionStatus()
       if (connection.ready) {
-        globalServerReady = true
         setServerReady(true)
         failCountRef.current = 0
         useAppStore.getState().setVlmStatus('idle')
       } else if (connection.status === 'starting' || connection.status === 'loading') {
         failCountRef.current = 0
         useAppStore.getState().setVlmStatus('loading')
-        useAppStore.setState({
-          analysis: { ...useAppStore.getState().analysis, summary: connectingAnalysis.summary }
-        })
+        useAppStore.getState().setAnalysisSummary(connectingAnalysis.summary)
       } else {
         failCountRef.current++
         if (failCountRef.current === 1) {
           useAppStore.getState().setVlmStatus('loading')
-          useAppStore.setState({
-            analysis: { ...useAppStore.getState().analysis, summary: connectingAnalysis.summary }
-          })
+          useAppStore.getState().setAnalysisSummary(connectingAnalysis.summary)
         } else if (failCountRef.current >= FAIL_THRESHOLD) {
           useAppStore.getState().setVlmStatus(
             'error',
             'VLM 服务未连接，请确保后端服务已启动且模型已加载'
           )
-          useAppStore.setState({
-            analysis: {
-              ...useAppStore.getState().analysis,
-              summary: 'VLM 服务连接失败，请检查后端服务状态'
-            }
-          })
+          useAppStore.getState().setAnalysisSummary('VLM 服务连接失败，请检查后端服务状态')
         }
       }
     }
@@ -181,15 +170,13 @@ export function useVlmAnalysis(options: VlmAnalysisOptions) {
   }, [enabled])
 
   useEffect(() => {
-    if (!frameDataUrl || analyzingRef.current) return
+    if (!frameDataUrl || analyzingRef.current || !hasChanged) return
 
     let cancelled = false
     analyzingRef.current = true
 
     ;(async () => {
       try {
-        if (!hasChanged) return
-
         let shouldSendVlm = false
         let detections: DetectionResult[] = []
 

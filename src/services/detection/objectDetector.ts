@@ -27,6 +27,7 @@ export function filterDetections(
 
 let model: import('@tensorflow-models/coco-ssd').ObjectDetection | null = null
 let status: DetectorStatus = 'idle'
+let unloadListenerAttached = false
 
 export function getDetectorStatus(): DetectorStatus {
   return status
@@ -46,6 +47,11 @@ export async function detect(
       await tf.ready()
       model = await cocoSsd.load({ base: 'lite_mobilenet_v2' })
       status = 'ready'
+
+      if (!unloadListenerAttached && typeof window !== 'undefined') {
+        unloadListenerAttached = true
+        window.addEventListener('beforeunload', disposeDetector)
+      }
     } catch {
       status = 'error'
       return []

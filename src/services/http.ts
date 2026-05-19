@@ -75,3 +75,21 @@ http.interceptors.request.use(async (config) => {
 
   return config
 })
+
+http.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (axios.isAxiosError(error)) {
+      if (error.code === 'ECONNABORTED') {
+        return Promise.reject(new Error('请求超时，请检查网络连接或稍后重试'))
+      }
+      if (!error.response) {
+        return Promise.reject(new Error('网络连接失败，请检查后端服务是否已启动'))
+      }
+      if (error.response.status >= 500) {
+        return Promise.reject(new Error('服务器内部错误，请稍后重试'))
+      }
+    }
+    return Promise.reject(error)
+  }
+)

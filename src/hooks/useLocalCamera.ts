@@ -7,7 +7,7 @@ function isStreamActive(s: MediaStream | null): s is MediaStream {
   return s !== null && s.active && s.getVideoTracks().some((t) => t.readyState === 'live');
 }
 
-export function useLocalCamera() {
+export function useLocalCamera(videoRef?: React.RefObject<HTMLVideoElement | null>) {
   const reused = isStreamActive(persistentStream);
   const [stream, setStream] = useState<MediaStream | null>(reused ? persistentStream : null);
   const [loading, setLoading] = useState(!reused);
@@ -60,6 +60,12 @@ export function useLocalCamera() {
       disposed = true;
     };
   }, []);
+
+  useEffect(() => {
+    if (videoRef?.current && stream) {
+      videoRef.current.srcObject = stream;
+    }
+  }, [stream, videoRef]);
 
   return { stream, loading, error };
 }
