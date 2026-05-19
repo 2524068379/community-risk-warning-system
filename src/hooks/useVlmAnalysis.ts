@@ -40,7 +40,11 @@ interface VlmAnalysisOptions {
   cameraId: string
   scene: string
   enabled?: boolean
-  captureIntervalMs?: number
+  /** Fast capture interval when motion detected (ms) */
+  activeIntervalMs?: number
+  /** Slow capture interval when scene is idle (ms) */
+  idleIntervalMs?: number
+  /** Fallback VLM interval when no objects detected (ms) */
   fallbackIntervalMs?: number
 }
 
@@ -96,8 +100,10 @@ export async function checkVlmConnectionStatus(
   }
 }
 
-const FALLBACK_INTERVAL_MS = 20000
+const FALLBACK_INTERVAL_MS = 10000
 const FAIL_THRESHOLD = 3
+/** High-priority labels that trigger immediate VLM dispatch */
+const HIGH_PRIORITY_LABELS = new Set(['person'])
 
 const connectingAnalysis: VlmAnalysis = {
   riskScore: 0,
@@ -116,7 +122,8 @@ export function useVlmAnalysis(options: VlmAnalysisOptions) {
     cameraId,
     scene,
     enabled = true,
-    captureIntervalMs = 2000,
+    activeIntervalMs = 500,
+    idleIntervalMs = 5000,
     fallbackIntervalMs = FALLBACK_INTERVAL_MS
   } = options
 
@@ -125,11 +132,13 @@ export function useVlmAnalysis(options: VlmAnalysisOptions) {
   const lastVlmTimeRef = useRef(0)
   const detectorFailedRef = useRef(false)
   const failCountRef = useRef(0)
+  const abortControllerRef = useRef<AbortController | null>(null)
 
   const shouldCapture = enabled && serverReady
 
   const { frameDataUrl, hasChanged, markConsumed } = useFrameCapture(videoRef, {
-    intervalMs: captureIntervalMs,
+    activeIntervalMs,
+    idleIntervalMs,
     quality: 0.7,
     maxWidth: 640,
     maxHeight: 480,
@@ -169,6 +178,14 @@ export function useVlmAnalysis(options: VlmAnalysisOptions) {
     return () => clearInterval(id)
   }, [enabled])
 
+  // Cleanup: abort any in-flight VLM request on unmount
+  useEffect(() => {
+    return () => {
+      abortControllerRef.current?.abort()
+      abortControllerRef.current = null
+    }
+  }, [])
+
   useEffect(() => {
     if (!frameDataUrl || analyzingRef.current || !hasChanged) return
 
@@ -178,6 +195,7 @@ export function useVlmAnalysis(options: VlmAnalysisOptions) {
     ;(async () => {
       try {
         let shouldSendVlm = false
+        let isHighPriority = false
         let detections: DetectionResult[] = []
 
         if (detectorFailedRef.current) {
@@ -197,6 +215,7 @@ export function useVlmAnalysis(options: VlmAnalysisOptions) {
 
           if (detections.length > 0) {
             shouldSendVlm = true
+            isHighPriority = detections.some((d) => HIGH_PRIORITY_LABELS.has(d.label))
           } else {
             const now = Date.now()
             if (now - lastVlmTimeRef.current >= fallbackIntervalMs) {
@@ -207,12 +226,38 @@ export function useVlmAnalysis(options: VlmAnalysisOptions) {
 
         if (!shouldSendVlm) return
 
+        // High-priority detection: abort stale in-flight request
+        if (isHighPriority && abortControllerRef.current) {
+          abortControllerRef.current.abort()
+          abortControllerRef.current = null
+        }
+
+        // Skip if a VLM request is already in-flight (non-priority frame)
+        if (!isHighPriority && abortControllerRef.current) return
+
         lastVlmTimeRef.current = Date.now()
         useAppStore.getState().setVlmStatus('analyzing')
-        const result = await analyzeFrameWithOllama(frameDataUrl, cameraId, scene)
-        if (!cancelled) {
-          useAppStore.getState().setAnalysis(result.analysis, result.boxes)
-          useAppStore.getState().setVlmStatus('ready')
+
+        const controller = new AbortController()
+        abortControllerRef.current = controller
+
+        try {
+          const result = await analyzeFrameWithOllama(
+            frameDataUrl, cameraId, scene, controller.signal
+          )
+          if (!cancelled) {
+            useAppStore.getState().setAnalysis(result.analysis, result.boxes)
+            useAppStore.getState().setVlmStatus('ready')
+          }
+        } catch (err) {
+          // Ignore aborted requests — not real errors
+          if (err instanceof DOMException && err.name === 'AbortError') return
+          if (cancelled) return
+          throw err
+        } finally {
+          if (abortControllerRef.current === controller) {
+            abortControllerRef.current = null
+          }
         }
       } catch (err) {
         if (!cancelled) {

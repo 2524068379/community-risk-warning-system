@@ -79,6 +79,10 @@ http.interceptors.request.use(async (config) => {
 http.interceptors.response.use(
   (response) => response,
   (error) => {
+    // Pass through abort/cancellation errors unchanged
+    if (axios.isCancel(error) || error?.name === 'AbortError' || error?.code === 'ERR_CANCELED') {
+      return Promise.reject(error)
+    }
     if (axios.isAxiosError(error)) {
       if (error.code === 'ECONNABORTED') {
         return Promise.reject(new Error('请求超时，请检查网络连接或稍后重试'))

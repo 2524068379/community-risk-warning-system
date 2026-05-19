@@ -119,7 +119,10 @@ export async function startOllama(): Promise<void> {
     '--host', vlmConfig.host,
     '-ngl', String(vlmConfig.gpuLayers),
     '-c', String(vlmConfig.contextSize),
-    '--no-warmup'
+    '-b', '256',
+    '--flash-attn',
+    '--no-warmup',
+    '--cont-batching'
   ]
 
   if (!fs.existsSync(mmprojPath)) {

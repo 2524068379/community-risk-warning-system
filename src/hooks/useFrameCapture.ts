@@ -8,6 +8,12 @@ interface FrameCaptureOptions {
   maxHeight?: number
   enabled?: boolean
   frameDiffThreshold?: number
+  /** Fast interval when motion is detected (ms) */
+  activeIntervalMs?: number
+  /** Slow interval when scene is idle (ms) */
+  idleIntervalMs?: number
+  /** Number of consecutive unchanged frames before switching to idle interval */
+  idleAfterFrames?: number
 }
 
 interface FrameCaptureResult {
@@ -32,7 +38,10 @@ export function useFrameCapture(
     maxWidth = 640,
     maxHeight = 480,
     enabled = true,
-    frameDiffThreshold = 0.05
+    frameDiffThreshold = 0.05,
+    activeIntervalMs = 500,
+    idleIntervalMs = 5000,
+    idleAfterFrames = 6
   } = options
 
   const [frameDataUrl, setFrameDataUrl] = useState<string | null>(null)
@@ -47,6 +56,11 @@ export function useFrameCapture(
   const prevGrayRef = useRef<Uint8ClampedArray | null>(null)
   const enabledRef = useRef(enabled)
   enabledRef.current = enabled
+
+  // Adaptive interval state
+  const unchangedCountRef = useRef(0)
+  const currentIntervalRef = useRef(activeIntervalMs)
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   useEffect(() => {
     canvasRef.current = document.createElement('canvas')
@@ -68,7 +82,12 @@ export function useFrameCapture(
   useEffect(() => {
     if (!enabled) return
 
-    const id = setInterval(() => {
+    function scheduleCapture() {
+      if (timerRef.current) clearInterval(timerRef.current)
+      timerRef.current = setInterval(captureLoop, currentIntervalRef.current)
+    }
+
+    function captureLoop() {
       const video = videoRef.current
       const canvas = canvasRef.current
       const diffCanvas = diffCanvasRef.current
@@ -89,6 +108,21 @@ export function useFrameCapture(
           : true
         prevGrayRef.current = gray
         setHasChanged(changed)
+
+        // Adaptive interval: fast when motion, slow when idle
+        if (changed) {
+          unchangedCountRef.current = 0
+          if (currentIntervalRef.current !== activeIntervalMs) {
+            currentIntervalRef.current = activeIntervalMs
+            scheduleCapture()
+          }
+        } else {
+          unchangedCountRef.current++
+          if (unchangedCountRef.current >= idleAfterFrames && currentIntervalRef.current !== idleIntervalMs) {
+            currentIntervalRef.current = idleIntervalMs
+            scheduleCapture()
+          }
+        }
 
         const vw = video.videoWidth
         const vh = video.videoHeight
@@ -114,10 +148,19 @@ export function useFrameCapture(
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Frame capture failed')
       }
-    }, intervalMs)
+    }
 
-    return () => clearInterval(id)
-  }, [enabled, intervalMs, quality, maxWidth, maxHeight, frameDiffThreshold, videoRef])
+    // Initial schedule with active interval
+    currentIntervalRef.current = activeIntervalMs
+    scheduleCapture()
+
+    return () => {
+      if (timerRef.current) {
+        clearInterval(timerRef.current)
+        timerRef.current = null
+      }
+    }
+  }, [enabled, intervalMs, quality, maxWidth, maxHeight, frameDiffThreshold, activeIntervalMs, idleIntervalMs, idleAfterFrames, videoRef])
 
   return { frameDataUrl, isProcessing, captureCount, error, hasChanged, markConsumed }
 }

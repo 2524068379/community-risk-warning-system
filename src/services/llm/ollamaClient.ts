@@ -170,7 +170,8 @@ export function parseVlmResponse(raw: string): { analysis: VlmAnalysis; boxes: D
 export async function analyzeFrameWithOllama(
   imageBase64: string,
   cameraId: string,
-  scene: string
+  scene: string,
+  signal?: AbortSignal
 ): Promise<{ analysis: VlmAnalysis; boxes: DetectionBox[] }> {
   const response = await http.post(OLLAMA_PROXY_PATH, {
     model: OLLAMA_MODEL,
@@ -190,7 +191,7 @@ export async function analyzeFrameWithOllama(
         ]
       }
     ]
-  })
+  }, { signal })
 
   const content = response.data?.choices?.[0]?.message?.content ?? ''
   return parseVlmResponse(content)
