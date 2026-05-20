@@ -1,0 +1,65 @@
+name: Dependabot Recreate Next PR
+
+on:
+  pull_request:
+    types: [closed]
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+jobs:
+  recreate:
+    if: >-
+      github.event.pull_request.user.login == 'dependabot[bot]' &&
+      github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check for remaining open Dependabot PRs
+        id: check
+        uses: actions/github-script@v8
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const { data: prs } = await github.rest.pulls.list({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              per_page: 100
+            });
+            const count = prs.filter(pr => pr.user.login === 'dependabot[bot]').length;
+            core.setOutput('open_count', count);
+            core.info(`Open Dependabot PRs: ${count}`);
+
+      - name: Trigger Dependabot update check
+        if: steps.check.outputs.open_count == '0'
+        uses: actions/github-script@v8
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            // Dependabot will auto-create the next PR on its next scheduled run.
+            // To accelerate this, we call the Dependabot API to request an immediate check.
+            try {
+              const ecosystems = [
+                { 'package-ecosystem': 'npm', directory: '/' },
+                { 'package-ecosystem': 'github-actions', directory: '/' }
+              ];
+              for (const eco of ecosystems) {
+                await github.request(
+                  'POST /repos/{owner}/{repo}/dependabot/updates',
+                  {
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    ...eco,
+                    headers: { 'X-GitHub-Api-Version': '2022-11-28' }
+                  }
+                );
+                core.info(`Triggered Dependabot check for ${eco['package-ecosystem']}`);
+              }
+            } catch (e) {
+              // API may not be available; Dependabot will still create the next PR
+              // on its daily schedule. This is not a failure.
+              core.warning(`Could not trigger immediate check: ${e.message}`);
+              core.info('Dependabot will create the next PR on its next scheduled run (daily at 09:00 CST).');
+            }
