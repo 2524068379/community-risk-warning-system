@@ -18,7 +18,7 @@ jobs:
     steps:
       - name: Check for remaining open Dependabot PRs
         id: check
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
@@ -34,7 +34,7 @@ jobs:
 
       - name: Trigger Dependabot update check
         if: steps.check.outputs.open_count == '0'
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
