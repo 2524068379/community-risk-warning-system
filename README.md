@@ -1,184 +1,164 @@
 # 险封·社区风险预警平台
 
-**v0.2.0** | 基于 **Electron 41 + React 19 + TypeScript + Vite 7 + Express 5** 构建的跨平台社区风险预警系统，集成本地摄像头实时画面、VLM 视觉分析（llama.cpp + Qwen3.5-4B）、百度地图联动与风险数据可视化。
+**v0.2.0** | Electron + React + TypeScript 构建的社区风险预警桌面应用。项目以本地摄像头画面为输入，结合本地 VLM 推理、目标检测、百度地图点位联动和风险数据可视化，提供社区监控总览、实时监控和预警事件查看能力。
 
-## 核心功能
+当前打包目标为 **Windows x64 portable zip**。浏览器开发模式可用于调试渲染进程和 Express 代理；完整的本地 VLM 自动拉起流程在 Electron 模式中运行。
 
-- **总览仪表板**：本地摄像头实时画面 + VLM 实时分析 + 百度地图联动 + 风险构成/趋势图表（Recharts）
-- **监控管理**：实时视频流 + 检测框叠加 + 点位列表快速切换
-- **风险预警**：事件等级分类（A/B/C）、VLM 研判详情、证据时间轴
-- **VLM 分析引擎**：本地 llama-server.exe 推理，帧采集 → 多模态分析 → 结构化输出，全链路本地运行
-- **双 AI 代理**：Qwen OpenAI 兼容代理（远程）+ Ollama 代理（本地 VLM），请求限流与验证
-- **跨平台部署**：Electron 桌面应用与浏览器开发模式，CI/CD 自动构建发布
+## 功能概览
+
+- **总览仪表板**：本地摄像头实时画面、VLM 状态、风险评分、风险构成、趋势折线图和百度地图点位联动。
+- **实时监控**：摄像头画面、点位列表、在线状态、风险分和 VLM 检测框叠加。
+- **预警事件**：按 A/B/C 风险等级筛选事件，查看事件概要、处置建议、关键证据和 VLM 研判结果。
+- **本地 VLM 分析**：Electron 主进程启动 `llama-server.exe`，渲染进程定时截帧并通过 `/api/ollama/chat/completions` 获取结构化研判结果。
+- **轻量目标检测预筛**：使用 TensorFlow.js COCO-SSD Lite 检测人员、车辆等目标，结合帧差与自适应截帧降低 VLM 调用频率。
+- **双代理能力**：Express 代理同时提供 Qwen OpenAI-compatible 远程接口和本地 llama.cpp VLM 接口，统一处理 CORS、限流、超时和请求校验。
+- **构建与发布**：GitHub Actions 在 Windows 环境运行测试、类型检查、构建和打包；应用包与 VLM 模型包分开产出。
 
 ## 技术栈
 
-| 层级 | 技术 | 版本 | 说明 |
-|------|------|------|------|
-| **前端框架** | React + TypeScript | 19 / 5.8 | 高性能渲染与类型安全 |
-| **UI 组件** | Ant Design | 6 | 企业级设计系统 |
-| **数据可视化** | Recharts | 3 | 风险饼图、趋势折线图 |
-| **状态管理** | Zustand | 5 | 轻量级全局状态 |
-| **路由** | react-router-dom | 7 | SPA 路由管理（懒加载） |
-| **HTTP 客户端** | Axios | 1.15 | 请求封装与拦截 |
-| **实时视频** | mpegts.js | 1.8 | 低延迟视频播放（FLV/MPEG-TS/HLS/MP4） |
-| **地图服务** | 百度地图 JSAPI GL | — | WebGL 地图与点位标注 |
-| **桌面框架** | Electron | 41 | 跨平台可执行程序（含 VLM 子进程管理） |
-| **构建工具** | electron-vite + Vite | 5 / 7 | Electron 三进程（main/preload/renderer）集成构建 |
-| **后端代理** | Node.js + Express | 22 / 5 | Qwen/Ollama API 代理、限流、验证 |
-| **VLM 推理** | llama.cpp (llama-server) | b8864 | 本地 CUDA 加速视觉推理 |
+| 层级 | 技术 | 当前版本 | 说明 |
+|------|------|----------|------|
+| 前端框架 | React + TypeScript | 19.2 / 5.8 | 渲染进程 UI 与类型约束 |
+| UI 组件 | Ant Design | 6.4 | 管理端组件体系 |
+| 数据可视化 | Recharts | 3.8 | 风险构成与趋势图表 |
+| 状态管理 | Zustand | 5.0 | 全局摄像头、事件和分析状态 |
+| 路由 | react-router-dom | 7.15 | SPA 路由与懒加载 |
+| HTTP 客户端 | Axios | 1.16 | 请求封装与拦截 |
+| 视频播放 | mpegts.js | 1.8 | FLV、MPEG-TS、HLS、MP4 播放能力 |
+| 目标检测 | TensorFlow.js + COCO-SSD | 4.22 / 2.2 | 浏览器侧轻量目标预筛 |
+| 地图服务 | 百度地图 JSAPI GL | 3.x | WebGL 地图与摄像头标注 |
+| 桌面框架 | Electron | 41.6 | 主进程窗口、代理和 VLM 子进程管理 |
+| 构建工具 | electron-vite + Vite | 5.0 / 7.0 | Electron 三进程构建与浏览器调试 |
+| 后端代理 | Node.js + Express | 22 / 5.2 | Qwen 和本地 VLM 代理 |
+| VLM 推理 | llama.cpp `llama-server` | b8864 | Windows CUDA 12.4 构建 |
 
 ## 项目结构
 
-```
+```text
 .
-├─ src/                          # 前端渲染进程
-│  ├─ components/               # React 组件
-│  │  ├─ player/               # 实时视频播放器（LiveVideoPlayer）
-│  │  ├─ CameraMapPanel.tsx    # 百度地图与摄像头标注
-│  │  ├── VlmAnalysisPanel.tsx # VLM 分析结果面板
-│  │  ├── VideoPanel.tsx       # 视频面板封装
-│  │  └── MetricCard.tsx       # 数据指标卡片
-│  ├─ hooks/                    # 自定义 Hooks
-│  │  ├─ useVlmAnalysis.ts     # VLM 分析调度（帧采集→推理→状态更新）
-│  │  ├─ useFrameCapture.ts    # 视频/摄像头帧定时截取
-│  │  ├─ useLocalCamera.ts     # 本地摄像头媒体流管理
-│  │  ├─ useBaiduMap.ts        # 百度地图实例管理
-│  │  └── useCameraMarkers.ts  # 地图摄像头标注管理
-│  ├─ pages/                    # 路由页面
-│  │  ├─ OverviewPage.tsx      # 总览仪表板（视频+VLM+地图+图表）
-│  │  ├─ MonitorPage.tsx       # 实时监控（视频+检测框+点位列表）
-│  │  └── AlertsPage.tsx       # 预警事件（列表+详情+VLM研判）
-│  ├─ layouts/                  # 布局组件（MainLayout）
-│  ├─ router/                   # 路由定义与懒加载配置
-│  ├─ services/                 # API 与第三方服务集成
-│  │  ├─ llm/                  # LLM 客户端
-│  │  │  ├─ ollamaClient.ts    # Ollama VLM 调用与响应解析
-│  │  │  └── qwenClient.ts     # Qwen 远程调用
-│  │  ├─ map/                  # 百度地图 SDK 加载与 InfoWindow
-│  │  └── http.ts              # Axios 实例与拦截器
-│  ├─ store/                    # Zustand 全局状态（useAppStore）
-│  ├─ data/                     # 模拟数据（mock 摄像头/事件）
-│  ├─ types/                    # TypeScript 类型定义
-│  ├─ utils/                    # 工具函数
-│  │  ├─ risk.ts               # 风险等级颜色/文本映射
-│  │  ├─ vlmStatusView.ts      # VLM 状态视图配置
-│  │  ├─ detectionBoxView.ts   # 检测框渲染样式
-│  │  ├── cameraFilter.ts      # 摄像头过滤
-│  │  └── escapeHtml.ts        # HTML 转义
-│  ├─ App.tsx                   # 应用入口
-│  └── main.tsx                 # Vite 应用挂载
-├─ electron/                     # Electron 主进程
-│  ├─ main.ts                   # 主进程入口（窗口+代理+VLM启动）
-│  ├─ preload.ts               # 预加载脚本（IPC桥接）
-│  └── ollamaManager.ts        # VLM 子进程生命周期管理（llama-server）
-├─ server/                       # Node/Express 代理服务
-│  ├─ index.js                  # 独立代理入口（浏览器模式）
-│  ├─ qwenProxy.js             # Qwen/Ollama 双代理路由、限流、验证
-│  └── ollamaHealthStatus.js   # Ollama 健康状态解析
-├─ shared/                       # 主进程/服务端/前端共享配置
-│  ├─ apiRoutes.js             # API 路由常量
-│  ├─ vlmModelConfig.js       # VLM 模型名称、URL、SHA256
-│  └── vlmRuntimeConfig.js    # VLM 运行时配置解析
-├─ scripts/                      # 工具脚本
-│  └── download-model.js       # 下载 llama-server + VLM 模型文件
+├─ src/                         # React 渲染进程
+│  ├─ components/                # 复用组件
+│  │  ├─ player/                 # LiveVideoPlayer 与播放状态工具
+│  │  ├─ CameraMapPanel.tsx      # 百度地图点位面板
+│  │  ├─ VlmAnalysisPanel.tsx    # VLM 结果展示
+│  │  ├─ VideoPanel.tsx          # 视频面板封装
+│  │  └─ MetricCard.tsx          # 指标卡片
+│  ├─ data/                      # Mock 摄像头与事件数据
+│  ├─ hooks/                     # 自定义 Hook
+│  │  ├─ useFrameCapture.ts      # 截帧、帧差和自适应间隔
+│  │  ├─ useLocalCamera.ts       # 本地摄像头媒体流
+│  │  ├─ useVlmAnalysis.ts       # VLM 调度与状态轮询
+│  │  ├─ useBaiduMap.ts          # 百度地图实例管理
+│  │  └─ useCameraMarkers.ts     # 地图标注管理
+│  ├─ layouts/                   # 页面布局
+│  ├─ pages/                     # Overview、Monitor、Alerts、NotFound
+│  ├─ router/                    # 路由定义与页面懒加载
+│  ├─ services/                  # API、地图、LLM、检测服务
+│  │  ├─ detection/              # TensorFlow.js 目标检测
+│  │  ├─ llm/                    # Qwen 与本地 VLM 客户端
+│  │  ├─ map/                    # 百度地图 SDK 和 InfoWindow
+│  │  └─ http.ts                 # Axios 实例
+│  ├─ store/                     # Zustand 全局状态
+│  ├─ types/                     # 业务类型和 Electron/Baidu 声明
+│  ├─ utils/                     # 风险、检测框、帧差、HTML 转义工具
+│  ├─ App.tsx                    # 应用入口组件
+│  └─ main.tsx                   # Vite 挂载入口
+├─ electron/                     # Electron 主进程与 preload
+│  ├─ main.ts                    # 窗口、内嵌代理、VLM 启停
+│  ├─ preload.ts                 # IPC 桥接
+│  ├─ ollamaManager.ts           # llama-server 生命周期管理
+│  └─ vlmResourcePath.ts         # 开发/打包资源路径解析
+├─ server/                       # Express 代理
+│  ├─ index.js                   # 独立代理入口
+│  ├─ qwenProxy.js               # Qwen 与本地 VLM 代理路由
+│  └─ ollamaHealthStatus.js      # VLM 健康状态转换
+├─ shared/                       # 三端共享常量与配置解析
+│  ├─ apiRoutes.js
+│  ├─ vlmModelConfig.js
+│  └─ vlmRuntimeConfig.js
+├─ scripts/
+│  └─ download-model.js          # 下载 llama-server、模型和 mmproj
 ├─ public/                       # 静态资源
-├─ example/                      # 示例媒体文件
-├─ resources/vlm/                # VLM 运行时资源（模型+可执行文件，不入库）
-├─ build/                        # Electron 打包图标
-├─ .github/                      # CI/CD
-│  ├─ workflows/build.yml       # 构建+测试+打包+发布
-│  ├─ workflows/dependabot-auto-merge.yml
-│  └── dependabot.yml           # Dependabot 自动依赖更新
-├─ .env.example                 # 前端环境变量模板
-├─ .env.server.example          # 后端环境变量模板
-├─ electron.vite.config.ts      # electron-vite 三进程构建配置
-├─ vite.config.ts               # 纯浏览器 Vite 配置
-├── vitest.config.ts            # Vitest 单测配置
-├─ package.json                 # 项目配置（v0.2.0）
-└─ electron-builder.json        # Electron 打包配置
+├─ example/                      # 示例媒体
+├─ resources/vlm/                # 本地 VLM 资源目录，运行时生成，不提交模型
+├─ build/                        # Electron 图标
+├─ .github/                      # CI、发布和 Dependabot 配置
+├─ .env.example                  # 前端环境变量模板
+├─ .env.server.example           # 代理与 VLM 环境变量模板
+├─ electron.vite.config.ts       # Electron 三进程构建配置
+├─ vite.config.ts                # 浏览器模式 Vite 配置
+├─ vitest.config.ts              # Vitest 配置
+├─ package.json                  # 脚本、依赖和 electron-builder 配置
+└─ package-lock.json
 ```
 
 ## 快速开始
 
-### 1. 环境准备
+### 环境要求
 
-```bash
-# 使用 Node.js 22+ 与 npm
-node --version  # v22.x.x 或更高
-npm --version   # 10.x.x 或更高
+- Node.js 22.x
+- npm 10.x 或更高版本
+- Windows 10/11 x64（完整桌面打包和内置 `llama-server.exe` 流程）
+- 可用摄像头（用于总览和监控页面实时画面）
+- 百度地图浏览器端 AK（地图功能需要）
+- NVIDIA CUDA 12.4 兼容环境（本地 VLM GPU 推理推荐；也可配置为 CPU）
 
-# 克隆仓库并进入目录
-git clone <repository-url>
-cd community-risk-warning-system
-```
-
-### 2. 安装依赖
+### 安装依赖
 
 ```bash
 npm ci
 ```
 
-### 3. 环境配置
-
-#### 前端配置（`.env`）
+### 配置前端环境
 
 ```bash
 cp .env.example .env
 ```
 
-编辑 `.env`，填写关键字段：
+关键字段：
 
 ```env
 VITE_APP_TITLE=险封·社区风险预警平台
+VITE_API_BASE_URL=
 
-# 百度地图 JSAPI GL
-VITE_BAIDU_MAP_AK=你的百度地图浏览器端AK
+VITE_BAIDU_MAP_AK=请填写你的百度地图浏览器端AK
 VITE_BAIDU_MAP_STYLE_ID=
 VITE_BAIDU_MAP_CENTER_LNG=118.796877
 VITE_BAIDU_MAP_CENTER_LAT=32.060255
 VITE_BAIDU_MAP_ZOOM=16
 
-# Qwen 代理配置（远程推理）
 VITE_QWEN_PROXY_PATH=/api/qwen/chat/completions
 VITE_QWEN_MODEL=jackrong-qwen3.5-4b-claude-4.6-opus-distilled-v2:q4_k_m
 
-# 演示视频流配置（可选）
 VITE_DEMO_STREAM_URL=
 VITE_DEMO_STREAM_TYPE=flv
 ```
 
-#### 后端代理配置（`.env.server`）
+### 配置代理与 VLM
 
 ```bash
 cp .env.server.example .env.server
 ```
 
-编辑 `.env.server`，填写关键字段：
+关键字段：
 
 ```env
-# 服务器配置
 SERVER_HOST=127.0.0.1
 SERVER_PORT=8787
-
-# CORS
 CORS_ORIGIN=http://localhost:5173
 ALLOW_LOCAL_FILE_ORIGINS=false
 REQUEST_BODY_LIMIT=8mb
 
-# Qwen 远程接口配置
-QWEN_BASE_URL=http://127.0.0.1:1234/v1
-QWEN_API_KEY=
-QWEN_MODEL=jackrong-qwen3.5-4b-claude-4.6-opus-distilled-v2:q4_k_m
-QWEN_TIMEOUT=60000
-
-# 限流与容量配置
 CHAT_REQUESTS_PER_MINUTE=30
 MAX_CHAT_MESSAGES=16
 MAX_CHAT_TOKENS=2048
 LOG_MODEL_OUTPUT=false
 
-# 本地 VLM 运行配置（llama-server）
+QWEN_BASE_URL=http://127.0.0.1:1234/v1
+QWEN_API_KEY=
+QWEN_MODEL=jackrong-qwen3.5-4b-claude-4.6-opus-distilled-v2:q4_k_m
+QWEN_TIMEOUT=60000
+
 VLM_HOST=127.0.0.1
 VLM_PORT=11434
 VLM_FORCE_CPU=false
@@ -187,121 +167,122 @@ VLM_CONTEXT_SIZE=4096
 VLM_STARTUP_TIMEOUT_MS=60000
 ```
 
-#### 下载 VLM 模型文件（Electron 模式可选）
+`VITE_*` 变量会进入浏览器代码，不要放入真实密钥。Qwen API Key 只应写入 `.env.server` 或 CI Secret。
+
+### 下载本地 VLM 资源
 
 ```bash
-# 下载 llama-server.exe（CUDA 构建）+ VLM 模型 + mmproj 视觉编码器
-# 约 3.2 GB，首次下载后自动跳过
 npm run download-model
 ```
 
-模型文件下载至 `resources/vlm/`：
-- `llama-server.exe` — llama.cpp CUDA 推理服务
-- `Qwen3.5-4B.Q4_K_M.gguf` (~2.55 GB) — 主模型
-- `mmproj-BF16.gguf` (~644 MB) — 视觉编码器
+脚本会下载并校验：
 
-脚本会自动验证 SHA256 完整性。
+| 文件 | 用途 |
+|------|------|
+| `llama-server.exe` | llama.cpp OpenAI-compatible 推理服务 |
+| `Qwen3.5-4B.Q4_K_M.gguf` | 主模型，约 2.55 GB |
+| `mmproj-BF16.gguf` | 视觉编码器，约 644 MB |
+| CUDA 相关 DLL | Windows CUDA 推理运行时依赖 |
 
-### 4. 开发运行
+资源放在 `resources/vlm/`。Electron 开发模式会从该目录查找并启动 `llama-server.exe`；打包后会从应用目录下的 `resources/vlm/` 查找。
 
-#### 仅前端开发（浏览器模式）
+## 开发命令
 
-```bash
-npm run dev:web
-```
-
-访问 `http://localhost:5173`，Vite 代理 `/api` 至后端。
-
-#### 仅后端代理
-
-```bash
-npm run dev:server
-```
-
-代理服务运行在 `http://127.0.0.1:8787`，提供以下路由：
-
-| 方法 | 路径 | 说明 |
-|------|------|------|
-| GET | `/api/health` | 代理健康检查 |
-| POST | `/api/qwen/chat/completions` | Qwen 远程推理代理 |
-| POST | `/api/ollama/chat/completions` | Ollama 本地 VLM 代理 |
-| GET | `/api/ollama/status` | Ollama 运行状态查询 |
-
-#### 前后端联调
-
-```bash
-npm run dev:all
-```
-
-同时启动浏览器 Vite 与 Express 代理。
-
-#### Electron 桌面应用开发
+### Electron 桌面模式
 
 ```bash
 npm run dev
 ```
 
-启动 Electron 主进程 + 渲染进程热更新。主进程会：
-1. 启动内嵌 Qwen/Ollama 代理服务（随机端口）
-2. 自动启动 `llama-server.exe` 子进程（如果模型文件存在）
-3. 通过 IPC 暴露 API 地址和 VLM 状态给渲染进程
+该模式会启动 Electron 主进程、渲染进程热更新和内嵌代理服务。若 `resources/vlm/` 中存在所需文件，主进程会自动启动本地 `llama-server.exe`。
 
-### 5. 生产构建与打包
+### 浏览器渲染模式
 
 ```bash
-# 构建前端资源（electron-vite 三进程构建）
-npm run build
-
-# 打包成 Windows 可执行文件（生成 dist-electron/）
-npm run package
-
-# 预览打包后的应用
-npm run preview
+npm run dev:web
 ```
 
-## 核心功能详解
+访问 `http://localhost:5173`。该模式只启动 Vite 渲染进程，适合调试 UI。`/api` 请求会按 Vite 配置代理到后端。
 
-### VLM 实时分析管线
+### 独立后端代理
 
-全链路本地运行的视觉分析流程：
-
-```
-摄像头/视频 → useFrameCapture（定时截帧）→ useVlmAnalysis（调度分析）
-    → ollamaClient（构建多模态请求）→ /api/ollama/chat/completions
-    → llama-server（本地推理）→ parseVlmResponse（JSON解析+校验）
-    → useAppStore（状态更新）→ UI 渲染
+```bash
+npm run dev:server
 ```
 
-**关键文件**：
-- `src/hooks/useFrameCapture.ts` — Canvas 截帧，可配置间隔/分辨率/质量
-- `src/hooks/useVlmAnalysis.ts` — 分析调度，帧消费锁，VLM 状态轮询
-- `src/services/llm/ollamaClient.ts` — 多模态请求构建，JSON 提取（兼容 `<think/>` 标签），DetectionBox 归一化
-- `electron/ollamaManager.ts` — llama-server 子进程生命周期（启动/健康检查/超时/停止）
+代理默认运行在 `http://127.0.0.1:8787`。注意：独立代理不会自动启动 `llama-server.exe`，如需在浏览器模式测试本地 VLM，请先确保 `VLM_HOST:VLM_PORT` 上已有兼容服务在运行。
 
-**分析输出**：
+### 前后端联调
+
+```bash
+npm run dev:all
+```
+
+同时启动浏览器渲染进程与 Express 代理。
+
+## API 路由
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/api/health` | 代理健康检查，返回 Qwen 配置状态和默认模型 |
+| POST | `/api/qwen/chat/completions` | Qwen OpenAI-compatible 远程接口代理 |
+| POST | `/api/ollama/chat/completions` | 本地 llama.cpp VLM 代理，命名沿用 `ollama` |
+| GET | `/api/ollama/status` | 本地 VLM 健康状态查询 |
+
+代理层会统一执行请求体大小限制、消息数量限制、`max_tokens` 上限校验、每 IP 每分钟限流、CORS 白名单和上游请求超时控制。
+
+## 核心流程
+
+### 本地 VLM 实时分析
+
+```text
+本地摄像头
+  -> useFrameCapture：缩放截帧、帧差判断、自适应采样
+  -> objectDetector：COCO-SSD Lite 预筛人员/车辆等目标
+  -> useVlmAnalysis：高优先级目标触发、空闲兜底触发、请求取消
+  -> /api/ollama/chat/completions：Express 代理
+  -> llama-server.exe：本地模型推理
+  -> parseVlmResponse：剥离 think 标签、提取 JSON、归一化 detectionBoxes
+  -> useAppStore：更新风险分析、检测框和趋势数据
+  -> Overview / Monitor / Alerts UI
+```
+
+关键文件：
+
+- `src/hooks/useFrameCapture.ts`：截帧、帧差和动态采样间隔。
+- `src/services/detection/objectDetector.ts`：动态加载 TensorFlow.js 与 COCO-SSD Lite。
+- `src/hooks/useVlmAnalysis.ts`：VLM 连接状态检查、检测预筛、请求调度和中断。
+- `src/services/llm/ollamaClient.ts`：多模态请求构建、模型响应解析和检测框归一化。
+- `electron/ollamaManager.ts`：`llama-server.exe` 启停、健康检查、超时和最多 3 次重启。
+
+VLM 结构化结果类型：
+
 ```typescript
 interface VlmAnalysis {
-  riskScore: number;       // 0-100 综合风险分
-  level: 'A' | 'B' | 'C'; // A=高危 B=中危 C=低危
-  hasRisk: boolean;        // 是否存在风险
-  confidence: number;      // 0-1 置信度
-  summary: string;         // 自然语言摘要
-  breakdown: RiskBreakdown[]; // 风险构成（百分比）
-  evidenceTimeline: string[]; // 证据时间轴
+  riskScore: number;
+  level: 'A' | 'B' | 'C';
+  hasRisk: boolean;
+  confidence: number;
+  summary: string;
+  evidenceTimeline: string[];
+  breakdown: RiskBreakdown[];
+  trend: TrendPoint[];
 }
 ```
 
-### 实时视频播放器
+### 地图联动
 
-**位置**：`src/components/player/LiveVideoPlayer.tsx`
+百度地图相关代码位于 `src/components/CameraMapPanel.tsx`、`src/hooks/useBaiduMap.ts`、`src/hooks/useCameraMarkers.ts` 和 `src/services/map/`。
 
-支持的协议：
-- `flv`：HTTP-FLV（推荐用于社区监控网关）
-- `mpegts`：MPEG-TS over HTTP（低延迟方案）
-- `hls`：HTTP Live Streaming（浏览器原生支持）
-- `mp4`：标准 MP4 文件播放
+使用前需要：
 
-配置示例：
+1. 在 `.env` 中配置 `VITE_BAIDU_MAP_AK`。
+2. 在百度地图控制台为浏览器 AK 配置 Referer 白名单，例如 `http://localhost:5173`。
+3. 确认点位坐标使用 BD09 坐标系。
+
+### 实时视频播放
+
+`src/components/player/LiveVideoPlayer.tsx` 支持 `flv`、`mpegts`、`hls` 和 `mp4`。当前总览和监控页面默认使用 `useLocalCamera` 接入本地摄像头，播放组件保留给演示流或后续网关接入场景。
 
 ```typescript
 <LiveVideoPlayer
@@ -312,52 +293,10 @@ interface VlmAnalysis {
 />
 ```
 
-监控页面额外支持本地摄像头直连（`useLocalCamera`），画面上叠加 VLM 检测框（`detectionBoxView.ts`）。
-
-### 百度地图集成
-
-**位置**：`src/components/CameraMapPanel.tsx`、`src/hooks/useBaiduMap.ts`、`src/services/map/baiduMap.ts`
-
-功能：
-- 动态加载百度地图 JSAPI GL
-- 摄像头点位标注（风险等级色彩分类）
-- 搜索定位与地图中心联动
-- 点击点位切换监控视角
-- InfoWindow 弹窗（`cameraInfoWindow.ts`）
-
-接入要求：
-1. 在 `.env` 中配置 `VITE_BAIDU_MAP_AK`
-2. 在百度地图控制台添加本地开发域名 `http://localhost:5173`
-3. 确保数据坐标为 `BD09`
-
-### 双 AI 代理架构
-
-**后端入口**：`server/qwenProxy.js`
-
-```
-前端
- ├─ /api/qwen/*  →  Qwen 远程推理（OpenAI 兼容，需 QWEN_BASE_URL + QWEN_API_KEY）
- └─ /api/ollama/* →  Ollama 本地 VLM（llama-server，无需外部 API）
-```
-
-共享特性：
-- **请求限流**：每 IP 每分钟 `CHAT_REQUESTS_PER_MINUTE` 次
-- **Payload 验证**：消息数量、max_tokens 上限
-- **CORS 白名单**：精确指定前端域名，支持 `file://` 协议（Electron）
-- **健康检查**：`/api/health` 与 `/api/ollama/status`
-
-### 数据可视化
-
-**位置**：`src/pages/OverviewPage.tsx`
-
-- **风险构成环形图**：Recharts PieChart，按类别展示风险占比
-- **风险趋势折线图**：Recharts LineChart，滚动显示最近 30 个时间点
-- **VLM 面板**：三种模式（full/compact/summary），展示风险分、等级、置信度、摘要
-
-## 测试与质量检查
+## 构建、测试与打包
 
 ```bash
-# 运行 Vitest 单测
+# 单元测试
 npm run test
 
 # 监听模式
@@ -366,173 +305,103 @@ npm run test:watch
 # TypeScript 类型检查
 npm run typecheck
 
-# 完整构建流程
-npm run build && npm run package
+# Electron/Vite 生产构建
+npm run build
+
+# Windows portable zip 打包
+npm run package
+
+# 预览构建后的 Electron 应用
+npm run preview
 ```
 
-测试文件与源码同目录放置（`*.test.ts` / `*.test.tsx` / `*.test.js`）。
+`npm run package` 会先执行 `npm run download-model`。打包配置位于 `package.json` 的 `build` 字段；portable 应用包会携带 `llama-server.exe` 和运行时 DLL，但会排除 `Qwen3.5-4B.Q4_K_M.gguf` 与 `mmproj-BF16.gguf` 两个大模型文件。CI 会额外生成独立的 `vlm-models.zip`，用于发布时单独分发模型。
 
-**提交代码前必须执行**：
+提交行为变更前建议运行：
 
 ```bash
-npm run test && npm run typecheck && npm run build
+npm run test
+npm run typecheck
+npm run build
 ```
 
 ## CI/CD
 
-### GitHub Actions（`.github/workflows/build.yml`）
+GitHub Actions 工作流位于 `.github/workflows/build.yml`：
 
-- **触发条件**：push to main、PR to main、tag `v*`
-- **构建步骤**：安装依赖 → 测试 → 类型检查 → VLM 模型缓存/下载 → SHA256 验证 → 构建 → 打包
-- **产物**：`windows-portable.zip`（应用）+ `vlm-models.zip`（模型文件）
-- **自动发布**：tag push 时创建 GitHub Release，附带应用和模型包
-- **Dependabot 优化**：Dependabot PR 跳过模型下载和打包步骤
+- 触发：push 到 `main`、PR 到 `main`、`v*` 标签和手动触发。
+- 环境：`windows-latest`，Node.js 22。
+- 步骤：`npm ci`、测试、类型检查、VLM 资源缓存/下载、SHA256 校验、构建、打包。
+- Dependabot PR：跳过 VLM 下载和 Windows 打包，只执行必要质量检查。
+- Release：推送 `v*` 标签时上传 `windows-portable` 与 `vlm-models` 两类产物。
 
-### Dependabot
+Dependabot 配置位于 `.github/dependabot.yml`，npm 和 GitHub Actions 依赖每天检查，每次最多打开 1 个 PR。小版本和补丁版本更新会尝试自动合并，主版本更新会打上 `needs-review` 与 `dependencies` 标签。
 
-- 自动检测 npm 和 GitHub Actions 依赖更新
-- 配置自动合并工作流（`.github/workflows/dependabot-auto-merge.yml`）
+## 编码约定
 
-## 编码规范
+- 前端与 Electron 使用 TypeScript，后端代理和 shared 配置使用 ESM JavaScript。
+- 使用两空格缩进、单引号和分号。
+- React 组件使用 PascalCase，例如 `CameraMapPanel.tsx`。
+- Hook 使用 `use` 前缀，例如 `useVlmAnalysis.ts`。
+- 从 `src` 导入优先使用 `@/` 别名。
+- 测试文件与源码就近放置，命名为 `*.test.ts`、`*.test.tsx` 或 `*.test.js`。
 
-### TypeScript 与 JavaScript
+## 安全与配置
 
-- **前端与 Electron**：必须使用 TypeScript（`.ts` / `.tsx`）
-- **后端代理与 shared**：JavaScript（`.js`），可被主进程和服务端直接引用
-- **缩进**：两空格
-- **引号**：单引号
-- **分号**：必须
-- **导入别名**：使用 `@/` 指向 `src/` 目录
+- 不要提交真实 `.env` 或 `.env.server`。
+- Qwen API Key 只放在服务端环境或 CI Secret 中。
+- 百度地图浏览器 AK 必须配置 Referer 白名单；本地开发通常需要加入 `http://localhost:5173`。
+- `ALLOW_LOCAL_FILE_ORIGINS` 仅在 Electron 内嵌代理场景由主进程覆盖为 `true`，普通浏览器代理默认关闭。
+- 生产环境保持 `LOG_MODEL_OUTPUT=false`，避免记录模型输出内容。
+- VLM 模型文件下载后会校验 SHA256，哈希配置集中在 `shared/vlmModelConfig.js`。
 
-### 组件与文件命名
-
-| 类型 | 命名方式 | 示例 |
-|------|---------|------|
-| React 组件 | PascalCase | `CameraMapPanel.tsx` |
-| 自定义 Hook | `use` 前缀 + PascalCase | `useBaiduMap.ts` |
-| Zustand Store | `use` 前缀 + PascalCase | `useAppStore.ts` |
-| 工具函数 | camelCase | `escapeHtml.ts` |
-
-### 导入示例
-
-```typescript
-// ✅ 推荐：使用 @/ 别名
-import { CameraMapPanel } from '@/components/CameraMapPanel';
-import { useAppStore } from '@/store/useAppStore';
-
-// shared 模块使用相对路径引用
-import { OLLAMA_CHAT_COMPLETIONS_ROUTE } from '../../shared/apiRoutes.js';
-```
-
-## 分支与提交规范
-
-### 提交信息格式（Conventional Commits）
-
-```
-<type>(<scope>): <subject>
-
-<body>
-
-<footer>
-```
-
-**Type 示例**：
-- `feat(map)`：新增地图功能
-- `feat(electron)`：Electron 特性
-- `fix(player)`：修复视频播放器
-- `build(deps)`：依赖更新
-- `ci(workflow)`：CI 工作流调整
-- `docs(readme)`：文档更新
-- `test`：测试相关
-- `refactor`：代码重构
-
-### Pull Request 要求
-
-每个 PR 应包括：
-1. **功能描述**：清晰的行为说明（What & Why）
-2. **验证命令**：复现步骤与测试指令
-3. **关联 Issue**：`Closes #xxx` 或 `Relates to #xxx`
-4. **媒体附件**：UI 变更需截图或录屏
-5. **检查清单**：
-   - [ ] `npm run test` 通过
-   - [ ] `npm run typecheck` 通过
-   - [ ] `npm run build` 通过
-   - [ ] 无 console 错误或警告
-
-## 安全与部署
-
-### 环境变量管理
-
-**绝不提交真实 `.env` 或 `.env.server` 文件**
-
-- **模板文件**：`.env.example` 与 `.env.server.example` 需提交
-- **敏感信息**：Qwen API Key、地图 AK 等仅在本地或 CI/CD secrets 中保存
-- **浏览器隐藏**：所有 `VITE_*` 变量在前端代码中可见，不应包含真实 Key
-- **CI/CD**：通过 GitHub Secrets `ENV_FILE` 注入环境变量
-
-### 百度地图安全配置
-
-- **Referer 白名单**：在地图控制台严格限制 `http://localhost:5173`（本地）与生产域名
-- **浏览器 AK** 需设置 Referer 限制
-- **坐标系**：确保数据坐标为 `BD09`，若为 `WGS84` 或 `GCJ02` 需在后端完成转换
-
-### VLM 模型安全
-
-- 模型文件通过 `scripts/download-model.js` 下载，自动验证 SHA256
-- CI/CD 构建中同样执行 SHA256 校验
-- 模型配置集中在 `shared/vlmModelConfig.js`，三端共享
-
-### Qwen 代理安全
-
-- **API Key 位置**：仅存储在服务端 `.env.server`
-- **日志管理**：生产环境 `LOG_MODEL_OUTPUT=false`
-- **CORS 配置**：`CORS_ORIGIN` 精确指定前端域名，Electron 模式通过 `allowLocalFileOrigins` 支持 `file://` 协议
-
-## 常见问题排查
+## 常见问题
 
 ### 地图不显示
 
-| 问题 | 排查步骤 |
-|------|---------|
-| 白屏或加载中 | 1. 检查 `VITE_BAIDU_MAP_AK` 是否填写 2. 验证浏览器能访问 `api.map.baidu.com` 3. 查看浏览器控制台错误 |
-| Referer 错误 | 1. 确认 `http://localhost:5173` 已加入地图控制台白名单 2. 检查 CSP 头是否限制脚本加载 |
-| 点位整体偏移 | 1. 确认坐标系为 `BD09` 2. 若为其他坐标系，在后端完成转换 |
+| 现象 | 排查 |
+|------|------|
+| 白屏或一直加载 | 检查 `VITE_BAIDU_MAP_AK`、网络访问 `api.map.baidu.com` 的能力和浏览器控制台错误 |
+| Referer 错误 | 确认 `http://localhost:5173` 或当前域名已加入百度地图控制台白名单 |
+| 点位偏移 | 确认数据坐标为 BD09；如为 WGS84 或 GCJ02，需先转换 |
 
-### 视频播放失败
+### 摄像头或视频不可用
 
-| 问题 | 排查步骤 |
-|------|---------|
-| 黑屏或加载中 | 1. 检查 `VITE_DEMO_STREAM_URL` 是否有效 2. 确认视频服务器 CORS 配置 3. 调整 `mpegts.js` 缓冲参数 |
-| 延迟高 | 1. 优先使用 `flv` 或 `mpegts` 协议 2. 检查网络带宽 3. 考虑 WebRTC 替代 |
+| 现象 | 排查 |
+|------|------|
+| 本地摄像头无法启动 | 检查系统摄像头权限、浏览器或 Electron 权限提示，以及是否被其他程序占用 |
+| 演示流黑屏 | 检查 `VITE_DEMO_STREAM_URL`、流协议类型和视频服务 CORS |
+| 延迟较高 | 优先使用 `flv` 或 `mpegts`，并检查网关缓冲配置 |
 
 ### VLM 分析不工作
 
-| 问题 | 排查步骤 |
-|------|---------|
-| 状态持续"等待连接" | 1. 检查 `resources/vlm/` 下模型文件是否存在 2. 运行 `npm run download-model` 3. 检查 Electron 控制台 `[vlm]` 日志 |
-| GPU 不可用 | 1. 设置 `VLM_FORCE_CPU=true` 2. 检查 CUDA 12.4 驱动 3. 降低 `VLM_GPU_LAYERS` |
-| 推理超时 | 1. 增大 `VLM_STARTUP_TIMEOUT_MS` 2. 降低 `VLM_CONTEXT_SIZE` 3. 检查显存占用 |
+| 现象 | 排查 |
+|------|------|
+| 状态停留在连接中 | 检查 `resources/vlm/` 是否包含 `llama-server.exe`、主模型和 `mmproj`，必要时运行 `npm run download-model` |
+| 浏览器模式调用失败 | 独立代理不会自动启动 VLM；请使用 `npm run dev` 或自行启动兼容 `VLM_HOST:VLM_PORT` 的服务 |
+| GPU 不可用 | 设置 `VLM_FORCE_CPU=true`，或检查 CUDA 12.4 运行时和显卡驱动 |
+| 推理超时 | 增大 `VLM_STARTUP_TIMEOUT_MS`，降低 `VLM_CONTEXT_SIZE` 或 `VLM_GPU_LAYERS` |
 
-### Qwen 代理无响应
+### Qwen 代理异常
 
-| 问题 | 排查步骤 |
-|------|---------|
-| 502 Bad Gateway | 1. 确认 `npm run dev:server` 已启动 2. 检查 `QWEN_BASE_URL` 与 `QWEN_API_KEY` 3. 验证远程 API 可访问 |
-| 超时 | 1. 增加 `QWEN_TIMEOUT` 值 2. 临时设置 `LOG_MODEL_OUTPUT=true` 查看日志 |
-| 限流错误 | 1. 检查 `CHAT_REQUESTS_PER_MINUTE` 设置 2. 确认消息历史不超过 `MAX_CHAT_MESSAGES` |
+| 现象 | 排查 |
+|------|------|
+| 500 配置错误 | 检查 `.env.server` 中的 `QWEN_BASE_URL` 与 `QWEN_API_KEY` |
+| 504 超时 | 增大 `QWEN_TIMEOUT`，并确认上游 OpenAI-compatible 服务可访问 |
+| 429 限流 | 调整 `CHAT_REQUESTS_PER_MINUTE`，或降低前端请求频率 |
 
 ## 相关资源
 
-- [Electron 官方文档](https://www.electronjs.org/docs)
-- [electron-vite 构建工具](https://electron-vite.org/)
-- [Vite 用户指南](https://cn.vitejs.dev/)
-- [React 文档](https://react.dev)
-- [TypeScript 手册](https://www.typescriptlang.org/docs/)
-- [Ant Design 组件库](https://ant.design/)
-- [Recharts 图表库](https://recharts.org/)
+- [Electron 文档](https://www.electronjs.org/docs/latest)
+- [electron-vite](https://electron-vite.org/)
+- [Vite 文档](https://cn.vitejs.dev/)
+- [React 文档](https://react.dev/)
+- [TypeScript 文档](https://www.typescriptlang.org/docs/)
+- [Ant Design](https://ant.design/)
+- [Recharts](https://recharts.org/)
 - [百度地图 JSAPI GL](https://lbsyun.baidu.com/index.php?title=jspopular3.0/api)
 - [llama.cpp](https://github.com/ggml-org/llama.cpp)
-- [Qwen 模型](https://huggingface.co/Jackrong/Qwen3.5-4B-Claude-4.6-Opus-Reasoning-Distilled-v2-GGUF)
+- [Qwen3.5-4B GGUF 模型](https://huggingface.co/Jackrong/Qwen3.5-4B-Claude-4.6-Opus-Reasoning-Distilled-v2-GGUF)
 
 ## 许可证
 
@@ -540,4 +409,4 @@ import { OLLAMA_CHAT_COMPLETIONS_ROUTE } from '../../shared/apiRoutes.js';
 
 ---
 
-**最后更新**：2026-04-28
+**最后更新**：2026-05-20
