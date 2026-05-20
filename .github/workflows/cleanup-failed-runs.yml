@@ -6,7 +6,7 @@ on:
       days:
         description: 'Delete failed runs older than N days'
         required: false
-        default: '7'
+        default: '0'
 
 permissions:
   actions: write
