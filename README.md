@@ -10,7 +10,7 @@
 - **实时监控**：摄像头画面、点位列表、在线状态、风险分和 VLM 检测框叠加。
 - **预警事件**：按 A/B/C 风险等级筛选事件，查看事件概要、处置建议、关键证据和 VLM 研判结果。
 - **本地 VLM 分析**：Electron 主进程启动 `llama-server.exe`，渲染进程定时截帧并通过 `/api/ollama/chat/completions` 获取结构化研判结果。
-- **轻量目标检测预筛**：使用 TensorFlow.js COCO-SSD Lite 检测人员、车辆等目标，结合帧差与自适应截帧降低 VLM 调用频率。
+- **轻量目标检测预筛**：使用 TensorFlow.js COCO-SSD Lite 检测人员、车辆等目标，检测标签和置信度阈值可通过环境变量配置，并结合帧差与自适应截帧降低 VLM 调用频率。
 - **双代理能力**：Express 代理同时提供 Qwen OpenAI-compatible 远程接口和本地 llama.cpp VLM 接口，统一处理 CORS、限流、超时和请求校验。
 - **构建与发布**：GitHub Actions 在 Windows 环境运行测试、类型检查、构建和打包；应用包与 VLM 模型包分开产出。
 
@@ -96,7 +96,7 @@
 
 ### 环境要求
 
-- Node.js 22.x
+- Node.js 22.x（仓库通过 `.nvmrc` 与 `package.json#engines` 固定为 `>=22 <23`）
 - npm 10.x 或更高版本
 - Windows 10/11 x64（完整桌面打包和内置 `llama-server.exe` 流程）
 - 可用摄像头（用于总览和监控页面实时画面）
@@ -132,7 +132,12 @@ VITE_QWEN_MODEL=jackrong-qwen3.5-4b-claude-4.6-opus-distilled-v2:q4_k_m
 
 VITE_DEMO_STREAM_URL=
 VITE_DEMO_STREAM_TYPE=flv
+
+VITE_DETECTION_LABELS=person,car,bicycle,motorcycle,dog
+VITE_DETECTION_MIN_SCORE=0.4
 ```
+
+`VITE_DETECTION_LABELS` 用英文逗号分隔 COCO-SSD 标签；`VITE_DETECTION_MIN_SCORE` 取值范围为 0 到 1，配置异常时回退到 0.4。
 
 ### 配置代理与 VLM
 
@@ -239,7 +244,7 @@ npm run dev:all
 本地摄像头
   -> useFrameCapture：缩放截帧、帧差判断、自适应采样
   -> objectDetector：COCO-SSD Lite 预筛人员/车辆等目标
-  -> useVlmAnalysis：高优先级目标触发、空闲兜底触发、请求取消
+  -> useVlmAnalysis：高优先级目标触发、空闲兜底触发、请求取消、未变化帧锁释放
   -> /api/ollama/chat/completions：Express 代理
   -> llama-server.exe：本地模型推理
   -> parseVlmResponse：剥离 think 标签、提取 JSON、归一化 detectionBoxes
@@ -251,7 +256,7 @@ npm run dev:all
 
 - `src/hooks/useFrameCapture.ts`：截帧、帧差和动态采样间隔。
 - `src/services/detection/objectDetector.ts`：动态加载 TensorFlow.js 与 COCO-SSD Lite。
-- `src/hooks/useVlmAnalysis.ts`：VLM 连接状态检查、检测预筛、请求调度和中断。
+- `src/hooks/useVlmAnalysis.ts`：VLM 连接状态检查、检测预筛、请求调度、中断和未变化帧消费。
 - `src/services/llm/ollamaClient.ts`：多模态请求构建、模型响应解析和检测框归一化。
 - `electron/ollamaManager.ts`：`llama-server.exe` 启停、健康检查、超时和最多 3 次重启。
 
@@ -340,6 +345,7 @@ Dependabot 配置位于 `.github/dependabot.yml`，npm 和 GitHub Actions 依赖
 ## 编码约定
 
 - 前端与 Electron 使用 TypeScript，后端代理和 shared 配置使用 ESM JavaScript。
+- React 应用级 Provider 与 Router 统一放在 `src/App.tsx`，`src/main.tsx` 只负责挂载。
 - 使用两空格缩进、单引号和分号。
 - React 组件使用 PascalCase，例如 `CameraMapPanel.tsx`。
 - Hook 使用 `use` 前缀，例如 `useVlmAnalysis.ts`。

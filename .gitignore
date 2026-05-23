@@ -3,11 +3,27 @@ dist
 *.tsbuildinfo
 vite.config.js
 vite.config.d.ts
+__pycache__/
 .vscode/*
 !.vscode/extensions.json
+.agents/
+.aris/
+.codex/
+.claude/
+idea-stage/
 .env
 .env.local
 .DS_Store
+
+# Paper build/review caches
+paper/*.aux
+paper/*.bbl
+paper/*.blg
+paper/*.fdb_latexmk
+paper/*.fls
+paper/*.log
+paper/*.out
+paper/.review_pages/
 
 .env.server
 dist-electron

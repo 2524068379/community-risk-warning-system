@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { checkVlmConnectionStatus, finalizeVlmFrame } from './useVlmAnalysis'
+import { checkVlmConnectionStatus, consumeUnchangedVlmFrame, finalizeVlmFrame } from './useVlmAnalysis'
 
 describe('finalizeVlmFrame', () => {
   it('releases the analysis lock and consumes the frame even after cancellation', () => {
@@ -13,6 +13,37 @@ describe('finalizeVlmFrame', () => {
 
     expect(markConsumed).toHaveBeenCalledTimes(1)
     expect(releaseAnalysisLock).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('consumeUnchangedVlmFrame', () => {
+  it('consumes unchanged frames so capture loops do not stay locked', () => {
+    const markConsumed = vi.fn()
+
+    expect(consumeUnchangedVlmFrame({
+      frameDataUrl: 'data:image/jpeg;base64,abc',
+      hasChanged: false,
+      markConsumed
+    })).toBe(true)
+
+    expect(markConsumed).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps changed or missing frames for normal processing', () => {
+    const markConsumed = vi.fn()
+
+    expect(consumeUnchangedVlmFrame({
+      frameDataUrl: 'data:image/jpeg;base64,abc',
+      hasChanged: true,
+      markConsumed
+    })).toBe(false)
+    expect(consumeUnchangedVlmFrame({
+      frameDataUrl: null,
+      hasChanged: false,
+      markConsumed
+    })).toBe(false)
+
+    expect(markConsumed).not.toHaveBeenCalled()
   })
 })
 

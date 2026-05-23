@@ -34,3 +34,9 @@ Recent commits use Conventional Commit-style prefixes, often with scopes: `feat:
 ## Security & Configuration Tips
 
 Copy `.env.example` to `.env` and `.env.server.example` to `.env.server`; never commit real `.env` files. Keep Qwen API keys only in the server environment. Restrict Baidu Map browser AK usage by Referer, and ensure local development origins such as `http://localhost:5173` are explicitly allowed.
+
+<!-- ARIS:BEGIN -->
+## ARIS Skill Scope
+For ARIS workflows in this project, use only the project-local ARIS skills under `.agents/skills/aris`.
+Do not use global skills or non-ARIS project skills unless the user explicitly asks to mix them.
+<!-- ARIS:END -->

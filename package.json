@@ -4,6 +4,10 @@
   "version": "0.2.0",
   "description": "Electron desktop app for community risk warning and VLM-assisted monitoring.",
   "author": "community-risk-warning-system contributors",
+  "engines": {
+    "node": ">=22 <23",
+    "npm": ">=10"
+  },
   "main": "./dist/main/main.cjs",
   "type": "module",
   "scripts": {

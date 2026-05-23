@@ -2,8 +2,10 @@ import type { DetectionResult } from '@/types'
 
 type DetectorStatus = 'idle' | 'loading' | 'ready' | 'error'
 
-const ALLOWED_LABELS = new Set(['person', 'car', 'bicycle', 'motorcycle', 'dog'])
+const DEFAULT_ALLOWED_LABELS = ['person', 'car', 'bicycle', 'motorcycle', 'dog']
+const ALLOWED_LABELS = parseDetectionLabels(import.meta.env.VITE_DETECTION_LABELS)
 const DEFAULT_MIN_SCORE = 0.4
+const MIN_SCORE = parseDetectionMinScore(import.meta.env.VITE_DETECTION_MIN_SCORE)
 
 interface RawDetection {
   class: string
@@ -11,10 +13,28 @@ interface RawDetection {
   bbox: [number, number, number, number]
 }
 
+export function parseDetectionLabels(raw?: string): Set<string> {
+  const labels = raw
+    ?.split(',')
+    .map((label) => label.trim())
+    .filter(Boolean)
+
+  return new Set(labels && labels.length > 0 ? labels : DEFAULT_ALLOWED_LABELS)
+}
+
+export function parseDetectionMinScore(raw?: string): number {
+  const value = Number(raw)
+  if (!Number.isFinite(value) || value < 0 || value > 1) {
+    return DEFAULT_MIN_SCORE
+  }
+
+  return value
+}
+
 export function filterDetections(
   detections: RawDetection[],
   allowedLabels: Set<string> = ALLOWED_LABELS,
-  minScore: number = DEFAULT_MIN_SCORE
+  minScore: number = MIN_SCORE
 ): DetectionResult[] {
   return detections
     .filter((d) => d.score >= minScore && allowedLabels.has(d.class))

@@ -53,9 +53,24 @@ interface FinalizeVlmFrameOptions {
   releaseAnalysisLock: () => void
 }
 
+interface ConsumeUnchangedFrameOptions {
+  frameDataUrl: string | null
+  hasChanged: boolean
+  markConsumed: () => void
+}
+
 export function finalizeVlmFrame(options: FinalizeVlmFrameOptions): void {
   options.markConsumed()
   options.releaseAnalysisLock()
+}
+
+export function consumeUnchangedVlmFrame(options: ConsumeUnchangedFrameOptions): boolean {
+  if (!options.frameDataUrl || options.hasChanged) {
+    return false
+  }
+
+  options.markConsumed()
+  return true
 }
 
 function normalizeRuntimeStatus(status: unknown, ready: boolean): VlmConnectionRuntimeStatus {
@@ -146,19 +161,36 @@ export function useVlmAnalysis(options: VlmAnalysisOptions) {
   })
 
   useEffect(() => {
-    if (!enabled) return
+    if (!enabled) {
+      setServerReady(false)
+      abortControllerRef.current?.abort()
+      abortControllerRef.current = null
+      return
+    }
+
+    let stopped = false
+
+    const markServerUnavailable = () => {
+      setServerReady(false)
+      abortControllerRef.current?.abort()
+      abortControllerRef.current = null
+    }
 
     const check = async () => {
       const connection = await checkVlmConnectionStatus()
+      if (stopped) return
+
       if (connection.ready) {
         setServerReady(true)
         failCountRef.current = 0
         useAppStore.getState().setVlmStatus('idle')
       } else if (connection.status === 'starting' || connection.status === 'loading') {
+        markServerUnavailable()
         failCountRef.current = 0
         useAppStore.getState().setVlmStatus('loading')
         useAppStore.getState().setAnalysisSummary(connectingAnalysis.summary)
       } else {
+        markServerUnavailable()
         failCountRef.current++
         if (failCountRef.current === 1) {
           useAppStore.getState().setVlmStatus('loading')
@@ -175,7 +207,10 @@ export function useVlmAnalysis(options: VlmAnalysisOptions) {
 
     check()
     const id = setInterval(check, 5000)
-    return () => clearInterval(id)
+    return () => {
+      stopped = true
+      clearInterval(id)
+    }
   }, [enabled])
 
   // Cleanup: abort any in-flight VLM request on unmount
@@ -187,7 +222,8 @@ export function useVlmAnalysis(options: VlmAnalysisOptions) {
   }, [])
 
   useEffect(() => {
-    if (!frameDataUrl || analyzingRef.current || !hasChanged) return
+    if (!frameDataUrl || analyzingRef.current) return
+    if (consumeUnchangedVlmFrame({ frameDataUrl, hasChanged, markConsumed })) return
 
     let cancelled = false
     analyzingRef.current = true

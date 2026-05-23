@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { filterDetections } from './objectDetector'
+import { filterDetections, parseDetectionLabels, parseDetectionMinScore } from './objectDetector'
 
 const makeDet = (cls: string, score: number) => ({
   class: cls,
@@ -47,5 +47,27 @@ describe('filterDetections', () => {
     const det = { class: 'person', score: 0.9, bbox: [1, 2, 3, 4] as [number, number, number, number] }
     const result = filterDetections([det])
     expect(result[0].bbox).toEqual([1, 2, 3, 4])
+  })
+})
+
+describe('parseDetectionLabels', () => {
+  it('parses configured labels', () => {
+    expect(Array.from(parseDetectionLabels('person,car,dog'))).toEqual(['person', 'car', 'dog'])
+  })
+
+  it('falls back to default labels when empty', () => {
+    expect(parseDetectionLabels('').has('person')).toBe(true)
+    expect(parseDetectionLabels(undefined).has('bicycle')).toBe(true)
+  })
+})
+
+describe('parseDetectionMinScore', () => {
+  it('accepts scores between 0 and 1', () => {
+    expect(parseDetectionMinScore('0.65')).toBe(0.65)
+  })
+
+  it('falls back when score is invalid', () => {
+    expect(parseDetectionMinScore('2')).toBe(0.4)
+    expect(parseDetectionMinScore('invalid')).toBe(0.4)
   })
 })
