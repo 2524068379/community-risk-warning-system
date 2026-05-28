@@ -1,6 +1,7 @@
 export interface VlmRuntimeConfig {
   host: string;
   port: number;
+  modelAlias: string;
   gpuLayers: number;
   contextSize: number;
   startupTimeoutMs: number;

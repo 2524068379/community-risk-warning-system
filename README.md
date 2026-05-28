@@ -166,6 +166,7 @@ QWEN_TIMEOUT=60000
 
 VLM_HOST=127.0.0.1
 VLM_PORT=11434
+VLM_MODEL=jackrong-qwen3.5-4b-claude-4.6-opus-distilled-v2:q4_k_m
 VLM_FORCE_CPU=false
 VLM_GPU_LAYERS=99
 VLM_CONTEXT_SIZE=4096
@@ -320,7 +321,7 @@ npm run package
 npm run preview
 ```
 
-`npm run package` 会先执行 `npm run download-model`。打包配置位于 `package.json` 的 `build` 字段；portable 应用包会携带 `llama-server.exe` 和运行时 DLL，但会排除 `Qwen3.5-4B.Q4_K_M.gguf` 与 `mmproj-BF16.gguf` 两个大模型文件。CI 会额外生成独立的 `vlm-models.zip`，用于发布时单独分发模型。
+`npm run package` 会先执行 `npm run download-model`。打包配置位于 `package.json` 的 `build` 字段；portable 应用包会携带 `llama-server.exe` 和运行时 DLL，但会排除 `Qwen3.5-4B.Q4_K_M.gguf` 与 `mmproj-BF16.gguf` 两个大模型文件。CI 会额外生成只包含模型文件的 `vlm-models.zip`，用于发布时单独分发模型。
 
 提交行为变更前建议运行：
 

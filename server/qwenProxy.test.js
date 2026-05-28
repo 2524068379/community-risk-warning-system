@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  buildOllamaRequestBody,
   buildProxyErrorResponse,
   buildQwenRequestBody,
   isAllowedCorsOrigin,
@@ -25,6 +26,7 @@ describe('qwenProxy', () => {
       MAX_CHAT_MESSAGES: '8',
       MAX_CHAT_TOKENS: '1600',
       LOG_MODEL_OUTPUT: 'true',
+      VLM_MODEL: 'local-vlm',
       VLM_PORT: '12345'
     });
 
@@ -40,6 +42,7 @@ describe('qwenProxy', () => {
     expect(config.maxChatMessages).toBe(8);
     expect(config.maxChatTokens).toBe(1600);
     expect(config.logModelOutput).toBe(true);
+    expect(config.ollamaModel).toBe('local-vlm');
     expect(config.ollamaBaseUrl).toBe('http://127.0.0.1:12345');
   });
 
@@ -58,6 +61,16 @@ describe('qwenProxy', () => {
     expect(buildQwenRequestBody({ model: 'custom', messages: [] }, 'qwen-default')).toEqual({
       model: 'custom',
       messages: []
+    });
+  });
+
+  it('rewrites local VLM requests to the managed llama-server alias', () => {
+    expect(buildOllamaRequestBody({
+      model: 'stale-browser-model',
+      messages: [{ role: 'user', content: 'ok' }]
+    }, 'local-vlm')).toEqual({
+      model: 'local-vlm',
+      messages: [{ role: 'user', content: 'ok' }]
     });
   });
 

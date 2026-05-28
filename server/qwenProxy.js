@@ -80,6 +80,7 @@ export function loadQwenProxyConfig(env = process.env) {
     qwenModel: env.QWEN_MODEL || DEFAULT_VLM_MODEL_ALIAS,
     qwenTimeout: parseInteger(env.QWEN_TIMEOUT, 60000),
     ollamaTimeout: parseInteger(env.OLLAMA_TIMEOUT, 120000),
+    ollamaModel: vlmRuntimeConfig.modelAlias,
     requestBodyLimit: env.REQUEST_BODY_LIMIT || '2mb',
     chatRequestsPerMinute: parseInteger(env.CHAT_REQUESTS_PER_MINUTE, 30, 0),
     maxChatMessages: parseInteger(env.MAX_CHAT_MESSAGES, 16),
@@ -97,6 +98,13 @@ export function buildQwenRequestBody(body = {}, defaultModel) {
   }
 
   return requestBody;
+}
+
+export function buildOllamaRequestBody(body = {}, model) {
+  return {
+    ...body,
+    model
+  };
 }
 
 export function parseProxyResponseText(text, onInvalidJson) {
@@ -300,6 +308,7 @@ export function createQwenProxyApp(config = loadQwenProxyConfig()) {
 
 export function createOllamaProxyRoutes(app, config = loadQwenProxyConfig(), chatRateLimiter, chatPayloadValidator) {
   const OLLAMA_BASE = config.ollamaBaseUrl || 'http://127.0.0.1:11434';
+  const OLLAMA_MODEL = config.ollamaModel || DEFAULT_VLM_MODEL_ALIAS;
   const rateLimiter = chatRateLimiter ?? createChatRateLimiter(config);
   const payloadValidator = chatPayloadValidator ?? createChatPayloadValidator(config);
 
@@ -311,7 +320,7 @@ export function createOllamaProxyRoutes(app, config = loadQwenProxyConfig(), cha
       const response = await fetch(`${OLLAMA_BASE}/v1/chat/completions`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(req.body),
+        body: JSON.stringify(buildOllamaRequestBody(req.body, OLLAMA_MODEL)),
         signal: controller.signal
       });
 

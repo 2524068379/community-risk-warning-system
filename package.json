@@ -101,11 +101,8 @@
         "from": "resources/vlm",
         "to": "vlm",
         "filter": [
-          "**/*",
-          "!Qwen3.5-4B.Q4_K_M.gguf",
-          "!mmproj-BF16.gguf",
-          "!llama-server.exe",
-          "!*.dll"
+          "llama-server.exe",
+          "*.dll"
         ]
       }
     ]

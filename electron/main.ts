@@ -10,7 +10,8 @@ import {
   isOllamaReady,
   getOllamaBaseUrl,
   getOllamaRuntimeStatus,
-  isGpuAvailable
+  isGpuAvailable,
+  refreshOllamaStatus
 } from './ollamaManager.js'
 
 const baseDir = app.isPackaged ? path.dirname(app.getPath('exe')) : app.getAppPath()
@@ -50,12 +51,16 @@ ipcMain.handle('get-api-base', () => {
   return `http://${proxyConfig.host}:${apiPort}`
 })
 
-ipcMain.handle('get-ollama-status', () => ({
-  ready: isOllamaReady(),
-  status: getOllamaRuntimeStatus(),
-  baseUrl: getOllamaBaseUrl(),
-  gpu: isGpuAvailable()
-}))
+ipcMain.handle('get-ollama-status', async () => {
+  await refreshOllamaStatus()
+
+  return {
+    ready: isOllamaReady(),
+    status: getOllamaRuntimeStatus(),
+    baseUrl: getOllamaBaseUrl(),
+    gpu: isGpuAvailable()
+  }
+})
 
 let mainWindow: BrowserWindow | null = null
 

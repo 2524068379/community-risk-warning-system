@@ -49,6 +49,10 @@ export function getOllamaRuntimeStatus(): OllamaRuntimeStatus {
   return status
 }
 
+export async function refreshOllamaStatus(): Promise<void> {
+  ready = await checkReady()
+}
+
 async function checkReady(): Promise<boolean> {
   try {
     const res = await fetch(`${getVlmBaseUrl()}/health`, {
@@ -112,6 +116,11 @@ export async function startOllama(): Promise<void> {
     return
   }
 
+  if (serverProcess) {
+    console.log('[vlm] Already starting')
+    return
+  }
+
   const resources = findVlmResources()
   if (!resources) {
     schedulePollForResources(
@@ -133,6 +142,7 @@ export async function startOllama(): Promise<void> {
 
   const args = [
     '-m', modelPath,
+    '-a', vlmConfig.modelAlias,
     '--mmproj', mmprojPath,
     '--port', String(vlmConfig.port),
     '--host', vlmConfig.host,
@@ -215,6 +225,14 @@ export async function startOllama(): Promise<void> {
   } catch (err) {
     console.error('[vlm] Failed to start:', err)
     ready = false
+
+    if (serverProcess) {
+      status = 'loading'
+      console.warn('[vlm] Process is still running; readiness will continue via health polling.')
+      return
+    }
+
+    status = 'error'
     schedulePollForResources('Spawn failed; will retry once files are present.')
   }
 }

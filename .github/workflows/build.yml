@@ -168,7 +168,7 @@ jobs:
             }
           }
 
-      - name: Verify portable package excludes VLM model files
+      - name: Verify portable package VLM resources
         if: env.IS_DEPENDABOT_PR != 'true'
         shell: pwsh
         run: |
@@ -191,15 +191,15 @@ jobs:
             }
           }
 
-          $runtimeFiles = @("llama-server.exe", "ggml-cuda.dll", "cublas64_12.dll", "cublasLt64_12.dll", "cudart64_12.dll", "llama.dll", "ggml.dll", "ggml-base.dll", "llama-common.dll", "libomp140.x86_64.dll")
+          $runtimeFiles = @("llama-server.exe", "ggml-cuda.dll", "cublas64_12.dll", "cublasLt64_12.dll", "cudart64_12.dll", "llama.dll", "ggml.dll", "ggml-base.dll", "llama-common.dll", "mtmd.dll", "ggml-cpu-x64.dll", "libomp140.x86_64.dll")
           foreach ($f in $runtimeFiles) {
-            if ($listing -match [regex]::Escape($f)) {
-              Write-Host "ERROR: Portable app package must not include VLM runtime file (also shipped in vlm-models.zip): $f"
+            if ($listing -notmatch [regex]::Escape($f)) {
+              Write-Host "ERROR: Portable app package must include VLM runtime file: $f"
               exit 1
             }
           }
 
-          Write-Host "Portable package excludes VLM model + runtime files: $($portableZip.Name)"
+          Write-Host "Portable package includes VLM runtime and excludes model files: $($portableZip.Name)"
 
       - name: Create VLM model package
         if: env.IS_DEPENDABOT_PR != 'true'
@@ -212,19 +212,18 @@ jobs:
           本压缩包包含视觉语言模型文件：
             - Qwen3.5-4B.Q4_K_M.gguf   (主模型 ~2.55 GB)
             - mmproj-BF16.gguf           (视觉编码器 ~644 MB)
-            - llama-server.exe            (CUDA 推理服务器)
-            - ggml-cuda.dll, cublas*.dll  (CUDA 依赖库)
+
+          llama-server.exe 和运行时 DLL 已随 Windows portable 应用包发布。
 
           解压位置
           --------
           将压缩包内所有文件解压到应用程序的 resources\vlm\ 目录下。
 
           完整路径应类似：
-            <应用安装目录>\resources\vlm\llama-server.exe
             <应用安装目录>\resources\vlm\Qwen3.5-4B.Q4_K_M.gguf
             <应用安装目录>\resources\vlm\mmproj-BF16.gguf
 
-          如果 resources\vlm 目录不存在，请手动创建。
+          Windows portable 应用包会预置 resources\vlm 目录和 VLM 运行时文件。
 
           验证
           ----
@@ -233,9 +232,7 @@ jobs:
 
           New-Item -ItemType Directory -Force -Path dist-models
 
-          $vlmFiles = @("Qwen3.5-4B.Q4_K_M.gguf", "mmproj-BF16.gguf", "llama-server.exe")
-          $supportingFiles = @("ggml-cuda.dll", "cublas64_12.dll", "cublasLt64_12.dll", "cudart64_12.dll", "llama.dll", "ggml.dll", "ggml-base.dll", "llama-common.dll", "libomp140.x86_64.dll")
-          $allRequiredFiles = $vlmFiles + $supportingFiles
+          $allRequiredFiles = @("Qwen3.5-4B.Q4_K_M.gguf", "mmproj-BF16.gguf")
 
           $missingFiles = @()
           foreach ($f in $allRequiredFiles) {
@@ -260,7 +257,7 @@ jobs:
           Set-Content -Path "dist-models/README-解压说明.txt" -Value $modelReadme -Encoding UTF8
 
           Write-Host "Creating vlm-models.zip..."
-          $filesToZip = @("dist-models/Qwen3.5-4B.Q4_K_M.gguf", "dist-models/mmproj-BF16.gguf", "dist-models/llama-server.exe") + ($supportingFiles | ForEach-Object { "dist-models/$_" }) + @("dist-models/README-解压说明.txt")
+          $filesToZip = @("dist-models/Qwen3.5-4B.Q4_K_M.gguf", "dist-models/mmproj-BF16.gguf", "dist-models/README-解压说明.txt")
           7z a -tzip "dist-models/vlm-models.zip" $filesToZip
 
           Write-Host "Cleaning up intermediate files..."

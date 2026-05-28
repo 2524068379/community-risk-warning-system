@@ -16,13 +16,10 @@ describe('package configuration', () => {
       (entry) => entry.from === 'resources/vlm' && entry.to === 'vlm'
     );
 
-    expect(vlmResources?.filter).toEqual(expect.arrayContaining([
-      '**/*',
-      `!${VLM_MODEL_FILE}`,
-      `!${VLM_MMPROJ_FILE}`,
-      '!llama-server.exe',
-      '!*.dll'
-    ]));
+    expect(vlmResources?.filter).toEqual([
+      'llama-server.exe',
+      '*.dll'
+    ]);
   });
 
   it('keeps the local VLM resource download script available', () => {
