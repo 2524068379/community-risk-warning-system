@@ -63,13 +63,17 @@ jobs:
 
           function Save-WithRetry($Url, $Path, $TimeoutSec) {
             $fileName = Split-Path $Path -Leaf
+            $tmpPath = "$Path.download"
             for ($i = 0; $i -lt $retryCount; $i++) {
               try {
-                $response = Invoke-WebRequest -Uri $Url -Headers $headers -UseBasicParsing -TimeoutSec $TimeoutSec -ErrorAction Stop
-                [System.IO.File]::WriteAllBytes($Path, $response.Content)
-                Write-Host "Downloaded: $fileName ($(($response.Content).Length) bytes)"
+                Remove-Item $tmpPath -Force -ErrorAction SilentlyContinue
+                Invoke-WebRequest -Uri $Url -Headers $headers -UseBasicParsing -TimeoutSec $TimeoutSec -OutFile $tmpPath -ErrorAction Stop
+                Move-Item $tmpPath $Path -Force
+                $downloadedSize = (Get-Item $Path).Length
+                Write-Host "Downloaded: $fileName ($downloadedSize bytes)"
                 return
               } catch {
+                Remove-Item $tmpPath -Force -ErrorAction SilentlyContinue
                 Write-Host "Download attempt $($i+1) failed for $fileName : $_"
                 if ($i -lt ($retryCount - 1)) { Start-Sleep -Seconds 10 }
               }

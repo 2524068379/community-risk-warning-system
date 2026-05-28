@@ -43,6 +43,19 @@ describe('build workflow', () => {
     expect(prepareBlock).toContain('Save-WithRetry $modelUrl $modelPath 600');
   });
 
+  it('streams large VLM downloads to disk instead of buffering response bytes in memory', () => {
+    const workflow = fs.readFileSync(new URL('./build.yml', import.meta.url), 'utf8');
+    const prepareIndex = workflow.indexOf('- name: Prepare VLM model files');
+    const hashIndex = workflow.indexOf('- name: Verify VLM model file hashes');
+    const prepareBlock = workflow.slice(prepareIndex, hashIndex);
+
+    expect(prepareBlock).toContain('-OutFile $tmpPath');
+    expect(prepareBlock).toContain('Move-Item $tmpPath $Path -Force');
+    expect(prepareBlock).toContain('$downloadedSize = (Get-Item $Path).Length');
+    expect(prepareBlock).not.toContain('WriteAllBytes');
+    expect(prepareBlock).not.toContain('$response.Content');
+  });
+
   it('verifies the portable app keeps runtime files but excludes VLM model files before uploading artifacts', () => {
     const workflow = fs.readFileSync(new URL('./build.yml', import.meta.url), 'utf8');
 
