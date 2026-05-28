@@ -76,7 +76,7 @@ async function waitForReady(timeoutMs: number): Promise<void> {
   throw new Error('VLM server did not become ready within timeout')
 }
 
-function findVlmResources(): { serverExe: string; modelDir: string } | null {
+function findVlmResources(): { serverExe: string; modelDir: string; cudaAvailable: boolean } | null {
   const modelDir = resolveVlmResourceDir({
     isPackaged: app.isPackaged,
     exePath: app.getPath('exe'),
@@ -85,7 +85,9 @@ function findVlmResources(): { serverExe: string; modelDir: string } | null {
   const cudaExe = path.join(modelDir, 'llama-server.exe')
 
   if (fs.existsSync(cudaExe)) {
-    return { serverExe: cudaExe, modelDir }
+    const cudaAvailable = fs.existsSync(path.join(modelDir, 'ggml-cuda.dll'))
+      && fs.existsSync(path.join(modelDir, 'cudart64_12.dll'))
+    return { serverExe: cudaExe, modelDir, cudaAvailable }
   }
 
   return null
@@ -124,12 +126,12 @@ export async function startOllama(): Promise<void> {
   const resources = findVlmResources()
   if (!resources) {
     schedulePollForResources(
-      'llama-server.exe not found in resources\\vlm. Extract vlm-models.zip into <app>\\resources\\vlm\\ to enable VLM features.'
+      'llama-server.exe not found in resources\\vlm. Reinstall the portable app or extract vlm-models.zip into <app>\\resources\\vlm\\ to enable VLM features.'
     )
     return
   }
 
-  const { serverExe, modelDir } = resources
+  const { serverExe, modelDir, cudaAvailable } = resources
   const modelPath = path.join(modelDir, VLM_MODEL_FILE)
   const mmprojPath = path.join(modelDir, VLM_MMPROJ_FILE)
 
@@ -140,16 +142,24 @@ export async function startOllama(): Promise<void> {
     return
   }
 
+  const effectiveGpuLayers = cudaAvailable ? vlmConfig.gpuLayers : 0
+  if (!cudaAvailable) {
+    console.warn(
+      '[vlm] CUDA runtime DLLs not found in resources/vlm — falling back to CPU inference. ' +
+        'Extract vlm-models.zip to enable GPU acceleration.'
+    )
+  }
+
   const args = [
     '-m', modelPath,
     '-a', vlmConfig.modelAlias,
     '--mmproj', mmprojPath,
     '--port', String(vlmConfig.port),
     '--host', vlmConfig.host,
-    '-ngl', String(vlmConfig.gpuLayers),
+    '-ngl', String(effectiveGpuLayers),
     '-c', String(vlmConfig.contextSize),
     '-b', '256',
-    '--flash-attn',
+    '--flash-attn', 'on',
     '--no-warmup',
     '--cont-batching'
   ]

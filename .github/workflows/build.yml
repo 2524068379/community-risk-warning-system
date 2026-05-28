@@ -191,7 +191,15 @@ jobs:
             }
           }
 
-          $runtimeFiles = @("llama-server.exe", "ggml-cuda.dll", "cublas64_12.dll", "cublasLt64_12.dll", "cudart64_12.dll", "llama.dll", "ggml.dll", "ggml-base.dll", "llama-common.dll", "mtmd.dll", "ggml-cpu-x64.dll", "libomp140.x86_64.dll")
+          $cudaOnlyFiles = @("cudart64_12.dll", "cublas64_12.dll", "cublasLt64_12.dll", "ggml-cuda.dll")
+          foreach ($f in $cudaOnlyFiles) {
+            if ($listing -match [regex]::Escape($f)) {
+              Write-Host "ERROR: Portable app package must not include CUDA-only runtime file (shipped via vlm-models.zip): $f"
+              exit 1
+            }
+          }
+
+          $runtimeFiles = @("llama-server.exe", "llama.dll", "llama-common.dll", "mtmd.dll", "ggml.dll", "ggml-base.dll", "ggml-cpu-x64.dll", "libomp140.x86_64.dll")
           foreach ($f in $runtimeFiles) {
             if ($listing -notmatch [regex]::Escape($f)) {
               Write-Host "ERROR: Portable app package must include VLM runtime file: $f"
@@ -199,21 +207,26 @@ jobs:
             }
           }
 
-          Write-Host "Portable package includes VLM runtime and excludes model files: $($portableZip.Name)"
+          Write-Host "Portable package includes CPU-only VLM runtime, excludes CUDA-only DLLs and model files: $($portableZip.Name)"
 
       - name: Create VLM model package
         if: env.IS_DEPENDABOT_PR != 'true'
         shell: pwsh
         run: |
           $modelReadme = @"
-          VLM 模型文件 — 解压说明
-          ========================
+          VLM 模型 + CUDA 运行时 — 解压说明
+          ====================================
 
-          本压缩包包含视觉语言模型文件：
+          本压缩包包含视觉语言模型文件与 GPU 加速所需的 CUDA 运行时：
             - Qwen3.5-4B.Q4_K_M.gguf   (主模型 ~2.55 GB)
             - mmproj-BF16.gguf           (视觉编码器 ~644 MB)
+            - cudart64_12.dll            (CUDA Runtime)
+            - cublas64_12.dll            (cuBLAS)
+            - cublasLt64_12.dll          (cuBLASLt)
+            - ggml-cuda.dll              (llama.cpp CUDA backend)
 
-          llama-server.exe 和运行时 DLL 已随 Windows portable 应用包发布。
+          llama-server.exe 与 CPU 通用 runtime DLL 已随 Windows portable 应用包发布。
+          仅当需要 GPU 加速时才需要解压本包；CPU 推理只需扩展 .gguf 模型文件。
 
           解压位置
           --------
@@ -222,8 +235,9 @@ jobs:
           完整路径应类似：
             <应用安装目录>\resources\vlm\Qwen3.5-4B.Q4_K_M.gguf
             <应用安装目录>\resources\vlm\mmproj-BF16.gguf
+            <应用安装目录>\resources\vlm\ggml-cuda.dll
 
-          Windows portable 应用包会预置 resources\vlm 目录和 VLM 运行时文件。
+          Windows portable 应用包会预置 resources\vlm 目录和 CPU 运行时文件。
 
           验证
           ----
@@ -232,7 +246,9 @@ jobs:
 
           New-Item -ItemType Directory -Force -Path dist-models
 
-          $allRequiredFiles = @("Qwen3.5-4B.Q4_K_M.gguf", "mmproj-BF16.gguf")
+          $modelFiles = @("Qwen3.5-4B.Q4_K_M.gguf", "mmproj-BF16.gguf")
+          $cudaFiles = @("cudart64_12.dll", "cublas64_12.dll", "cublasLt64_12.dll", "ggml-cuda.dll")
+          $allRequiredFiles = $modelFiles + $cudaFiles
 
           $missingFiles = @()
           foreach ($f in $allRequiredFiles) {
@@ -257,7 +273,7 @@ jobs:
           Set-Content -Path "dist-models/README-解压说明.txt" -Value $modelReadme -Encoding UTF8
 
           Write-Host "Creating vlm-models.zip..."
-          $filesToZip = @("dist-models/Qwen3.5-4B.Q4_K_M.gguf", "dist-models/mmproj-BF16.gguf", "dist-models/README-解压说明.txt")
+          $filesToZip = ($allRequiredFiles | ForEach-Object { "dist-models/$_" }) + @("dist-models/README-解压说明.txt")
           7z a -tzip "dist-models/vlm-models.zip" $filesToZip
 
           Write-Host "Cleaning up intermediate files..."

@@ -321,7 +321,7 @@ npm run package
 npm run preview
 ```
 
-`npm run package` 会先执行 `npm run download-model`。打包配置位于 `package.json` 的 `build` 字段；portable 应用包会携带 `llama-server.exe` 和运行时 DLL，但会排除 `Qwen3.5-4B.Q4_K_M.gguf` 与 `mmproj-BF16.gguf` 两个大模型文件。CI 会额外生成只包含模型文件的 `vlm-models.zip`，用于发布时单独分发模型。
+`npm run package` 会先执行 `npm run download-model`。打包配置位于 `package.json` 的 `build` 字段；portable 应用包会携带 `llama-server.exe` 与 CPU 通用运行时 DLL（`ggml-cpu-*.dll`、`llama.dll`、`mtmd.dll` 等），但不包含 CUDA-only DLL（`ggml-cuda.dll`、`cudart64_12.dll`、`cublas64_12.dll`、`cublasLt64_12.dll`）和 `Qwen3.5-4B.Q4_K_M.gguf`、`mmproj-BF16.gguf` 两个大模型文件。CI 会额外生成 `vlm-models.zip`，把模型文件与 CUDA 运行时一并分发；CPU 推理只需解压 `.gguf` 模型，GPU 加速则需把 CUDA DLL 一同解压到 `resources\vlm\` 目录下。
 
 提交行为变更前建议运行：
 

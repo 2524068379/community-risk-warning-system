@@ -102,7 +102,14 @@
         "to": "vlm",
         "filter": [
           "llama-server.exe",
-          "*.dll"
+          "llama.dll",
+          "llama-common.dll",
+          "mtmd.dll",
+          "ggml.dll",
+          "ggml-base.dll",
+          "ggml-rpc.dll",
+          "ggml-cpu-*.dll",
+          "libomp140.x86_64.dll"
         ]
       }
     ]

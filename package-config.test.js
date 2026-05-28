@@ -18,8 +18,27 @@ describe('package configuration', () => {
 
     expect(vlmResources?.filter).toEqual([
       'llama-server.exe',
-      '*.dll'
+      'llama.dll',
+      'llama-common.dll',
+      'mtmd.dll',
+      'ggml.dll',
+      'ggml-base.dll',
+      'ggml-rpc.dll',
+      'ggml-cpu-*.dll',
+      'libomp140.x86_64.dll'
     ]);
+  });
+
+  it('keeps CUDA-only runtime DLLs out of the portable filter so they ship via vlm-models.zip', () => {
+    const vlmResources = packageJson.build.extraResources?.find(
+      (entry) => entry.from === 'resources/vlm' && entry.to === 'vlm'
+    );
+
+    const cudaOnlyFiles = ['cudart64_12.dll', 'cublas64_12.dll', 'cublasLt64_12.dll', 'ggml-cuda.dll'];
+    for (const f of cudaOnlyFiles) {
+      expect(vlmResources?.filter).not.toContain(f);
+    }
+    expect(vlmResources?.filter).not.toContain('*.dll');
   });
 
   it('keeps the local VLM resource download script available', () => {

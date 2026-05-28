@@ -41,19 +41,29 @@ describe('build workflow', () => {
     expect(workflow).toContain('mmproj-BF16.gguf');
   });
 
-  it('verifies the portable app includes the llama.cpp runtime files needed at launch', () => {
+  it('verifies the portable app includes the CPU llama.cpp runtime files needed at launch', () => {
     const workflow = fs.readFileSync(new URL('./build.yml', import.meta.url), 'utf8');
 
     expect(workflow).toContain('Portable app package must include VLM runtime file');
-    for (const f of ['llama-server.exe', 'ggml-cuda.dll', 'cublas64_12.dll', 'cudart64_12.dll', 'mtmd.dll', 'ggml-cpu-x64.dll']) {
+    for (const f of ['llama-server.exe', 'llama.dll', 'mtmd.dll', 'ggml-cpu-x64.dll', 'ggml-base.dll', 'libomp140.x86_64.dll']) {
       expect(workflow).toContain(f);
     }
   });
 
-  it('ships only model assets in vlm-models.zip because runtime files are in the app package', () => {
+  it('asserts the portable package does NOT carry CUDA-only runtime DLLs because they ship via vlm-models.zip', () => {
     const workflow = fs.readFileSync(new URL('./build.yml', import.meta.url), 'utf8');
 
-    expect(workflow).toContain('llama-server.exe 和运行时 DLL 已随 Windows portable 应用包发布。');
-    expect(workflow).toContain('$allRequiredFiles = @("Qwen3.5-4B.Q4_K_M.gguf", "mmproj-BF16.gguf")');
+    expect(workflow).toContain('Portable app package must not include CUDA-only runtime file');
+    for (const f of ['cudart64_12.dll', 'cublas64_12.dll', 'cublasLt64_12.dll', 'ggml-cuda.dll']) {
+      expect(workflow).toContain(f);
+    }
+  });
+
+  it('ships model assets and CUDA runtime DLLs together in vlm-models.zip', () => {
+    const workflow = fs.readFileSync(new URL('./build.yml', import.meta.url), 'utf8');
+
+    expect(workflow).toContain('llama-server.exe 与 CPU 通用 runtime DLL 已随 Windows portable 应用包发布。');
+    expect(workflow).toContain('$modelFiles = @("Qwen3.5-4B.Q4_K_M.gguf", "mmproj-BF16.gguf")');
+    expect(workflow).toContain('$cudaFiles = @("cudart64_12.dll", "cublas64_12.dll", "cublasLt64_12.dll", "ggml-cuda.dll")');
   });
 });
