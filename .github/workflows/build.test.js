@@ -25,6 +25,24 @@ describe('build workflow', () => {
     expect(workflow).toContain('Skipping VLM download and Windows packaging for Dependabot pull requests.');
   });
 
+  it('repairs stale VLM caches by preparing runtime and model files before hashing', () => {
+    const workflow = fs.readFileSync(new URL('./build.yml', import.meta.url), 'utf8');
+
+    const cacheIndex = workflow.indexOf('- name: Cache VLM model files');
+    const prepareIndex = workflow.indexOf('- name: Prepare VLM model files');
+    const hashIndex = workflow.indexOf('- name: Verify VLM model file hashes');
+    const prepareBlock = workflow.slice(prepareIndex, hashIndex);
+
+    expect(cacheIndex).toBeGreaterThan(-1);
+    expect(prepareIndex).toBeGreaterThan(cacheIndex);
+    expect(hashIndex).toBeGreaterThan(prepareIndex);
+    expect(prepareBlock).toContain("if: env.IS_DEPENDABOT_PR != 'true'");
+    expect(prepareBlock).not.toContain("steps.cache-vlm.outputs.cache-hit != 'true'");
+    expect(prepareBlock).toContain('Missing VLM runtime files from cache/source');
+    expect(prepareBlock).toContain('Save-WithRetry $llamaUrl $llamaZip 300');
+    expect(prepareBlock).toContain('Save-WithRetry $modelUrl $modelPath 600');
+  });
+
   it('verifies the portable app keeps runtime files but excludes VLM model files before uploading artifacts', () => {
     const workflow = fs.readFileSync(new URL('./build.yml', import.meta.url), 'utf8');
 

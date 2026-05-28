@@ -49,77 +49,88 @@ jobs:
         uses: actions/cache@v5
         with:
           path: resources/vlm
-          key: vlm-jackrong-qwen3.5-4b-q4km-mmproj-sha256-v1
+          key: vlm-jackrong-qwen3.5-4b-q4km-mmproj-sha256-v2
 
-      - name: Download VLM model files
-        if: env.IS_DEPENDABOT_PR != 'true' && steps.cache-vlm.outputs.cache-hit != 'true'
+      - name: Prepare VLM model files
+        if: env.IS_DEPENDABOT_PR != 'true'
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path resources/vlm
 
           $headers = @{ 'User-Agent' = 'curl/8.19.0' }
           $progressPreference = 'SilentlyContinue'
-
-          Write-Host "Downloading llama-server (CUDA build)..."
-          $llamaUrl = "https://github.com/ggml-org/llama.cpp/releases/download/b8864/llama-b8864-bin-win-cuda-12.4-x64.zip"
-          $cudartUrl = "https://github.com/ggml-org/llama.cpp/releases/download/b8864/cudart-llama-bin-win-cuda-12.4-x64.zip"
-
           $retryCount = 3
-          foreach ($url in @($llamaUrl, $cudartUrl)) {
-            $fileName = Split-Path $url -Leaf
-            $success = $false
+
+          function Save-WithRetry($Url, $Path, $TimeoutSec) {
+            $fileName = Split-Path $Path -Leaf
             for ($i = 0; $i -lt $retryCount; $i++) {
               try {
-                $response = Invoke-WebRequest -Uri $url -Headers $headers -UseBasicParsing -TimeoutSec 300 -ErrorAction Stop
-                [System.IO.File]::WriteAllBytes("resources/vlm/$fileName", $response.Content)
+                $response = Invoke-WebRequest -Uri $Url -Headers $headers -UseBasicParsing -TimeoutSec $TimeoutSec -ErrorAction Stop
+                [System.IO.File]::WriteAllBytes($Path, $response.Content)
                 Write-Host "Downloaded: $fileName ($(($response.Content).Length) bytes)"
-                $success = $true
-                break
+                return
               } catch {
                 Write-Host "Download attempt $($i+1) failed for $fileName : $_"
-                if ($i -lt ($retryCount - 1)) { Start-Sleep -Seconds 5 }
+                if ($i -lt ($retryCount - 1)) { Start-Sleep -Seconds 10 }
               }
             }
-            if (-not $success) { throw "Failed to download $fileName after $retryCount attempts" }
+            throw "Failed to download $fileName after $retryCount attempts"
           }
 
-          Write-Host "Extracting llama-server..."
-          Expand-Archive -Path resources/vlm/llama-b8864-bin-win-cuda-12.4-x64.zip -DestinationPath resources/vlm -Force
-          Expand-Archive -Path resources/vlm/cudart-llama-bin-win-cuda-12.4-x64.zip -DestinationPath resources/vlm -Force
+          $runtimeFiles = @(
+            "llama-server.exe",
+            "llama.dll",
+            "llama-common.dll",
+            "mtmd.dll",
+            "ggml.dll",
+            "ggml-base.dll",
+            "ggml-rpc.dll",
+            "ggml-cpu-x64.dll",
+            "libomp140.x86_64.dll",
+            "cudart64_12.dll",
+            "cublas64_12.dll",
+            "cublasLt64_12.dll",
+            "ggml-cuda.dll"
+          )
+          $missingRuntimeFiles = @($runtimeFiles | Where-Object { -not (Test-Path "resources/vlm/$_") })
+          if ($missingRuntimeFiles.Count -gt 0) {
+            Write-Host "Missing VLM runtime files from cache/source: $($missingRuntimeFiles -join ', ')"
+            Write-Host "Downloading llama-server (CUDA build)..."
+            $llamaUrl = "https://github.com/ggml-org/llama.cpp/releases/download/b8864/llama-b8864-bin-win-cuda-12.4-x64.zip"
+            $cudartUrl = "https://github.com/ggml-org/llama.cpp/releases/download/b8864/cudart-llama-bin-win-cuda-12.4-x64.zip"
+            $llamaZip = "resources/vlm/llama-b8864-bin-win-cuda-12.4-x64.zip"
+            $cudartZip = "resources/vlm/cudart-llama-bin-win-cuda-12.4-x64.zip"
 
-          Remove-Item resources/vlm/llama-b8864-bin-win-cuda-12.4-x64.zip, resources/vlm/cudart-llama-bin-win-cuda-12.4-x64.zip -Force -ErrorAction SilentlyContinue
+            Save-WithRetry $llamaUrl $llamaZip 300
+            Save-WithRetry $cudartUrl $cudartZip 300
 
-          Write-Host "Downloading Qwen3.5-4B.Q4_K_M.gguf (~2.55 GB)..."
+            Write-Host "Extracting llama-server runtime..."
+            Expand-Archive -Path $llamaZip -DestinationPath resources/vlm -Force
+            Expand-Archive -Path $cudartZip -DestinationPath resources/vlm -Force
+            Remove-Item $llamaZip, $cudartZip -Force -ErrorAction SilentlyContinue
+          } else {
+            Write-Host "VLM runtime files already present in cache/source."
+          }
+
           $modelUrl = "https://huggingface.co/Jackrong/Qwen3.5-4B-Claude-4.6-Opus-Reasoning-Distilled-v2-GGUF/resolve/main/Qwen3.5-4B.Q4_K_M.gguf"
-          for ($i = 0; $i -lt $retryCount; $i++) {
-            try {
-              $response = Invoke-WebRequest -Uri $modelUrl -Headers $headers -UseBasicParsing -TimeoutSec 600 -ErrorAction Stop
-              [System.IO.File]::WriteAllBytes("resources/vlm/Qwen3.5-4B.Q4_K_M.gguf", $response.Content)
-              Write-Host "Model downloaded ($(($response.Content).Length) bytes)"
-              break
-            } catch {
-              Write-Host "Download attempt $($i+1) failed: $_"
-              if ($i -lt ($retryCount - 1)) { Start-Sleep -Seconds 10 }
-              else { throw "Failed to download model after $retryCount attempts" }
-            }
+          $modelPath = "resources/vlm/Qwen3.5-4B.Q4_K_M.gguf"
+          if (-not (Test-Path $modelPath)) {
+            Write-Host "Downloading Qwen3.5-4B.Q4_K_M.gguf (~2.55 GB)..."
+            Save-WithRetry $modelUrl $modelPath 600
+          } else {
+            Write-Host "Qwen3.5-4B.Q4_K_M.gguf already present, skipping download."
           }
 
-          Write-Host "Downloading mmproj-BF16.gguf (~644 MB)..."
           $mmprojUrl = "https://huggingface.co/Jackrong/Qwen3.5-4B-Claude-4.6-Opus-Reasoning-Distilled-v2-GGUF/resolve/main/mmproj-BF16.gguf"
-          for ($i = 0; $i -lt $retryCount; $i++) {
-            try {
-              $response = Invoke-WebRequest -Uri $mmprojUrl -Headers $headers -UseBasicParsing -TimeoutSec 300 -ErrorAction Stop
-              [System.IO.File]::WriteAllBytes("resources/vlm/mmproj-BF16.gguf", $response.Content)
-              Write-Host "mmproj downloaded ($(($response.Content).Length) bytes)"
-              break
-            } catch {
-              Write-Host "Download attempt $($i+1) failed: $_"
-              if ($i -lt ($retryCount - 1)) { Start-Sleep -Seconds 10 }
-              else { throw "Failed to download mmproj after $retryCount attempts" }
-            }
+          $mmprojPath = "resources/vlm/mmproj-BF16.gguf"
+          if (-not (Test-Path $mmprojPath)) {
+            Write-Host "Downloading mmproj-BF16.gguf (~644 MB)..."
+            Save-WithRetry $mmprojUrl $mmprojPath 300
+          } else {
+            Write-Host "mmproj-BF16.gguf already present, skipping download."
           }
 
-          Write-Host "VLM files downloaded:"
+          Write-Host "Prepared VLM files:"
           Get-ChildItem resources/vlm | Where-Object { $_.Extension -in '.exe', '.dll', '.gguf' } | Format-Table Name, Length
 
       - name: Verify VLM model file hashes
