@@ -39,4 +39,13 @@ describe('build workflow', () => {
     expect(workflow).toContain('Qwen3.5-4B.Q4_K_M.gguf');
     expect(workflow).toContain('mmproj-BF16.gguf');
   });
+
+  it('verifies the portable app excludes CUDA runtime files that ship in vlm-models.zip', () => {
+    const workflow = fs.readFileSync(new URL('./build.yml', import.meta.url), 'utf8');
+
+    expect(workflow).toContain('Portable app package must not include VLM runtime file');
+    for (const f of ['llama-server.exe', 'ggml-cuda.dll', 'cublas64_12.dll', 'cudart64_12.dll']) {
+      expect(workflow).toContain(f);
+    }
+  });
 });

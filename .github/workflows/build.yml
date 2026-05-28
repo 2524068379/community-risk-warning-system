@@ -191,7 +191,15 @@ jobs:
             }
           }
 
-          Write-Host "Portable package excludes VLM model files: $($portableZip.Name)"
+          $runtimeFiles = @("llama-server.exe", "ggml-cuda.dll", "cublas64_12.dll", "cublasLt64_12.dll", "cudart64_12.dll", "llama.dll", "ggml.dll", "ggml-base.dll", "llama-common.dll", "libomp140.x86_64.dll")
+          foreach ($f in $runtimeFiles) {
+            if ($listing -match [regex]::Escape($f)) {
+              Write-Host "ERROR: Portable app package must not include VLM runtime file (also shipped in vlm-models.zip): $f"
+              exit 1
+            }
+          }
+
+          Write-Host "Portable package excludes VLM model + runtime files: $($portableZip.Name)"
 
       - name: Create VLM model package
         if: env.IS_DEPENDABOT_PR != 'true'

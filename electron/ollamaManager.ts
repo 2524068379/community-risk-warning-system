@@ -17,8 +17,11 @@ let ready = false
 let status: OllamaRuntimeStatus = 'starting'
 let runtimeConfig: VlmRuntimeConfig | null = null
 let restartAttempts = 0
+let resourcePollTimer: NodeJS.Timeout | null = null
+let stopped = false
 const MAX_RESTART_ATTEMPTS = 3
 const RESTART_DELAY_MS = 3000
+const RESOURCE_POLL_INTERVAL_MS = 5000
 
 function getVlmRuntimeConfig(): VlmRuntimeConfig {
   runtimeConfig ??= loadVlmRuntimeConfig(process.env)
@@ -84,7 +87,23 @@ function findVlmResources(): { serverExe: string; modelDir: string } | null {
   return null
 }
 
+function schedulePollForResources(reason: string): void {
+  if (stopped || resourcePollTimer || serverProcess) return
+  console.warn(`[vlm] ${reason} — will retry every ${RESOURCE_POLL_INTERVAL_MS}ms`)
+  status = 'starting'
+  resourcePollTimer = setTimeout(() => {
+    resourcePollTimer = null
+    if (stopped) return
+    startOllama().catch((err) => {
+      console.error('[vlm] Poll-driven restart failed:', err)
+      schedulePollForResources('startOllama threw during poll')
+    })
+  }, RESOURCE_POLL_INTERVAL_MS)
+  resourcePollTimer.unref?.()
+}
+
 export async function startOllama(): Promise<void> {
+  stopped = false
   const vlmConfig = getVlmRuntimeConfig()
 
   if (await checkReady()) {
@@ -95,9 +114,9 @@ export async function startOllama(): Promise<void> {
 
   const resources = findVlmResources()
   if (!resources) {
-    console.warn('[vlm] llama-server.exe not found in resources\\vlm, VLM features disabled')
-    console.warn('[vlm] Run: node scripts/download-model.js')
-    status = 'error'
+    schedulePollForResources(
+      'llama-server.exe not found in resources\\vlm. Extract vlm-models.zip into <app>\\resources\\vlm\\ to enable VLM features.'
+    )
     return
   }
 
@@ -106,9 +125,9 @@ export async function startOllama(): Promise<void> {
   const mmprojPath = path.join(modelDir, VLM_MMPROJ_FILE)
 
   if (!fs.existsSync(modelPath)) {
-    console.error(`[vlm] Model file not found: ${modelPath}`)
-    console.error('[vlm] Run: node scripts/download-model.js')
-    status = 'error'
+    schedulePollForResources(
+      `Model file not found: ${modelPath}. Extract vlm-models.zip into the same folder.`
+    )
     return
   }
 
@@ -163,20 +182,28 @@ export async function startOllama(): Promise<void> {
       serverProcess = null
       ready = false
 
+      if (stopped) {
+        status = 'starting'
+        return
+      }
+
       if (code !== 0 && restartAttempts < MAX_RESTART_ATTEMPTS) {
         restartAttempts++
         console.log(`[vlm] Restarting in ${RESTART_DELAY_MS}ms (attempt ${restartAttempts}/${MAX_RESTART_ATTEMPTS})...`)
         status = 'starting'
         setTimeout(() => {
-          if (!serverProcess) {
+          if (!serverProcess && !stopped) {
             startOllama().catch((err) => {
               console.error('[vlm] Restart failed:', err)
-              status = 'error'
+              schedulePollForResources('startOllama threw during restart')
             })
           }
         }, RESTART_DELAY_MS).unref()
       } else {
-        status = 'error'
+        restartAttempts = 0
+        schedulePollForResources(
+          'VLM server exited; will keep polling so reinstalled model files are picked up automatically.'
+        )
       }
     })
 
@@ -188,11 +215,16 @@ export async function startOllama(): Promise<void> {
   } catch (err) {
     console.error('[vlm] Failed to start:', err)
     ready = false
-    status = 'error'
+    schedulePollForResources('Spawn failed; will retry once files are present.')
   }
 }
 
 export async function stopOllama(): Promise<void> {
+  stopped = true
+  if (resourcePollTimer) {
+    clearTimeout(resourcePollTimer)
+    resourcePollTimer = null
+  }
   if (serverProcess) {
     serverProcess.kill()
     serverProcess = null

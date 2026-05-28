@@ -19,7 +19,9 @@ describe('package configuration', () => {
     expect(vlmResources?.filter).toEqual(expect.arrayContaining([
       '**/*',
       `!${VLM_MODEL_FILE}`,
-      `!${VLM_MMPROJ_FILE}`
+      `!${VLM_MMPROJ_FILE}`,
+      '!llama-server.exe',
+      '!*.dll'
     ]));
   });
 
