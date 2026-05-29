@@ -216,7 +216,7 @@ jobs:
 
           $runtimeFiles = @("llama-server.exe", "llama.dll", "llama-common.dll", "mtmd.dll", "ggml.dll", "ggml-base.dll", "ggml-cpu-x64.dll", "libomp140.x86_64.dll")
           foreach ($f in $runtimeFiles) {
-            if ($listing -notmatch [regex]::Escape($f)) {
+            if (-not ($listing -match [regex]::Escape($f))) {
               Write-Host "ERROR: Portable app package must include VLM runtime file: $f"
               exit 1
             }

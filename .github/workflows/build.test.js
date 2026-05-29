@@ -68,6 +68,7 @@ describe('build workflow', () => {
     expect(verifyIndex).toBeLessThan(uploadIndex);
     expect(workflow).toContain('Portable app package must not include VLM model file');
     expect(workflow).toContain('Portable app package must include VLM runtime file');
+    expect(workflow).toContain('-not ($listing -match [regex]::Escape($f))');
     expect(workflow).toContain('Qwen3.5-4B.Q4_K_M.gguf');
     expect(workflow).toContain('mmproj-BF16.gguf');
   });
