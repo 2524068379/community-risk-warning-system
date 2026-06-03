@@ -2,9 +2,24 @@ import type { DetectionResult } from '@/types'
 
 type DetectorStatus = 'idle' | 'loading' | 'ready' | 'error'
 
-const DEFAULT_ALLOWED_LABELS = ['person', 'car', 'bicycle', 'motorcycle', 'dog']
+const DEFAULT_ALLOWED_LABELS = [
+  'person',
+  'car',
+  'truck',
+  'bus',
+  'bicycle',
+  'motorcycle',
+  'dog',
+  'backpack',
+  'handbag',
+  'suitcase',
+  'chair',
+  'couch',
+  'bench',
+  'potted plant'
+]
 const ALLOWED_LABELS = parseDetectionLabels(import.meta.env.VITE_DETECTION_LABELS)
-const DEFAULT_MIN_SCORE = 0.4
+const DEFAULT_MIN_SCORE = 0.35
 const MIN_SCORE = parseDetectionMinScore(import.meta.env.VITE_DETECTION_MIN_SCORE)
 
 interface RawDetection {

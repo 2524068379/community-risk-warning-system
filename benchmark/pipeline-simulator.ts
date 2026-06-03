@@ -46,11 +46,11 @@ export interface PipelineMetrics {
   gpuUtilizationEstimate: number // 0-1
 }
 
-const HIGH_PRIORITY_LABELS = new Set(['person'])
+const HIGH_PRIORITY_LABELS = new Set(['person', 'motorcycle', 'bicycle'])
 const ACTIVE_INTERVAL_MS = 500
 const IDLE_INTERVAL_MS = 5000
 const IDLE_AFTER_FRAMES = 6
-const FALLBACK_INTERVAL_MS = 10000
+const FALLBACK_INTERVAL_MS = 6000
 const MOTION_THRESHOLD = 0.05
 
 export function generateScenario(

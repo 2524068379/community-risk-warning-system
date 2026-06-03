@@ -46,6 +46,8 @@ interface VlmAnalysisOptions {
   idleIntervalMs?: number
   /** Fallback VLM interval when no objects detected (ms) */
   fallbackIntervalMs?: number
+  /** Periodic VLM probe interval for unchanged scenes (ms) */
+  idleProbeIntervalMs?: number
 }
 
 interface FinalizeVlmFrameOptions {
@@ -57,6 +59,23 @@ interface ConsumeUnchangedFrameOptions {
   frameDataUrl: string | null
   hasChanged: boolean
   markConsumed: () => void
+  now?: number
+  lastVlmTime?: number
+  idleProbeIntervalMs?: number
+}
+
+interface PlanVlmDispatchOptions {
+  detectorFailed: boolean
+  detections: DetectionResult[]
+  now: number
+  lastVlmTime: number
+  fallbackIntervalMs: number
+}
+
+interface VlmDispatchPlan {
+  shouldSendVlm: boolean
+  isHighPriority: boolean
+  reason: 'detector-failed' | 'high-priority-object' | 'object' | 'fallback' | 'skip'
 }
 
 export function finalizeVlmFrame(options: FinalizeVlmFrameOptions): void {
@@ -67,6 +86,16 @@ export function finalizeVlmFrame(options: FinalizeVlmFrameOptions): void {
 export function consumeUnchangedVlmFrame(options: ConsumeUnchangedFrameOptions): boolean {
   if (!options.frameDataUrl || options.hasChanged) {
     return false
+  }
+
+  if (
+    options.idleProbeIntervalMs !== undefined &&
+    options.lastVlmTime !== undefined
+  ) {
+    const now = options.now ?? Date.now()
+    if (now - options.lastVlmTime >= options.idleProbeIntervalMs) {
+      return false
+    }
   }
 
   options.markConsumed()
@@ -115,10 +144,44 @@ export async function checkVlmConnectionStatus(
   }
 }
 
-const FALLBACK_INTERVAL_MS = 10000
+const FALLBACK_INTERVAL_MS = 6000
+const IDLE_PROBE_INTERVAL_MS = 12000
 const FAIL_THRESHOLD = 3
 /** High-priority labels that trigger immediate VLM dispatch */
-const HIGH_PRIORITY_LABELS = new Set(['person'])
+const HIGH_PRIORITY_LABELS = new Set(['person', 'motorcycle', 'bicycle'])
+
+export function planVlmDispatch(options: PlanVlmDispatchOptions): VlmDispatchPlan {
+  if (options.detectorFailed) {
+    return {
+      shouldSendVlm: true,
+      isHighPriority: true,
+      reason: 'detector-failed'
+    }
+  }
+
+  if (options.detections.length > 0) {
+    const isHighPriority = options.detections.some((d) => HIGH_PRIORITY_LABELS.has(d.label))
+    return {
+      shouldSendVlm: true,
+      isHighPriority,
+      reason: isHighPriority ? 'high-priority-object' : 'object'
+    }
+  }
+
+  if (options.now - options.lastVlmTime >= options.fallbackIntervalMs) {
+    return {
+      shouldSendVlm: true,
+      isHighPriority: false,
+      reason: 'fallback'
+    }
+  }
+
+  return {
+    shouldSendVlm: false,
+    isHighPriority: false,
+    reason: 'skip'
+  }
+}
 
 const connectingAnalysis: VlmAnalysis = {
   riskScore: 0,
@@ -139,7 +202,8 @@ export function useVlmAnalysis(options: VlmAnalysisOptions) {
     enabled = true,
     activeIntervalMs = 500,
     idleIntervalMs = 5000,
-    fallbackIntervalMs = FALLBACK_INTERVAL_MS
+    fallbackIntervalMs = FALLBACK_INTERVAL_MS,
+    idleProbeIntervalMs = IDLE_PROBE_INTERVAL_MS
   } = options
 
   const [serverReady, setServerReady] = useState(false)
@@ -223,20 +287,22 @@ export function useVlmAnalysis(options: VlmAnalysisOptions) {
 
   useEffect(() => {
     if (!frameDataUrl || analyzingRef.current) return
-    if (consumeUnchangedVlmFrame({ frameDataUrl, hasChanged, markConsumed })) return
+    if (consumeUnchangedVlmFrame({
+      frameDataUrl,
+      hasChanged,
+      markConsumed,
+      lastVlmTime: lastVlmTimeRef.current,
+      idleProbeIntervalMs
+    })) return
 
     let cancelled = false
     analyzingRef.current = true
 
     ;(async () => {
       try {
-        let shouldSendVlm = false
-        let isHighPriority = false
         let detections: DetectionResult[] = []
 
-        if (detectorFailedRef.current) {
-          shouldSendVlm = true
-        } else {
+        if (!detectorFailedRef.current) {
           try {
             const video = videoRef.current
             if (video && video.readyState >= 2) {
@@ -248,28 +314,26 @@ export function useVlmAnalysis(options: VlmAnalysisOptions) {
             detectorFailedRef.current = true
             useAppStore.getState().setDetectorStatus('error')
           }
-
-          if (detections.length > 0) {
-            shouldSendVlm = true
-            isHighPriority = detections.some((d) => HIGH_PRIORITY_LABELS.has(d.label))
-          } else {
-            const now = Date.now()
-            if (now - lastVlmTimeRef.current >= fallbackIntervalMs) {
-              shouldSendVlm = true
-            }
-          }
         }
 
-        if (!shouldSendVlm) return
+        const dispatchPlan = planVlmDispatch({
+          detectorFailed: detectorFailedRef.current,
+          detections,
+          now: Date.now(),
+          lastVlmTime: lastVlmTimeRef.current,
+          fallbackIntervalMs
+        })
+
+        if (!dispatchPlan.shouldSendVlm) return
 
         // High-priority detection: abort stale in-flight request
-        if (isHighPriority && abortControllerRef.current) {
+        if (dispatchPlan.isHighPriority && abortControllerRef.current) {
           abortControllerRef.current.abort()
           abortControllerRef.current = null
         }
 
         // Skip if a VLM request is already in-flight (non-priority frame)
-        if (!isHighPriority && abortControllerRef.current) return
+        if (!dispatchPlan.isHighPriority && abortControllerRef.current) return
 
         lastVlmTimeRef.current = Date.now()
         useAppStore.getState().setVlmStatus('analyzing')
@@ -315,5 +379,5 @@ export function useVlmAnalysis(options: VlmAnalysisOptions) {
     return () => {
       cancelled = true
     }
-  }, [frameDataUrl, cameraId, scene, markConsumed, hasChanged, fallbackIntervalMs, videoRef])
+  }, [frameDataUrl, cameraId, scene, markConsumed, hasChanged, fallbackIntervalMs, idleProbeIntervalMs, videoRef])
 }

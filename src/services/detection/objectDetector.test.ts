@@ -58,6 +58,8 @@ describe('parseDetectionLabels', () => {
   it('falls back to default labels when empty', () => {
     expect(parseDetectionLabels('').has('person')).toBe(true)
     expect(parseDetectionLabels(undefined).has('bicycle')).toBe(true)
+    expect(parseDetectionLabels(undefined).has('truck')).toBe(true)
+    expect(parseDetectionLabels(undefined).has('backpack')).toBe(true)
   })
 })
 
@@ -67,7 +69,7 @@ describe('parseDetectionMinScore', () => {
   })
 
   it('falls back when score is invalid', () => {
-    expect(parseDetectionMinScore('2')).toBe(0.4)
-    expect(parseDetectionMinScore('invalid')).toBe(0.4)
+    expect(parseDetectionMinScore('2')).toBe(0.35)
+    expect(parseDetectionMinScore('invalid')).toBe(0.35)
   })
 })
