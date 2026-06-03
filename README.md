@@ -30,7 +30,7 @@
 | 桌面框架 | Electron | 41.6 | 主进程窗口、代理和 VLM 子进程管理 |
 | 构建工具 | electron-vite + Vite | 5.0 / 7.0 | Electron 三进程构建与浏览器调试 |
 | 后端代理 | Node.js + Express | 22 / 5.2 | Qwen 和本地 VLM 代理 |
-| VLM 推理 | llama.cpp `llama-server` | b8864 | Windows CUDA 12.4 构建 |
+| VLM 推理 | llama.cpp `llama-server` | b9484 | Windows CUDA 12.4 构建 |
 
 ## 项目结构
 
@@ -128,16 +128,16 @@ VITE_BAIDU_MAP_CENTER_LAT=32.060255
 VITE_BAIDU_MAP_ZOOM=16
 
 VITE_QWEN_PROXY_PATH=/api/qwen/chat/completions
-VITE_QWEN_MODEL=jackrong-qwen3.5-4b-claude-4.6-opus-distilled-v2:q4_k_m
+VITE_QWEN_MODEL=qwen3.5-4b-sompoa-heresy-v2-mtp:q4_k_m
 
 VITE_DEMO_STREAM_URL=
 VITE_DEMO_STREAM_TYPE=flv
 
-VITE_DETECTION_LABELS=person,car,bicycle,motorcycle,dog
-VITE_DETECTION_MIN_SCORE=0.4
+VITE_DETECTION_LABELS=person,car,truck,bus,bicycle,motorcycle,dog,backpack,handbag,suitcase,chair,couch,bench,potted plant
+VITE_DETECTION_MIN_SCORE=0.35
 ```
 
-`VITE_DETECTION_LABELS` 用英文逗号分隔 COCO-SSD 标签；`VITE_DETECTION_MIN_SCORE` 取值范围为 0 到 1，配置异常时回退到 0.4。
+`VITE_DETECTION_LABELS` 用英文逗号分隔 COCO-SSD 标签；`VITE_DETECTION_MIN_SCORE` 取值范围为 0 到 1，配置异常时回退到 0.35。
 
 ### 配置代理与 VLM
 
@@ -161,16 +161,22 @@ LOG_MODEL_OUTPUT=false
 
 QWEN_BASE_URL=http://127.0.0.1:1234/v1
 QWEN_API_KEY=
-QWEN_MODEL=jackrong-qwen3.5-4b-claude-4.6-opus-distilled-v2:q4_k_m
+QWEN_MODEL=qwen3.5-4b-sompoa-heresy-v2-mtp:q4_k_m
 QWEN_TIMEOUT=60000
 
 VLM_HOST=127.0.0.1
 VLM_PORT=11434
-VLM_MODEL=jackrong-qwen3.5-4b-claude-4.6-opus-distilled-v2:q4_k_m
+VLM_MODEL=qwen3.5-4b-sompoa-heresy-v2-mtp:q4_k_m
 VLM_FORCE_CPU=false
 VLM_GPU_LAYERS=99
 VLM_CONTEXT_SIZE=4096
+VLM_BATCH_SIZE=512
+VLM_UBATCH_SIZE=256
 VLM_STARTUP_TIMEOUT_MS=60000
+VLM_MTP_ENABLED=true
+VLM_MTP_DRAFT_TOKENS=4
+VLM_MTP_MIN_DRAFT_TOKENS=1
+VLM_MTP_MIN_PROBABILITY=0.75
 ```
 
 `VITE_*` 变量会进入浏览器代码，不要放入真实密钥。Qwen API Key 只应写入 `.env.server` 或 CI Secret。
@@ -186,8 +192,8 @@ npm run download-model
 | 文件 | 用途 |
 |------|------|
 | `llama-server.exe` | llama.cpp OpenAI-compatible 推理服务 |
-| `Qwen3.5-4B.Q4_K_M.gguf` | 主模型，约 2.55 GB |
-| `mmproj-BF16.gguf` | 视觉编码器，约 644 MB |
+| `qwen3.5-4b-sompoa-heresy-v2-mtp-q4_k_m.gguf` | 主模型，约 2.71 GB |
+| `mmproj-Qwen3.5-9B-Uncensored-HauhauCS-Aggressive-BF16.gguf` | 视觉编码器，约 922 MB |
 | CUDA 相关 DLL | Windows CUDA 推理运行时依赖 |
 
 资源放在 `resources/vlm/`。Electron 开发模式会从该目录查找并启动 `llama-server.exe`；打包后会从应用目录下的 `resources/vlm/` 查找。
@@ -321,7 +327,7 @@ npm run package
 npm run preview
 ```
 
-`npm run package` 会先执行 `npm run download-model`。打包配置位于 `package.json` 的 `build` 字段；portable 应用包会携带 `llama-server.exe` 与 CPU 通用运行时 DLL（`ggml-cpu-*.dll`、`llama.dll`、`mtmd.dll` 等），但不包含 CUDA-only DLL（`ggml-cuda.dll`、`cudart64_12.dll`、`cublas64_12.dll`、`cublasLt64_12.dll`）和 `Qwen3.5-4B.Q4_K_M.gguf`、`mmproj-BF16.gguf` 两个大模型文件。CI 会额外生成 `vlm-models.zip`，把模型文件与 CUDA 运行时一并分发；CPU 推理只需解压 `.gguf` 模型，GPU 加速则需把 CUDA DLL 一同解压到 `resources\vlm\` 目录下。
+`npm run package` 会先执行 `npm run download-model`。打包配置位于 `package.json` 的 `build` 字段；portable 应用包会携带 `llama-server.exe` 与 CPU 通用运行时 DLL（`ggml-cpu-*.dll`、`llama.dll`、`mtmd.dll` 等），但不包含 CUDA-only DLL（`ggml-cuda.dll`、`cudart64_12.dll`、`cublas64_12.dll`、`cublasLt64_12.dll`）和 `qwen3.5-4b-sompoa-heresy-v2-mtp-q4_k_m.gguf`、`mmproj-Qwen3.5-9B-Uncensored-HauhauCS-Aggressive-BF16.gguf` 两个大模型文件。CI 会额外生成 `vlm-models.zip`，把模型文件与 CUDA 运行时一并分发；CPU 推理只需解压 `.gguf` 模型，GPU 加速则需把 CUDA DLL 一同解压到 `resources\vlm\` 目录下。
 
 提交行为变更前建议运行：
 
@@ -408,7 +414,8 @@ Dependabot 配置位于 `.github/dependabot.yml`，npm 和 GitHub Actions 依赖
 - [Recharts](https://recharts.org/)
 - [百度地图 JSAPI GL](https://lbsyun.baidu.com/index.php?title=jspopular3.0/api)
 - [llama.cpp](https://github.com/ggml-org/llama.cpp)
-- [Qwen3.5-4B GGUF 模型](https://huggingface.co/Jackrong/Qwen3.5-4B-Claude-4.6-Opus-Reasoning-Distilled-v2-GGUF)
+- [Qwen3.5-4B SOMPOA MTP GGUF 模型](https://huggingface.co/aLKHoEbI/Qwen3.5-4B-SOMPOA-heresy-v2-MTP-Q4_K_M-GGUF)
+- [HauhauCS Qwen3.5 mmproj](https://huggingface.co/HauhauCS/Qwen3.5-9B-Uncensored-HauhauCS-Aggressive/blob/main/mmproj-Qwen3.5-9B-Uncensored-HauhauCS-Aggressive-BF16.gguf)
 
 ## 许可证
 

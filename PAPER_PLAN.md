@@ -83,9 +83,9 @@ Vision-Language Models (VLMs) offer powerful capabilities for understanding surv
 - Stage 2: Object Detection Pre-screening
   - COCO-SSD Lite MobileNet v2 (TensorFlow.js)
   - Lazy loading, allowed labels filter
-  - Confidence threshold: 0.4
+  - Confidence threshold: 0.35
 - Stage 3: VLM Analysis
-  - Qwen3.5-4B Q4_K_M GGUF via llama.cpp
+  - Qwen3.5-4B SOMPOA MTP Q4_K_M GGUF via llama.cpp b9484 with HauhauCS mmproj
   - Structured JSON output with risk assessment
 - Figure 2: Pipeline flowchart
 

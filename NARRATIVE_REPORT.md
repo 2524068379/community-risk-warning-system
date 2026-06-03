@@ -37,14 +37,14 @@ The system is a three-process Electron desktop application with an embedded Expr
 **Stage 2: Object Detection Pre-screening** (`src/services/detection/objectDetector.ts`)
 - COCO-SSD with Lite MobileNet v2 backbone (TensorFlow.js)
 - Lazy-loaded on first use to avoid startup overhead
-- Filters to allowed labels: `person`, `car`, `bicycle`, `motorcycle`, `dog`
-- Minimum confidence threshold: 0.4
+- Filters to allowed labels including `person`, `car`, `truck`, `bus`, `bicycle`, `motorcycle`, `dog`, and blockage-related objects
+- Minimum confidence threshold: 0.35
 - Acts as pre-filter: `person` detection triggers high-priority VLM dispatch
 
 **Stage 3: VLM Analysis** (`src/services/llm/ollamaClient.ts`)
-- Qwen3.5-4B Claude 4.6 Opus Reasoning Distilled v2 (Q4_K_M GGUF, ~2.55 GB)
-- Vision encoder: mmproj-BF16.gguf (~644 MB)
-- Runtime: llama.cpp `llama-server.exe` with CUDA 12.4, flash attention, continuous batching
+- Qwen3.5-4B SOMPOA heresy v2 MTP (Q4_K_M GGUF, ~2.71 GB)
+- Vision encoder: mmproj-Qwen3.5-9B-Uncensored-HauhauCS-Aggressive-BF16.gguf (~922 MB)
+- Runtime: llama.cpp `llama-server.exe` b9484 with CUDA 12.4, flash attention, continuous batching, and MTP speculative decoding
 - Temperature 0.15, max_tokens 800, no streaming
 - Structured JSON output with risk score (0-100), level (A/B/C), confidence, evidence timeline, detection boxes
 

@@ -4,6 +4,9 @@ import { createHash } from 'node:crypto';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
+  LLAMA_CPP_CUDA_VERSION,
+  LLAMA_CPP_VERSION,
+  VLM_HAS_MMPROJ,
   VLM_MODEL_FILE,
   VLM_MODEL_SHA256,
   VLM_MODEL_URL,
@@ -15,10 +18,10 @@ import {
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const vlmDir = join(__dirname, '..', 'resources', 'vlm');
 
-const LLAMA_CPP_CUDA_ZIP = 'llama-b8864-bin-win-cuda-12.4-x64.zip';
-const LLAMA_CPP_CUDA_URL = `https://github.com/ggml-org/llama.cpp/releases/download/b8864/${LLAMA_CPP_CUDA_ZIP}`;
-const CUDART_ZIP = 'cudart-llama-bin-win-cuda-12.4-x64.zip';
-const CUDART_URL = `https://github.com/ggml-org/llama.cpp/releases/download/b8864/${CUDART_ZIP}`;
+const LLAMA_CPP_CUDA_ZIP = `llama-${LLAMA_CPP_VERSION}-bin-win-cuda-${LLAMA_CPP_CUDA_VERSION}-x64.zip`;
+const LLAMA_CPP_CUDA_URL = `https://github.com/ggml-org/llama.cpp/releases/download/${LLAMA_CPP_VERSION}/${LLAMA_CPP_CUDA_ZIP}`;
+const CUDART_ZIP = `cudart-llama-bin-win-cuda-${LLAMA_CPP_CUDA_VERSION}-x64.zip`;
+const CUDART_URL = `https://github.com/ggml-org/llama.cpp/releases/download/${LLAMA_CPP_VERSION}/${CUDART_ZIP}`;
 
 function run(command) {
   console.log(`> ${command}`);
@@ -74,7 +77,7 @@ async function main() {
   }
 
   if (!existsSync(modelFile)) {
-    console.log(`\n=== Downloading ${VLM_MODEL_FILE} (~2.55 GB) ===`);
+    console.log(`\n=== Downloading ${VLM_MODEL_FILE} (~2.71 GB) ===`);
     console.log('This may take a while...');
     run(`curl -L -o "${modelFile}" "${VLM_MODEL_URL}"`);
   } else {
@@ -82,13 +85,17 @@ async function main() {
   }
   await verifySha256(modelFile, VLM_MODEL_SHA256);
 
-  if (!existsSync(mmprojFile)) {
-    console.log(`\n=== Downloading ${VLM_MMPROJ_FILE} (~644 MB) ===`);
-    run(`curl -L -o "${mmprojFile}" "${VLM_MMPROJ_URL}"`);
+  if (VLM_HAS_MMPROJ) {
+    if (!existsSync(mmprojFile)) {
+      console.log(`\n=== Downloading ${VLM_MMPROJ_FILE} (~922 MB) ===`);
+      run(`curl -L -o "${mmprojFile}" "${VLM_MMPROJ_URL}"`);
+    } else {
+      console.log(`${VLM_MMPROJ_FILE} already exists, skipping download`);
+    }
+    await verifySha256(mmprojFile, VLM_MMPROJ_SHA256);
   } else {
-    console.log(`${VLM_MMPROJ_FILE} already exists, skipping download`);
+    console.log('No mmproj configured, skipping vision encoder download');
   }
-  await verifySha256(mmprojFile, VLM_MMPROJ_SHA256);
 
   console.log('\n=== Download complete ===');
   console.log(`Files in ${vlmDir}:`);

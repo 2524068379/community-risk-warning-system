@@ -46,7 +46,7 @@ describe('qwenProxy', () => {
     expect(config.ollamaBaseUrl).toBe('http://127.0.0.1:12345');
   });
 
-  it('defaults to the Jackrong distilled Qwen3.5 4B model', () => {
+  it('defaults to the configured Qwen3.5 SOMPOA MTP model', () => {
     const config = loadQwenProxyConfig({});
 
     expect(config.qwenModel).toBe(DEFAULT_VLM_MODEL_ALIAS);

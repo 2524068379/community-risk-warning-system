@@ -10,7 +10,13 @@ describe('vlmRuntimeConfig', () => {
       modelAlias: DEFAULT_VLM_MODEL_ALIAS,
       gpuLayers: 99,
       contextSize: 4096,
-      startupTimeoutMs: 60000
+      batchSize: 512,
+      ubatchSize: 256,
+      startupTimeoutMs: 60000,
+      mtpEnabled: true,
+      mtpDraftTokens: 4,
+      mtpMinDraftTokens: 1,
+      mtpMinProbability: 0.75
     });
   });
 
@@ -21,14 +27,26 @@ describe('vlmRuntimeConfig', () => {
       VLM_MODEL: 'local-vlm',
       VLM_FORCE_CPU: 'true',
       VLM_CONTEXT_SIZE: '2048',
-      VLM_STARTUP_TIMEOUT_MS: '15000'
+      VLM_BATCH_SIZE: '1024',
+      VLM_UBATCH_SIZE: '128',
+      VLM_STARTUP_TIMEOUT_MS: '15000',
+      VLM_MTP_ENABLED: 'false',
+      VLM_MTP_DRAFT_TOKENS: '8',
+      VLM_MTP_MIN_DRAFT_TOKENS: '2',
+      VLM_MTP_MIN_PROBABILITY: '0.6'
     })).toEqual({
       host: '127.0.0.1',
       port: 12345,
       modelAlias: 'local-vlm',
       gpuLayers: 0,
       contextSize: 2048,
-      startupTimeoutMs: 15000
+      batchSize: 1024,
+      ubatchSize: 128,
+      startupTimeoutMs: 15000,
+      mtpEnabled: false,
+      mtpDraftTokens: 8,
+      mtpMinDraftTokens: 2,
+      mtpMinProbability: 0.6
     });
   });
 });

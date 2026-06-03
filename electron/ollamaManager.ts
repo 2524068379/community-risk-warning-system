@@ -9,7 +9,7 @@ import {
   type GpuAvailability,
   type OllamaRuntimeStatus
 } from '../server/ollamaHealthStatus.js'
-import { VLM_MODEL_FILE, VLM_MMPROJ_FILE } from '../shared/vlmModelConfig.js'
+import { VLM_HAS_MMPROJ, VLM_MODEL_FILE, VLM_MMPROJ_FILE } from '../shared/vlmModelConfig.js'
 import { loadVlmRuntimeConfig, type VlmRuntimeConfig } from '../shared/vlmRuntimeConfig.js'
 
 let serverProcess: ChildProcess | null = null
@@ -22,6 +22,48 @@ let stopped = false
 const MAX_RESTART_ATTEMPTS = 3
 const RESTART_DELAY_MS = 3000
 const RESOURCE_POLL_INTERVAL_MS = 5000
+
+interface BuildLlamaServerArgsOptions {
+  modelPath: string
+  mmprojPath: string | null
+  vlmConfig: VlmRuntimeConfig
+  effectiveGpuLayers: number
+}
+
+export function buildLlamaServerArgs(options: BuildLlamaServerArgsOptions): string[] {
+  const { modelPath, mmprojPath, vlmConfig, effectiveGpuLayers } = options
+  const args = [
+    '-m', modelPath,
+    '-a', vlmConfig.modelAlias,
+    '--port', String(vlmConfig.port),
+    '--host', vlmConfig.host,
+    '-ngl', String(effectiveGpuLayers),
+    '-c', String(vlmConfig.contextSize),
+    '-b', String(vlmConfig.batchSize),
+    '-ub', String(vlmConfig.ubatchSize),
+    '--flash-attn', 'on',
+    '--no-warmup',
+    '--cont-batching',
+    '--jinja'
+  ]
+
+  if (mmprojPath) {
+    args.push('--mmproj', mmprojPath)
+  }
+
+  if (vlmConfig.mtpEnabled) {
+    args.push(
+      '--spec-type', 'draft-mtp',
+      '--spec-draft-model', modelPath,
+      '--spec-draft-ngl', String(effectiveGpuLayers),
+      '--spec-draft-n-max', String(vlmConfig.mtpDraftTokens),
+      '--spec-draft-n-min', String(vlmConfig.mtpMinDraftTokens),
+      '--spec-draft-p-min', String(vlmConfig.mtpMinProbability)
+    )
+  }
+
+  return args
+}
 
 function getVlmRuntimeConfig(): VlmRuntimeConfig {
   runtimeConfig ??= loadVlmRuntimeConfig(process.env)
@@ -133,7 +175,7 @@ export async function startOllama(): Promise<void> {
 
   const { serverExe, modelDir, cudaAvailable } = resources
   const modelPath = path.join(modelDir, VLM_MODEL_FILE)
-  const mmprojPath = path.join(modelDir, VLM_MMPROJ_FILE)
+  const configuredMmprojPath = VLM_HAS_MMPROJ ? path.join(modelDir, VLM_MMPROJ_FILE) : null
 
   if (!fs.existsSync(modelPath)) {
     schedulePollForResources(
@@ -150,25 +192,13 @@ export async function startOllama(): Promise<void> {
     )
   }
 
-  const args = [
-    '-m', modelPath,
-    '-a', vlmConfig.modelAlias,
-    '--mmproj', mmprojPath,
-    '--port', String(vlmConfig.port),
-    '--host', vlmConfig.host,
-    '-ngl', String(effectiveGpuLayers),
-    '-c', String(vlmConfig.contextSize),
-    '-b', '256',
-    '--flash-attn', 'on',
-    '--no-warmup',
-    '--cont-batching'
-  ]
-
-  if (!fs.existsSync(mmprojPath)) {
+  const mmprojPath = configuredMmprojPath && fs.existsSync(configuredMmprojPath)
+    ? configuredMmprojPath
+    : null
+  if (configuredMmprojPath && !mmprojPath) {
     console.warn('[vlm] mmproj file not found, running without vision encoder')
-    const idx = args.indexOf('--mmproj')
-    if (idx !== -1) args.splice(idx, 2)
   }
+  const args = buildLlamaServerArgs({ modelPath, mmprojPath, vlmConfig, effectiveGpuLayers })
 
   console.log('[vlm] Starting:', serverExe, args.join(' '))
   status = 'starting'

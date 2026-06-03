@@ -1,9 +1,15 @@
-export const DEFAULT_VLM_MODEL_ALIAS = 'jackrong-qwen3.5-4b-claude-4.6-opus-distilled-v2:q4_k_m';
-export const VLM_MODEL_REPO = 'Jackrong/Qwen3.5-4B-Claude-4.6-Opus-Reasoning-Distilled-v2-GGUF';
-export const VLM_MODEL_FILE = 'Qwen3.5-4B.Q4_K_M.gguf';
-export const VLM_MMPROJ_FILE = 'mmproj-BF16.gguf';
-export const VLM_MODEL_SHA256 = 'de8cf2454c46ec34e6b991dc11f5dd42d543926272d8a59d36ceb5a2eaf7962a';
-export const VLM_MMPROJ_SHA256 = '32c003c4247825cd765bd882c0c2d3b3b071f4f909aa00f9e1d6404ba2422cf0';
+export const DEFAULT_VLM_MODEL_ALIAS = 'qwen3.5-4b-sompoa-heresy-v2-mtp:q4_k_m';
+export const VLM_MODEL_REPO = 'aLKHoEbI/Qwen3.5-4B-SOMPOA-heresy-v2-MTP-Q4_K_M-GGUF';
+export const VLM_MODEL_FILE = 'qwen3.5-4b-sompoa-heresy-v2-mtp-q4_k_m.gguf';
+export const VLM_MMPROJ_REPO = 'HauhauCS/Qwen3.5-9B-Uncensored-HauhauCS-Aggressive';
+export const VLM_MMPROJ_FILE = 'mmproj-Qwen3.5-9B-Uncensored-HauhauCS-Aggressive-BF16.gguf';
+export const VLM_MODEL_SHA256 = '11072ba67c42d3309ca0634654492666b2ccb12de238677aeb34ca566e612696';
+export const VLM_MMPROJ_SHA256 = '05f662501f8bd45607b079723a3e238a4e888fd085a10a53f4057a0e250f6934';
+export const VLM_HAS_MMPROJ = Boolean(VLM_MMPROJ_FILE);
+export const LLAMA_CPP_VERSION = 'b9484';
+export const LLAMA_CPP_CUDA_VERSION = '12.4';
 
 export const VLM_MODEL_URL = `https://huggingface.co/${VLM_MODEL_REPO}/resolve/main/${VLM_MODEL_FILE}`;
-export const VLM_MMPROJ_URL = `https://huggingface.co/${VLM_MODEL_REPO}/resolve/main/${VLM_MMPROJ_FILE}`;
+export const VLM_MMPROJ_URL = VLM_HAS_MMPROJ
+  ? `https://huggingface.co/${VLM_MMPROJ_REPO}/resolve/main/${VLM_MMPROJ_FILE}`
+  : '';
