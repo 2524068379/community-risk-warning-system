@@ -1,5 +1,5 @@
 import { execSync } from 'node:child_process';
-import { createReadStream, existsSync, mkdirSync } from 'node:fs';
+import { createReadStream, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -22,6 +22,7 @@ const LLAMA_CPP_CUDA_ZIP = `llama-${LLAMA_CPP_VERSION}-bin-win-cuda-${LLAMA_CPP_
 const LLAMA_CPP_CUDA_URL = `https://github.com/ggml-org/llama.cpp/releases/download/${LLAMA_CPP_VERSION}/${LLAMA_CPP_CUDA_ZIP}`;
 const CUDART_ZIP = `cudart-llama-bin-win-cuda-${LLAMA_CPP_CUDA_VERSION}-x64.zip`;
 const CUDART_URL = `https://github.com/ggml-org/llama.cpp/releases/download/${LLAMA_CPP_VERSION}/${CUDART_ZIP}`;
+const RUNTIME_VERSION = `${LLAMA_CPP_VERSION}-cuda-${LLAMA_CPP_CUDA_VERSION}`;
 
 function run(command) {
   console.log(`> ${command}`);
@@ -52,11 +53,15 @@ async function main() {
   mkdirSync(vlmDir, { recursive: true });
 
   const serverExe = join(vlmDir, 'llama-server.exe');
+  const runtimeVersionFile = join(vlmDir, '.llama-cpp-runtime-version');
   const modelFile = join(vlmDir, VLM_MODEL_FILE);
   const mmprojFile = join(vlmDir, VLM_MMPROJ_FILE);
+  const hasCurrentRuntime = existsSync(serverExe)
+    && existsSync(runtimeVersionFile)
+    && readFileSync(runtimeVersionFile, 'utf8').trim() === RUNTIME_VERSION;
 
-  if (!existsSync(serverExe)) {
-    console.log('\n=== Downloading llama-server (CUDA build) ===');
+  if (!hasCurrentRuntime) {
+    console.log(`\n=== Downloading llama-server ${RUNTIME_VERSION} ===`);
     const llamaZip = join(vlmDir, LLAMA_CPP_CUDA_ZIP);
     const cudartZip = join(vlmDir, CUDART_ZIP);
 
@@ -71,9 +76,10 @@ async function main() {
     run(`powershell -Command "Expand-Archive -Path '${llamaZip}' -DestinationPath '${vlmDir}' -Force"`);
     run(`powershell -Command "Expand-Archive -Path '${cudartZip}' -DestinationPath '${vlmDir}' -Force"`);
 
+    writeFileSync(runtimeVersionFile, `${RUNTIME_VERSION}\n`);
     console.log('llama-server.exe extracted');
   } else {
-    console.log('llama-server.exe already exists, skipping download');
+    console.log(`llama-server ${RUNTIME_VERSION} already exists, skipping download`);
   }
 
   if (!existsSync(modelFile)) {

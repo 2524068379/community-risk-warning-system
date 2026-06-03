@@ -51,6 +51,8 @@ describe('VLM model packaging configuration', () => {
     expect(downloadScript).toContain('VLM_MMPROJ_FILE');
     expect(downloadScript).toContain('VLM_MMPROJ_URL');
     expect(downloadScript).toContain('VLM_MMPROJ_SHA256');
+    expect(downloadScript).toContain('LLAMA_CPP_VERSION');
+    expect(downloadScript).toContain('.llama-cpp-runtime-version');
     expect(ollamaManager).toContain('../shared/vlmModelConfig.js');
     expect(ollamaManager).toContain('VLM_MODEL_FILE');
     expect(ollamaManager).toContain('VLM_MMPROJ_FILE');

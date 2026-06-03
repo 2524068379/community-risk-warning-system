@@ -18,6 +18,7 @@ describe('package configuration', () => {
 
     expect(vlmResources?.filter).toEqual([
       'llama-server.exe',
+      'llama-server-impl.dll',
       'llama.dll',
       'llama-common.dll',
       'mtmd.dll',

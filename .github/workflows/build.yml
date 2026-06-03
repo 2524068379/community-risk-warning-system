@@ -60,6 +60,8 @@ jobs:
           $headers = @{ 'User-Agent' = 'curl/8.19.0' }
           $progressPreference = 'SilentlyContinue'
           $retryCount = 3
+          $runtimeVersion = "b9484-cuda-12.4"
+          $runtimeVersionPath = "resources/vlm/.llama-cpp-runtime-version"
 
           function Save-WithRetry($Url, $Path, $TimeoutSec) {
             $fileName = Split-Path $Path -Leaf
@@ -83,6 +85,7 @@ jobs:
 
           $runtimeFiles = @(
             "llama-server.exe",
+            "llama-server-impl.dll",
             "llama.dll",
             "llama-common.dll",
             "mtmd.dll",
@@ -97,8 +100,12 @@ jobs:
             "ggml-cuda.dll"
           )
           $missingRuntimeFiles = @($runtimeFiles | Where-Object { -not (Test-Path "resources/vlm/$_") })
-          if ($missingRuntimeFiles.Count -gt 0) {
+          $hasCurrentRuntime = (Test-Path $runtimeVersionPath) -and ((Get-Content $runtimeVersionPath -Raw).Trim() -eq $runtimeVersion)
+          if (($missingRuntimeFiles.Count -gt 0) -or (-not $hasCurrentRuntime)) {
             Write-Host "Missing VLM runtime files from cache/source: $($missingRuntimeFiles -join ', ')"
+            if (-not $hasCurrentRuntime) {
+              Write-Host "VLM runtime marker is missing or stale. Expected: $runtimeVersion"
+            }
             Write-Host "Downloading llama-server (CUDA build)..."
             $llamaUrl = "https://github.com/ggml-org/llama.cpp/releases/download/b9484/llama-b9484-bin-win-cuda-12.4-x64.zip"
             $cudartUrl = "https://github.com/ggml-org/llama.cpp/releases/download/b9484/cudart-llama-bin-win-cuda-12.4-x64.zip"
@@ -111,6 +118,7 @@ jobs:
             Write-Host "Extracting llama-server runtime..."
             Expand-Archive -Path $llamaZip -DestinationPath resources/vlm -Force
             Expand-Archive -Path $cudartZip -DestinationPath resources/vlm -Force
+            Set-Content -Path $runtimeVersionPath -Value $runtimeVersion -NoNewline
             Remove-Item $llamaZip, $cudartZip -Force -ErrorAction SilentlyContinue
           } else {
             Write-Host "VLM runtime files already present in cache/source."
@@ -214,7 +222,7 @@ jobs:
             }
           }
 
-          $runtimeFiles = @("llama-server.exe", "llama.dll", "llama-common.dll", "mtmd.dll", "ggml.dll", "ggml-base.dll", "ggml-cpu-x64.dll", "libomp140.x86_64.dll")
+          $runtimeFiles = @("llama-server.exe", "llama-server-impl.dll", "llama.dll", "llama-common.dll", "mtmd.dll", "ggml.dll", "ggml-base.dll", "ggml-cpu-x64.dll", "libomp140.x86_64.dll")
           foreach ($f in $runtimeFiles) {
             if (-not ($listing -match [regex]::Escape($f))) {
               Write-Host "ERROR: Portable app package must include VLM runtime file: $f"
@@ -240,7 +248,7 @@ jobs:
             - cublasLt64_12.dll          (cuBLASLt)
             - ggml-cuda.dll              (llama.cpp CUDA backend)
 
-          llama-server.exe 与 CPU 通用 runtime DLL 已随 Windows portable 应用包发布。
+          llama-server.exe、llama-server-impl.dll 与 CPU 通用 runtime DLL 已随 Windows portable 应用包发布。
           仅当需要 GPU 加速时才需要解压本包；CPU 推理只需扩展 .gguf 模型文件。
 
           解压位置

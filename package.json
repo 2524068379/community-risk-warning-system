@@ -102,6 +102,7 @@
         "to": "vlm",
         "filter": [
           "llama-server.exe",
+          "llama-server-impl.dll",
           "llama.dll",
           "llama-common.dll",
           "mtmd.dll",
