@@ -83,7 +83,7 @@ async function main() {
   }
 
   if (!existsSync(modelFile)) {
-    console.log(`\n=== Downloading ${VLM_MODEL_FILE} (~2.71 GB) ===`);
+    console.log(`\n=== Downloading ${VLM_MODEL_FILE} (~2.83 GB) ===`);
     console.log('This may take a while...');
     run(`curl -L -o "${modelFile}" "${VLM_MODEL_URL}"`);
   } else {
@@ -93,7 +93,7 @@ async function main() {
 
   if (VLM_HAS_MMPROJ) {
     if (!existsSync(mmprojFile)) {
-      console.log(`\n=== Downloading ${VLM_MMPROJ_FILE} (~922 MB) ===`);
+      console.log(`\n=== Downloading ${VLM_MMPROJ_FILE} (~676 MB) ===`);
       run(`curl -L -o "${mmprojFile}" "${VLM_MMPROJ_URL}"`);
     } else {
       console.log(`${VLM_MMPROJ_FILE} already exists, skipping download`);

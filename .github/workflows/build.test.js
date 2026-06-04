@@ -73,8 +73,8 @@ describe('build workflow', () => {
     expect(workflow).toContain('Portable app package must not include VLM model file');
     expect(workflow).toContain('Portable app package must include VLM runtime file');
     expect(workflow).toContain('-not ($listing -match [regex]::Escape($f))');
-    expect(workflow).toContain('qwen3.5-4b-sompoa-heresy-v2-mtp-q4_k_m.gguf');
-    expect(workflow).toContain('mmproj-Qwen3.5-9B-Uncensored-HauhauCS-Aggressive-BF16.gguf');
+    expect(workflow).toContain('Qwen3.5-4B-Q4_K_M.gguf');
+    expect(workflow).toContain('mmproj-BF16.gguf');
   });
 
   it('verifies the portable app includes the CPU llama.cpp runtime files needed at launch', () => {
@@ -99,7 +99,7 @@ describe('build workflow', () => {
     const workflow = fs.readFileSync(new URL('./build.yml', import.meta.url), 'utf8');
 
     expect(workflow).toContain('llama-server.exe、llama-server-impl.dll 与 CPU 通用 runtime DLL 已随 Windows portable 应用包发布。');
-    expect(workflow).toContain('$modelFiles = @("qwen3.5-4b-sompoa-heresy-v2-mtp-q4_k_m.gguf", "mmproj-Qwen3.5-9B-Uncensored-HauhauCS-Aggressive-BF16.gguf")');
+    expect(workflow).toContain('$modelFiles = @("Qwen3.5-4B-Q4_K_M.gguf", "mmproj-BF16.gguf")');
     expect(workflow).toContain('$cudaFiles = @("cudart64_12.dll", "cublas64_12.dll", "cublasLt64_12.dll", "ggml-cuda.dll")');
   });
 });

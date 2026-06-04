@@ -15,14 +15,14 @@ import {
 } from './vlmModelConfig.js';
 
 describe('vlmModelConfig', () => {
-  it('keeps the current Qwen3.5 SOMPOA MTP model and HauhauCS mmproj configuration', () => {
-    expect(DEFAULT_VLM_MODEL_ALIAS).toBe('qwen3.5-4b-sompoa-heresy-v2-mtp:q4_k_m');
-    expect(VLM_MODEL_REPO).toBe('aLKHoEbI/Qwen3.5-4B-SOMPOA-heresy-v2-MTP-Q4_K_M-GGUF');
-    expect(VLM_MODEL_FILE).toBe('qwen3.5-4b-sompoa-heresy-v2-mtp-q4_k_m.gguf');
-    expect(VLM_MMPROJ_REPO).toBe('HauhauCS/Qwen3.5-9B-Uncensored-HauhauCS-Aggressive');
-    expect(VLM_MMPROJ_FILE).toBe('mmproj-Qwen3.5-9B-Uncensored-HauhauCS-Aggressive-BF16.gguf');
-    expect(VLM_MODEL_SHA256).toBe('11072ba67c42d3309ca0634654492666b2ccb12de238677aeb34ca566e612696');
-    expect(VLM_MMPROJ_SHA256).toBe('05f662501f8bd45607b079723a3e238a4e888fd085a10a53f4057a0e250f6934');
+  it('keeps the current Unsloth Qwen3.5 MTP model and bundled mmproj configuration', () => {
+    expect(DEFAULT_VLM_MODEL_ALIAS).toBe('qwen3.5-4b-mtp:q4_k_m');
+    expect(VLM_MODEL_REPO).toBe('unsloth/Qwen3.5-4B-MTP-GGUF');
+    expect(VLM_MODEL_FILE).toBe('Qwen3.5-4B-Q4_K_M.gguf');
+    expect(VLM_MMPROJ_REPO).toBe('unsloth/Qwen3.5-4B-MTP-GGUF');
+    expect(VLM_MMPROJ_FILE).toBe('mmproj-BF16.gguf');
+    expect(VLM_MODEL_SHA256).toBe('3874209241c9a397e2f62cd3f70f80fd2dfbf0dfccb6838416bdb48a714e8630');
+    expect(VLM_MMPROJ_SHA256).toBe('169ee40fb1e234ff38b2d814eb8633611a54b6f941f11b700d96dec02cb44ddf');
     expect(VLM_HAS_MMPROJ).toBe(true);
     expect(LLAMA_CPP_VERSION).toBe('b9484');
     expect(LLAMA_CPP_CUDA_VERSION).toBe('12.4');

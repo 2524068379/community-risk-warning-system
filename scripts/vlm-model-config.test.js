@@ -11,8 +11,10 @@ import {
   VLM_MMPROJ_SHA256
 } from '../shared/vlmModelConfig.js';
 
-const oldUnslothRepo = 'unsloth/Qwen3.5-4B-GGUF';
-const oldModelFile = 'Qwen3.5-4B-Q4_K_M.gguf';
+const oldSompoaRepo = 'aLKHoEbI/Qwen3.5-4B-SOMPOA-heresy-v2-MTP-Q4_K_M-GGUF';
+const oldSompoaModelFile = 'qwen3.5-4b-sompoa-heresy-v2-mtp-q4_k_m.gguf';
+const oldHauhaucsRepo = 'HauhauCS/Qwen3.5-9B-Uncensored-HauhauCS-Aggressive';
+const oldHauhaucsMmproj = 'mmproj-Qwen3.5-9B-Uncensored-HauhauCS-Aggressive-BF16.gguf';
 const oldJackrongRepo = 'Jackrong/Qwen3.5-4B-Claude-4.6-Opus-Reasoning-Distilled-v2-GGUF';
 
 function read(path) {
@@ -20,7 +22,7 @@ function read(path) {
 }
 
 describe('VLM model packaging configuration', () => {
-  it('downloads the configured Qwen GGUF and HauhauCS mmproj in the GitHub build workflow', () => {
+  it('downloads the configured Qwen GGUF and bundled mmproj in the GitHub build workflow', () => {
     const workflow = read('.github/workflows/build.yml');
 
     expect(workflow).toContain(VLM_MODEL_REPO);
@@ -35,8 +37,10 @@ describe('VLM model packaging configuration', () => {
       workflow.indexOf('Prepare VLM model files')
     );
     expect(workflow.indexOf('Verify VLM model file hashes')).toBeLessThan(workflow.indexOf('- name: Build'));
-    expect(workflow).not.toContain(oldUnslothRepo);
-    expect(workflow).not.toContain(oldModelFile);
+    expect(workflow).not.toContain(oldSompoaRepo);
+    expect(workflow).not.toContain(oldSompoaModelFile);
+    expect(workflow).not.toContain(oldHauhaucsRepo);
+    expect(workflow).not.toContain(oldHauhaucsMmproj);
     expect(workflow).not.toContain(oldJackrongRepo);
   });
 
@@ -56,8 +60,10 @@ describe('VLM model packaging configuration', () => {
     expect(ollamaManager).toContain('../shared/vlmModelConfig.js');
     expect(ollamaManager).toContain('VLM_MODEL_FILE');
     expect(ollamaManager).toContain('VLM_MMPROJ_FILE');
-    expect(downloadScript).not.toContain(oldUnslothRepo);
-    expect(downloadScript).not.toContain(oldModelFile);
-    expect(ollamaManager).not.toContain(oldModelFile);
+    expect(downloadScript).not.toContain(oldSompoaRepo);
+    expect(downloadScript).not.toContain(oldSompoaModelFile);
+    expect(downloadScript).not.toContain(oldHauhaucsRepo);
+    expect(downloadScript).not.toContain(oldHauhaucsMmproj);
+    expect(ollamaManager).not.toContain(oldSompoaModelFile);
   });
 });
