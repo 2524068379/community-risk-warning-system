@@ -70,6 +70,26 @@ describe('parseVlmResponse', () => {
     ])
   })
 
+  it('normalizes numeric detection box fields returned as strings', () => {
+    const result = parseVlmResponse(JSON.stringify({
+      hasRisk: true,
+      riskScore: '70',
+      level: 'B',
+      confidence: '80%',
+      summary: 'risk found',
+      evidenceTimeline: [],
+      breakdown: [{ label: 'risk', value: 100 }],
+      detectionBoxes: [
+        { x: '0.1', y: '0.2', width: '0.3', height: '0.4', label: 'valid', confidence: '0.9', risk: true }
+      ]
+    }))
+
+    expect(result.analysis.confidence).toBe(0.8)
+    expect(result.boxes).toEqual([
+      { x: 0.1, y: 0.2, width: 0.3, height: 0.4, label: 'valid', confidence: 0.9, risk: true }
+    ])
+  })
+
   it('parses JSON wrapped in a markdown code fence with a language identifier', () => {
     const raw = '```json\n{"hasRisk":false,"riskScore":10,"level":"C","confidence":0.7,"summary":"正常","evidenceTimeline":[],"breakdown":[{"label":"正常","value":100}],"detectionBoxes":[]}\n```'
     const result = parseVlmResponse(raw)
@@ -110,9 +130,10 @@ describe('parseVlmResponse', () => {
     expect(result.analysis.riskScore).toBe(45)
   })
 
-  it('returns the fallback analysis when the response contains no JSON at all', () => {
-    const result = parseVlmResponse('对不起，我无法分析这张图片。')
-    expect(result.analysis.summary).toBe('模型返回格式异常，无法解析')
+  it('uses plain text as a low-confidence summary when the response contains no JSON', () => {
+    const result = parseVlmResponse('画面中未发现明显社区安全风险。')
+    expect(result.analysis.summary).toBe('画面中未发现明显社区安全风险。')
+    expect(result.analysis.confidence).toBe(0.2)
     expect(result.boxes).toEqual([])
   })
 
@@ -120,5 +141,49 @@ describe('parseVlmResponse', () => {
     const raw = '说明：结果对象为 {"hasRisk":false,"riskScore":15,"level":"C","confidence":0.5,"summary":"画面清晰","evidenceTimeline":[],"breakdown":[{"label":"正常","value":100}],"detectionBoxes":[]}，请查收。'
     const result = parseVlmResponse(raw)
     expect(result.analysis.summary).toBe('画面清晰')
+  })
+
+  it('parses JSON-like model output with single quotes, unquoted keys, and Python booleans', () => {
+    const raw = "{hasRisk: True, riskScore: 62, level: 'B', confidence: 0.71, summary: '消防通道疑似被占用', evidenceTimeline: ['10:01 消防通道被占用'], breakdown: [{'label': '消防', 'value': 100}], detectionBoxes: []}"
+    const result = parseVlmResponse(raw)
+    expect(result.analysis.hasRisk).toBe(true)
+    expect(result.analysis.summary).toBe('消防通道疑似被占用')
+    expect(result.analysis.evidenceTimeline).toEqual(['10:01 消防通道被占用'])
+    expect(result.analysis.breakdown).toEqual([{ label: '消防', value: 100 }])
+  })
+
+  it('keeps parsing JSON that appears after an unclosed think tag', () => {
+    const raw = '<think>先观察画面\n{"hasRisk":true,"riskScore":55,"level":"B","confidence":0.7,"summary":"检测到异常聚集","evidenceTimeline":[],"breakdown":[{"label":"治安","value":100}],"detectionBoxes":[]}'
+    const result = parseVlmResponse(raw)
+    expect(result.analysis.summary).toBe('检测到异常聚集')
+    expect(result.analysis.riskScore).toBe(55)
+  })
+
+  it('unwraps structured results returned inside common response envelopes', () => {
+    const result = parseVlmResponse({
+      result: {
+        risk_score: 35,
+        risk_level: 'B级',
+        confidence: 0.6,
+        has_risk: '是',
+        description: '发现人员聚集',
+        evidence_timeline: '10:01 入口聚集；10:02 人群未散开',
+        risk_breakdown: { 治安: 100 },
+        boxes: []
+      }
+    })
+
+    expect(result.analysis.hasRisk).toBe(true)
+    expect(result.analysis.riskScore).toBe(35)
+    expect(result.analysis.level).toBe('B')
+    expect(result.analysis.summary).toBe('发现人员聚集')
+    expect(result.analysis.evidenceTimeline).toEqual(['10:01 入口聚集', '10:02 人群未散开'])
+  })
+
+  it('uses the first structured object from a JSON array response', () => {
+    const raw = '[{"hasRisk":false,"riskScore":8,"level":"C","confidence":0.9,"summary":"正常","evidenceTimeline":[],"breakdown":[{"label":"正常","value":100}],"detectionBoxes":[]}]'
+    const result = parseVlmResponse(raw)
+    expect(result.analysis.summary).toBe('正常')
+    expect(result.analysis.riskScore).toBe(8)
   })
 })

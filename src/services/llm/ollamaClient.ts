@@ -30,22 +30,29 @@ function buildUserPrompt(cameraId: string, scene: string): string {
   return `这是来自摄像头 ${cameraId}（场景：${scene}）的实时画面。请分析当前画面中存在的社区安全风险，并返回结构化JSON结果。当前时间：${now}`
 }
 
-interface OllamaResponse {
-  hasRisk: boolean
-  riskScore: number
-  level: string
-  confidence: number
-  hasLoitering?: boolean
-  hasGathering?: boolean
-  hasFallen?: boolean
-  summary: string
-  evidenceTimeline: string[]
-  breakdown: { label: string; value: number }[]
-  detectionBoxes: DetectionBox[]
-}
+type JsonObject = Record<string, unknown>
 
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value))
+}
+
+function isRecord(value: unknown): value is JsonObject {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+}
+
+function toFiniteNumber(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value
+  }
+
+  if (typeof value === 'string') {
+    const normalized = Number(value.trim().replace(/%$/, ''))
+    if (Number.isFinite(normalized)) {
+      return normalized
+    }
+  }
+
+  return null
 }
 
 function isFiniteNumber(value: unknown): value is number {
@@ -57,48 +64,88 @@ function normalizeDetectionBox(box: unknown): DetectionBox | null {
     return null
   }
 
-  const candidate = box as Partial<DetectionBox>
+  const candidate = box as Partial<DetectionBox> & { bbox?: unknown }
+  let x = toFiniteNumber(candidate.x)
+  let y = toFiniteNumber(candidate.y)
+  let width = toFiniteNumber(candidate.width)
+  let height = toFiniteNumber(candidate.height)
+  const confidence = toFiniteNumber(candidate.confidence)
+
   if (
-    !isFiniteNumber(candidate.x) ||
-    !isFiniteNumber(candidate.y) ||
-    !isFiniteNumber(candidate.width) ||
-    !isFiniteNumber(candidate.height) ||
-    !isFiniteNumber(candidate.confidence) ||
+    (x === null || y === null || width === null || height === null) &&
+    Array.isArray(candidate.bbox) &&
+    candidate.bbox.length >= 4
+  ) {
+    const [bx, by, bw, bh] = candidate.bbox.map((value) => toFiniteNumber(value))
+    x = bx
+    y = by
+    width = bw
+    height = bh
+  }
+
+  if (
+    !isFiniteNumber(x) ||
+    !isFiniteNumber(y) ||
+    !isFiniteNumber(width) ||
+    !isFiniteNumber(height) ||
+    !isFiniteNumber(confidence) ||
     typeof candidate.label !== 'string' ||
     !candidate.label.trim()
   ) {
     return null
   }
 
-  if (candidate.width <= 0 || candidate.height <= 0) {
+  if (width <= 0 || height <= 0) {
     return null
   }
 
   return {
-    x: clamp(candidate.x, 0, 1),
-    y: clamp(candidate.y, 0, 1),
-    width: clamp(candidate.width, 0, 1),
-    height: clamp(candidate.height, 0, 1),
+    x: clamp(x, 0, 1),
+    y: clamp(y, 0, 1),
+    width: clamp(width, 0, 1),
+    height: clamp(height, 0, 1),
     label: candidate.label,
-    confidence: clamp(candidate.confidence, 0, 1),
+    confidence: clamp(confidence, 0, 1),
     risk: typeof candidate.risk === 'boolean' ? candidate.risk : false
   }
 }
 
 function stripThinkTags(text: string): string {
-  return text.replace(/<think\b[^>]*>[\s\S]*?<\/think>/gi, '').trim()
+  const withoutClosedTags = text.replace(/<think\b[^>]*>[\s\S]*?<\/think>/gi, '')
+  const unclosedTag = withoutClosedTags.match(/<think\b[^>]*>/i)
+  if (!unclosedTag || unclosedTag.index === undefined) {
+    return withoutClosedTags.trim()
+  }
+
+  const beforeTag = withoutClosedTags.slice(0, unclosedTag.index)
+  const afterTag = withoutClosedTags.slice(unclosedTag.index + unclosedTag[0].length)
+  const jsonStart = afterTag.search(/[{\[]/)
+  if (jsonStart !== -1) {
+    return `${beforeTag}${afterTag.slice(jsonStart)}`.trim()
+  }
+
+  return beforeTag.trim()
 }
 
-function extractFencedJson(text: string): string | null {
+function extractFencedJsonBlocks(text: string): string[] {
   // Match ``` optionally followed by a language tag (json/JSON/etc.), content, and closing ```.
-  const match = text.match(/```[a-zA-Z0-9_-]*\s*([\s\S]*?)```/)
-  return match ? match[1].trim() : null
+  const blocks = [...text.matchAll(/```[a-zA-Z0-9_-]*\s*([\s\S]*?)```/g)]
+    .map((match) => match[1].trim())
+    .filter(Boolean)
+
+  if (blocks.length > 0) {
+    return blocks
+  }
+
+  const unclosed = text.match(/```[a-zA-Z0-9_-]*\s*([\s\S]*)$/)
+  return unclosed?.[1]?.trim() ? [unclosed[1].trim()] : []
 }
 
-function extractBalancedObject(text: string): string | null {
-  let depth = 0
+function extractBalancedJsonValues(text: string): string[] {
+  const values: string[] = []
+  const stack: string[] = []
   let start = -1
-  let inString = false
+  let inString: '"' | '\'' | null = null
   let escape = false
 
   for (let i = 0; i < text.length; i++) {
@@ -109,119 +156,443 @@ function extractBalancedObject(text: string): string | null {
         escape = false
       } else if (ch === '\\') {
         escape = true
-      } else if (ch === '"') {
-        inString = false
+      } else if (ch === inString) {
+        inString = null
       }
       continue
     }
 
-    if (ch === '"') {
-      inString = true
-    } else if (ch === '{') {
-      if (depth === 0) start = i
-      depth++
-    } else if (ch === '}') {
-      depth--
-      if (depth === 0 && start !== -1) {
-        return text.slice(start, i + 1)
+    if (ch === '"' || ch === '\'') {
+      inString = ch
+    } else if (ch === '{' || ch === '[') {
+      if (stack.length === 0) start = i
+      stack.push(ch === '{' ? '}' : ']')
+    } else if (ch === '}' || ch === ']') {
+      if (stack[stack.length - 1] !== ch) {
+        stack.length = 0
+        start = -1
+        continue
+      }
+
+      stack.pop()
+      if (stack.length === 0 && start !== -1) {
+        values.push(text.slice(start, i + 1))
+        start = -1
       }
     }
   }
 
-  return null
+  return values
 }
 
-function extractJson(raw: string): string | null {
+function extractJsonCandidates(raw: string): string[] {
   let text = stripThinkTags(raw.trim())
-
-  const fenced = extractFencedJson(text)
-  if (fenced) {
-    text = fenced
+  const sources = extractFencedJsonBlocks(text)
+  if (sources.length === 0) {
+    sources.push(text)
   }
 
-  const balanced = extractBalancedObject(text)
-  if (balanced) return balanced
-
-  const first = text.indexOf('{')
-  const last = text.lastIndexOf('}')
-  if (first !== -1 && last > first) {
-    return text.slice(first, last + 1)
-  }
-
-  return null
+  return sources.flatMap((source) => extractBalancedJsonValues(source))
 }
 
 function sanitizeJson(jsonStr: string): string {
-  let out = jsonStr
+  let out = jsonStr.trim()
+  out = out
+    .replace(/^\uFEFF/, '')
+    .replace(/[“”]/g, '"')
+    .replace(/[‘’]/g, '\'')
+
+  out = normalizeJsonLikePunctuation(out)
   // Strip single-line comments that are NOT inside string literals.
   out = out.replace(/(?:^|\n)([^"\n]|"[^"\n\\]*(?:\\.[^"\\]*)*")*?(\/\/[^\n]*)/g, (match, _prefix, comment) =>
     match.replace(comment, '')
   )
+  // Strip block comments.
+  out = out.replace(/\/\*[\s\S]*?\*\//g, '')
   // A simpler second pass to catch trailing inline comments missed above.
   out = out.replace(/^\s*\/\/[^\n]*$/gm, '')
+  // Quote common unquoted object keys and normalize JSON-like literals.
+  out = out.replace(/([{,]\s*)([A-Za-z_$][\w$-]*)(\s*:)/g, '$1"$2"$3')
+  out = out.replace(/([{,]\s*)'([^'\\]*(?:\\.[^'\\]*)*)'(\s*:)/g, (_match, prefix, key, suffix) =>
+    `${prefix}${JSON.stringify(key.replace(/\\'/g, '\''))}${suffix}`
+  )
+  out = out.replace(/:\s*'([^'\\]*(?:\\.[^'\\]*)*)'/g, (_match, value) =>
+    `:${JSON.stringify(value.replace(/\\'/g, '\''))}`
+  )
+  out = out.replace(/'([^'\\]*(?:\\.[^'\\]*)*)'/g, (_match, value) =>
+    JSON.stringify(value.replace(/\\'/g, '\''))
+  )
+  out = out.replace(/\bTrue\b/g, 'true')
+  out = out.replace(/\bFalse\b/g, 'false')
+  out = out.replace(/\bNone\b/g, 'null')
   // Strip trailing commas before } or ].
   out = out.replace(/,\s*([\]}])/g, '$1')
   return out
 }
 
-export function parseVlmResponse(raw: string): { analysis: VlmAnalysis; boxes: DetectionBox[] } {
-  const fallback: VlmAnalysis = {
-    riskScore: 0,
-    level: 'C',
-    hasRisk: false,
-    confidence: 0,
-    summary: '模型返回格式异常，无法解析',
-    evidenceTimeline: [],
-    breakdown: [{ label: '解析失败', value: 100 }],
-    trend: []
-  }
+function normalizeJsonLikePunctuation(input: string): string {
+  let out = ''
+  let inString: '"' | '\'' | null = null
+  let escape = false
 
-  const jsonStr = extractJson(raw)
-  if (!jsonStr) {
-    console.warn('[vlm-parser] No JSON found in response, raw length:', raw.length)
-    return { analysis: fallback, boxes: [] }
-  }
+  for (const ch of input) {
+    if (inString) {
+      out += ch
+      if (escape) {
+        escape = false
+      } else if (ch === '\\') {
+        escape = true
+      } else if (ch === inString) {
+        inString = null
+      }
+      continue
+    }
 
-  let parsed: OllamaResponse
-  try {
-    parsed = JSON.parse(jsonStr) as OllamaResponse
-  } catch (primaryError) {
-    try {
-      parsed = JSON.parse(sanitizeJson(jsonStr)) as OllamaResponse
-    } catch (secondaryError) {
-      console.warn(
-        '[vlm-parser] JSON parse failed:',
-        primaryError instanceof Error ? primaryError.message : primaryError,
-        '| sanitized retry:',
-        secondaryError instanceof Error ? secondaryError.message : secondaryError
-      )
-      return { analysis: fallback, boxes: [] }
+    if (ch === '"' || ch === '\'') {
+      inString = ch
+      out += ch
+    } else if (ch === '：') {
+      out += ':'
+    } else if (ch === '，') {
+      out += ','
+    } else {
+      out += ch
     }
   }
 
+  return out
+}
+
+function parseJsonCandidate(candidate: string): unknown | null {
+  const attempts = [candidate, sanitizeJson(candidate)]
+  for (const attempt of attempts) {
+    try {
+      return JSON.parse(attempt)
+    } catch {
+      // Try the next repair level.
+    }
+  }
+
+  return null
+}
+
+function getNestedValue(record: JsonObject, keys: string[]): unknown {
+  for (const key of keys) {
+    if (record[key] !== undefined && record[key] !== null) {
+      return record[key]
+    }
+  }
+
+  return undefined
+}
+
+function hasVlmFields(record: JsonObject): boolean {
+  const knownKeys = [
+    'hasRisk',
+    'riskScore',
+    'risk_score',
+    'level',
+    'riskLevel',
+    'risk_level',
+    'confidence',
+    'summary',
+    'description',
+    'conclusion',
+    'evidenceTimeline',
+    'breakdown',
+    'detectionBoxes'
+  ]
+  return knownKeys.some((key) => key in record)
+}
+
+function unwrapVlmPayload(value: unknown): unknown | null {
+  if (Array.isArray(value)) {
+    return value.map((item) => unwrapVlmPayload(item)).find(Boolean) ?? null
+  }
+
+  if (!isRecord(value)) {
+    return null
+  }
+
+  if (hasVlmFields(value)) {
+    return value
+  }
+
+  const content = isRecord(value.message) ? value.message.content : undefined
+  if (typeof content === 'string') {
+    return parseModelPayload(content)
+  }
+
+  if (Array.isArray(value.choices)) {
+    for (const choice of value.choices) {
+      const unwrapped = unwrapVlmPayload(choice)
+      if (unwrapped) {
+        return unwrapped
+      }
+    }
+  }
+
+  const nested = getNestedValue(value, ['analysis', 'result', 'data', 'output', 'response', 'riskAnalysis'])
+  if (nested !== undefined) {
+    if (typeof nested === 'string') {
+      return parseModelPayload(nested)
+    }
+
+    return unwrapVlmPayload(nested)
+  }
+
+  return null
+}
+
+function parseModelPayload(raw: unknown): unknown | null {
+  if (isRecord(raw) || Array.isArray(raw)) {
+    return unwrapVlmPayload(raw)
+  }
+
+  if (typeof raw !== 'string') {
+    return null
+  }
+
+  for (const candidate of extractJsonCandidates(raw)) {
+    const parsed = parseJsonCandidate(candidate)
+    const unwrapped = unwrapVlmPayload(parsed)
+    if (unwrapped) {
+      return unwrapped
+    }
+  }
+
+  return null
+}
+
+function normalizeBoolean(value: unknown, fallback = false): boolean {
+  if (typeof value === 'boolean') {
+    return value
+  }
+
+  if (typeof value === 'number') {
+    return value !== 0
+  }
+
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase()
+    if (['true', 'yes', 'y', '1', '是', '有', '存在'].includes(normalized)) {
+      return true
+    }
+    if (['false', 'no', 'n', '0', '否', '无', '不存在'].includes(normalized)) {
+      return false
+    }
+  }
+
+  return fallback
+}
+
+function normalizeOptionalBoolean(value: unknown): boolean | undefined {
+  if (value === undefined || value === null) {
+    return undefined
+  }
+
+  return normalizeBoolean(value)
+}
+
+function normalizeRiskScore(value: unknown): number {
+  const score = toFiniteNumber(value)
+  return clamp(score ?? 0, 0, 100)
+}
+
+function normalizeConfidence(value: unknown): number {
+  const confidence = toFiniteNumber(value)
+  if (confidence === null) {
+    return 0
+  }
+
+  return clamp(confidence > 1 && confidence <= 100 ? confidence / 100 : confidence, 0, 1)
+}
+
+function normalizeLevel(value: unknown, riskScore: number): 'A' | 'B' | 'C' {
+  if (typeof value === 'string') {
+    const normalized = value.trim().toUpperCase()
+    const matched = normalized.match(/[ABC]/)
+    if (matched) {
+      return matched[0] as 'A' | 'B' | 'C'
+    }
+
+    if (/高|HIGH|SEVERE/.test(normalized)) {
+      return 'A'
+    }
+    if (/中|MEDIUM|MODERATE/.test(normalized)) {
+      return 'B'
+    }
+    if (/低|LOW|NORMAL|SAFE/.test(normalized)) {
+      return 'C'
+    }
+  }
+
+  if (riskScore >= 70) return 'A'
+  if (riskScore >= 30) return 'B'
+  return 'C'
+}
+
+function normalizeStringArray(value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return value.map((item) => String(item).trim()).filter(Boolean)
+  }
+
+  if (typeof value === 'string') {
+    return value
+      .split(/[\n；;]+/)
+      .map((item) => item.trim())
+      .filter(Boolean)
+  }
+
+  return []
+}
+
+function normalizeBreakdown(value: unknown): { label: string; value: number }[] {
+  if (Array.isArray(value)) {
+    const items = value.flatMap((item) => {
+      if (!isRecord(item)) {
+        return []
+      }
+
+      const label = String(getNestedValue(item, ['label', 'name', 'type']) ?? '').trim()
+      const itemValue = toFiniteNumber(getNestedValue(item, ['value', 'score', 'percent', 'percentage']))
+      if (!label || itemValue === null) {
+        return []
+      }
+
+      return [{ label, value: clamp(Math.round(itemValue), 0, 100) }]
+    })
+
+    if (items.length > 0) {
+      return items
+    }
+  }
+
+  if (isRecord(value)) {
+    return Object.entries(value).flatMap(([label, itemValue]) => {
+      const normalizedValue = toFiniteNumber(itemValue)
+      return normalizedValue === null ? [] : [{ label, value: clamp(Math.round(normalizedValue), 0, 100) }]
+    })
+  }
+
+  return [{ label: '综合评估', value: 100 }]
+}
+
+function pickSummary(record: JsonObject): string {
+  const value = getNestedValue(record, [
+    'summary',
+    'description',
+    'conclusion',
+    'reason',
+    'riskDescription',
+    'risk_description',
+    'analysisSummary',
+    'analysis_summary'
+  ])
+
+  if (typeof value === 'string' && value.trim()) {
+    return value.trim()
+  }
+
+  return '分析完成'
+}
+
+function normalizeVlmPayload(parsed: unknown): { analysis: VlmAnalysis; boxes: DetectionBox[] } | null {
+  const payload = unwrapVlmPayload(parsed)
+  if (!isRecord(payload)) {
+    return null
+  }
+
+  const riskScore = normalizeRiskScore(getNestedValue(payload, ['riskScore', 'risk_score', 'score']))
+  const level = normalizeLevel(getNestedValue(payload, ['level', 'riskLevel', 'risk_level']), riskScore)
+  const detectionBoxes = getNestedValue(payload, ['detectionBoxes', 'detection_boxes', 'boxes', 'detections'])
   const analysis: VlmAnalysis = {
-    hasRisk: Boolean(parsed.hasRisk),
-    riskScore: clamp(Number(parsed.riskScore) || 0, 0, 100),
-    level: ['A', 'B', 'C'].includes(parsed.level) ? parsed.level as 'A' | 'B' | 'C' : 'C',
-    confidence: clamp(Number(parsed.confidence) || 0, 0, 1),
-    hasLoitering: typeof parsed.hasLoitering === 'boolean' ? parsed.hasLoitering : undefined,
-    hasGathering: typeof parsed.hasGathering === 'boolean' ? parsed.hasGathering : undefined,
-    hasFallen: typeof parsed.hasFallen === 'boolean' ? parsed.hasFallen : undefined,
-    summary: String(parsed.summary || '分析完成'),
-    evidenceTimeline: Array.isArray(parsed.evidenceTimeline) ? parsed.evidenceTimeline : [],
-    breakdown: Array.isArray(parsed.breakdown) && parsed.breakdown.length > 0
-      ? parsed.breakdown
-      : [{ label: '综合评估', value: 100 }],
+    hasRisk: normalizeBoolean(getNestedValue(payload, ['hasRisk', 'has_risk', 'risk']), riskScore >= 30),
+    riskScore,
+    level,
+    confidence: normalizeConfidence(getNestedValue(payload, ['confidence', 'probability'])),
+    hasLoitering: normalizeOptionalBoolean(getNestedValue(payload, ['hasLoitering', 'has_loitering', 'loitering'])),
+    hasGathering: normalizeOptionalBoolean(getNestedValue(payload, ['hasGathering', 'has_gathering', 'gathering'])),
+    hasFallen: normalizeOptionalBoolean(getNestedValue(payload, ['hasFallen', 'has_fallen', 'fallen'])),
+    summary: pickSummary(payload),
+    evidenceTimeline: normalizeStringArray(getNestedValue(payload, [
+      'evidenceTimeline',
+      'evidence_timeline',
+      'timeline',
+      'evidence'
+    ])),
+    breakdown: normalizeBreakdown(getNestedValue(payload, ['breakdown', 'riskBreakdown', 'risk_breakdown'])),
     trend: []
   }
-  const boxes: DetectionBox[] = Array.isArray(parsed.detectionBoxes)
-    ? parsed.detectionBoxes.flatMap((box) => {
+  const boxes: DetectionBox[] = Array.isArray(detectionBoxes)
+    ? detectionBoxes.flatMap((box) => {
         const normalized = normalizeDetectionBox(box)
         return normalized ? [normalized] : []
       })
     : []
 
   return { analysis, boxes }
+}
+
+function buildFallbackAnalysis(summary = '模型未返回可解析内容'): VlmAnalysis {
+  const normalizedSummary = summary.trim() || '模型未返回可解析内容'
+  const hasRisk =
+    /(风险|异常|摔倒|聚集|徘徊|堵塞|占用|充电|闯入|求助|损坏)/.test(normalizedSummary) &&
+    !/(未发现|无明显|正常|风险可控|没有发现)/.test(normalizedSummary)
+  const riskScore = hasRisk ? 45 : 0
+
+  return {
+    riskScore,
+    level: hasRisk ? 'B' : 'C',
+    hasRisk,
+    confidence: 0.2,
+    summary: normalizedSummary,
+    evidenceTimeline: [],
+    breakdown: [{ label: hasRisk ? '文本风险摘要' : '文本摘要', value: 100 }],
+    trend: []
+  }
+}
+
+function extractLooseSummary(raw: string): string | null {
+  const text = stripThinkTags(raw)
+  const summaryMatch = text.match(/["'“”]?summary["'“”]?\s*[:：]\s*["'“”]([^"'“”\n\r}]{1,240})["'“”]?/i)
+    ?? text.match(/(?:模型摘要|摘要|结论|summary)\s*[:：]\s*([^\n\r]{1,240})/i)
+
+  return summaryMatch?.[1]?.trim() || null
+}
+
+function buildFallbackFromRaw(raw: unknown): VlmAnalysis {
+  if (typeof raw !== 'string') {
+    return buildFallbackAnalysis()
+  }
+
+  const looseSummary = extractLooseSummary(raw)
+  if (looseSummary) {
+    return buildFallbackAnalysis(looseSummary)
+  }
+
+  const text = stripThinkTags(raw)
+    .replace(/```[a-zA-Z0-9_-]*\s*/g, '')
+    .replace(/```/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+
+  if (!text) {
+    return buildFallbackAnalysis()
+  }
+
+  return buildFallbackAnalysis(text.length > 180 ? `${text.slice(0, 177)}...` : text)
+}
+
+export function parseVlmResponse(raw: unknown): { analysis: VlmAnalysis; boxes: DetectionBox[] } {
+  const parsed = parseModelPayload(raw)
+  const normalized = normalizeVlmPayload(parsed)
+  if (normalized) {
+    return normalized
+  }
+
+  console.warn('[vlm-parser] Falling back to plain-text summary')
+  return { analysis: buildFallbackFromRaw(raw), boxes: [] }
 }
 
 export async function analyzeFrameWithOllama(
