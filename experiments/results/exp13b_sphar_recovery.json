@@ -1,0 +1,499 @@
+{
+  "ig_miss_clips": 8,
+  "owl_results": [
+    {
+      "video": "uccrime_Explosion009_x264.mp4",
+      "category": "igniting",
+      "owl_ceiling": {
+        "available": true,
+        "max_score": 0.0198,
+        "n_detections": 684,
+        "top_detections": [
+          {
+            "prompt": "fire",
+            "score": 0.0198
+          },
+          {
+            "prompt": "assault",
+            "score": 0.0164
+          },
+          {
+            "prompt": "assault",
+            "score": 0.0161
+          },
+          {
+            "prompt": "fire",
+            "score": 0.0125
+          },
+          {
+            "prompt": "car crash",
+            "score": 0.0107
+          }
+        ]
+      },
+      "owl_operational": {
+        "available": true,
+        "max_score": 0.0,
+        "n_detections": 0,
+        "top_detections": []
+      }
+    },
+    {
+      "video": "uccrime_Arson013_x264.mp4",
+      "category": "igniting",
+      "owl_ceiling": {
+        "available": true,
+        "max_score": 0.0099,
+        "n_detections": 347,
+        "top_detections": [
+          {
+            "prompt": "assault",
+            "score": 0.0099
+          },
+          {
+            "prompt": "assault",
+            "score": 0.0098
+          },
+          {
+            "prompt": "assault",
+            "score": 0.0094
+          },
+          {
+            "prompt": "fire",
+            "score": 0.0064
+          },
+          {
+            "prompt": "assault",
+            "score": 0.0064
+          }
+        ]
+      },
+      "owl_operational": {
+        "available": true,
+        "max_score": 0.0,
+        "n_detections": 0,
+        "top_detections": []
+      }
+    },
+    {
+      "video": "uccrime_Arson007_x264.mp4",
+      "category": "igniting",
+      "owl_ceiling": {
+        "available": true,
+        "max_score": 0.0108,
+        "n_detections": 785,
+        "top_detections": [
+          {
+            "prompt": "smoke",
+            "score": 0.0108
+          },
+          {
+            "prompt": "person falling",
+            "score": 0.0106
+          },
+          {
+            "prompt": "person falling",
+            "score": 0.0103
+          },
+          {
+            "prompt": "person falling",
+            "score": 0.0103
+          },
+          {
+            "prompt": "person falling",
+            "score": 0.0102
+          }
+        ]
+      },
+      "owl_operational": {
+        "available": true,
+        "max_score": 0.0,
+        "n_detections": 0,
+        "top_detections": []
+      }
+    },
+    {
+      "video": "uccrime_Explosion034_x264.mp4",
+      "category": "igniting",
+      "owl_ceiling": {
+        "available": true,
+        "max_score": 0.0277,
+        "n_detections": 272,
+        "top_detections": [
+          {
+            "prompt": "smoke",
+            "score": 0.0277
+          },
+          {
+            "prompt": "fire",
+            "score": 0.0215
+          },
+          {
+            "prompt": "smoke",
+            "score": 0.0149
+          },
+          {
+            "prompt": "fire",
+            "score": 0.012
+          },
+          {
+            "prompt": "fire",
+            "score": 0.0105
+          }
+        ]
+      },
+      "owl_operational": {
+        "available": true,
+        "max_score": 0.0,
+        "n_detections": 0,
+        "top_detections": []
+      }
+    },
+    {
+      "video": "uccrime_Arson028_x264.mp4",
+      "category": "igniting",
+      "owl_ceiling": {
+        "available": true,
+        "max_score": 0.0089,
+        "n_detections": 447,
+        "top_detections": [
+          {
+            "prompt": "vandalism",
+            "score": 0.0089
+          },
+          {
+            "prompt": "car crash",
+            "score": 0.0083
+          },
+          {
+            "prompt": "car crash",
+            "score": 0.0079
+          },
+          {
+            "prompt": "fire",
+            "score": 0.0067
+          },
+          {
+            "prompt": "car crash",
+            "score": 0.0066
+          }
+        ]
+      },
+      "owl_operational": {
+        "available": true,
+        "max_score": 0.0,
+        "n_detections": 0,
+        "top_detections": []
+      }
+    },
+    {
+      "video": "uccrime_Arson008_x264.mp4",
+      "category": "igniting",
+      "owl_ceiling": {
+        "available": true,
+        "max_score": 0.0185,
+        "n_detections": 1052,
+        "top_detections": [
+          {
+            "prompt": "assault",
+            "score": 0.0185
+          },
+          {
+            "prompt": "fire",
+            "score": 0.0183
+          },
+          {
+            "prompt": "assault",
+            "score": 0.0166
+          },
+          {
+            "prompt": "assault",
+            "score": 0.0161
+          },
+          {
+            "prompt": "assault",
+            "score": 0.0142
+          }
+        ]
+      },
+      "owl_operational": {
+        "available": true,
+        "max_score": 0.0,
+        "n_detections": 0,
+        "top_detections": []
+      }
+    },
+    {
+      "video": "uccrime_Explosion008_x264.mp4",
+      "category": "igniting",
+      "owl_ceiling": {
+        "available": true,
+        "max_score": 0.0104,
+        "n_detections": 200,
+        "top_detections": [
+          {
+            "prompt": "smoke",
+            "score": 0.0104
+          },
+          {
+            "prompt": "smoke",
+            "score": 0.0087
+          },
+          {
+            "prompt": "smoke",
+            "score": 0.006
+          },
+          {
+            "prompt": "smoke",
+            "score": 0.0051
+          },
+          {
+            "prompt": "smoke",
+            "score": 0.0048
+          }
+        ]
+      },
+      "owl_operational": {
+        "available": true,
+        "max_score": 0.0,
+        "n_detections": 0,
+        "top_detections": []
+      }
+    },
+    {
+      "video": "uccrime_RoadAccidents042_x264.mp4",
+      "category": "carcrash",
+      "owl_ceiling": {
+        "available": true,
+        "max_score": 0.0202,
+        "n_detections": 907,
+        "top_detections": [
+          {
+            "prompt": "person falling",
+            "score": 0.0202
+          },
+          {
+            "prompt": "person falling",
+            "score": 0.0201
+          },
+          {
+            "prompt": "vandalism",
+            "score": 0.0179
+          },
+          {
+            "prompt": "person falling",
+            "score": 0.0175
+          },
+          {
+            "prompt": "person falling",
+            "score": 0.0157
+          }
+        ]
+      },
+      "owl_operational": {
+        "available": true,
+        "max_score": 0.0,
+        "n_detections": 0,
+        "top_detections": []
+      }
+    }
+  ],
+  "vlm_results": [
+    {
+      "video": "uccrime_Explosion009_x264.mp4",
+      "category": "igniting",
+      "per_frame": [
+        {
+          "frame": 0,
+          "error": "HTTPConnectionPool(host='127.0.0.1', port=11434): Max retries exceeded with url:",
+          "detected": false
+        },
+        {
+          "frame": 1,
+          "error": "HTTPConnectionPool(host='127.0.0.1', port=11434): Max retries exceeded with url:",
+          "detected": false
+        },
+        {
+          "frame": 2,
+          "error": "HTTPConnectionPool(host='127.0.0.1', port=11434): Max retries exceeded with url:",
+          "detected": false
+        }
+      ],
+      "n_detected": 0,
+      "n_tested": 3
+    },
+    {
+      "video": "uccrime_Arson013_x264.mp4",
+      "category": "igniting",
+      "per_frame": [
+        {
+          "frame": 0,
+          "error": "HTTPConnectionPool(host='127.0.0.1', port=11434): Max retries exceeded with url:",
+          "detected": false
+        },
+        {
+          "frame": 1,
+          "error": "HTTPConnectionPool(host='127.0.0.1', port=11434): Max retries exceeded with url:",
+          "detected": false
+        },
+        {
+          "frame": 2,
+          "error": "HTTPConnectionPool(host='127.0.0.1', port=11434): Max retries exceeded with url:",
+          "detected": false
+        }
+      ],
+      "n_detected": 0,
+      "n_tested": 3
+    },
+    {
+      "video": "uccrime_Arson007_x264.mp4",
+      "category": "igniting",
+      "per_frame": [
+        {
+          "frame": 0,
+          "error": "HTTPConnectionPool(host='127.0.0.1', port=11434): Max retries exceeded with url:",
+          "detected": false
+        },
+        {
+          "frame": 1,
+          "error": "HTTPConnectionPool(host='127.0.0.1', port=11434): Max retries exceeded with url:",
+          "detected": false
+        },
+        {
+          "frame": 2,
+          "error": "HTTPConnectionPool(host='127.0.0.1', port=11434): Max retries exceeded with url:",
+          "detected": false
+        }
+      ],
+      "n_detected": 0,
+      "n_tested": 3
+    },
+    {
+      "video": "uccrime_Explosion034_x264.mp4",
+      "category": "igniting",
+      "per_frame": [
+        {
+          "frame": 0,
+          "error": "HTTPConnectionPool(host='127.0.0.1', port=11434): Max retries exceeded with url:",
+          "detected": false
+        },
+        {
+          "frame": 1,
+          "error": "HTTPConnectionPool(host='127.0.0.1', port=11434): Max retries exceeded with url:",
+          "detected": false
+        },
+        {
+          "frame": 2,
+          "error": "HTTPConnectionPool(host='127.0.0.1', port=11434): Max retries exceeded with url:",
+          "detected": false
+        }
+      ],
+      "n_detected": 0,
+      "n_tested": 3
+    },
+    {
+      "video": "uccrime_Arson028_x264.mp4",
+      "category": "igniting",
+      "per_frame": [
+        {
+          "frame": 0,
+          "error": "HTTPConnectionPool(host='127.0.0.1', port=11434): Max retries exceeded with url:",
+          "detected": false
+        },
+        {
+          "frame": 1,
+          "error": "HTTPConnectionPool(host='127.0.0.1', port=11434): Max retries exceeded with url:",
+          "detected": false
+        },
+        {
+          "frame": 2,
+          "error": "HTTPConnectionPool(host='127.0.0.1', port=11434): Max retries exceeded with url:",
+          "detected": false
+        }
+      ],
+      "n_detected": 0,
+      "n_tested": 3
+    },
+    {
+      "video": "uccrime_Arson008_x264.mp4",
+      "category": "igniting",
+      "per_frame": [
+        {
+          "frame": 0,
+          "error": "HTTPConnectionPool(host='127.0.0.1', port=11434): Max retries exceeded with url:",
+          "detected": false
+        },
+        {
+          "frame": 1,
+          "error": "HTTPConnectionPool(host='127.0.0.1', port=11434): Max retries exceeded with url:",
+          "detected": false
+        },
+        {
+          "frame": 2,
+          "error": "HTTPConnectionPool(host='127.0.0.1', port=11434): Max retries exceeded with url:",
+          "detected": false
+        }
+      ],
+      "n_detected": 0,
+      "n_tested": 3
+    },
+    {
+      "video": "uccrime_Explosion008_x264.mp4",
+      "category": "igniting",
+      "per_frame": [
+        {
+          "frame": 0,
+          "error": "HTTPConnectionPool(host='127.0.0.1', port=11434): Max retries exceeded with url:",
+          "detected": false
+        },
+        {
+          "frame": 1,
+          "error": "HTTPConnectionPool(host='127.0.0.1', port=11434): Max retries exceeded with url:",
+          "detected": false
+        },
+        {
+          "frame": 2,
+          "error": "HTTPConnectionPool(host='127.0.0.1', port=11434): Max retries exceeded with url:",
+          "detected": false
+        }
+      ],
+      "n_detected": 0,
+      "n_tested": 3
+    },
+    {
+      "video": "uccrime_RoadAccidents042_x264.mp4",
+      "category": "carcrash",
+      "per_frame": [
+        {
+          "frame": 0,
+          "error": "HTTPConnectionPool(host='127.0.0.1', port=11434): Max retries exceeded with url:",
+          "detected": false
+        },
+        {
+          "frame": 1,
+          "error": "HTTPConnectionPool(host='127.0.0.1', port=11434): Max retries exceeded with url:",
+          "detected": false
+        },
+        {
+          "frame": 2,
+          "error": "HTTPConnectionPool(host='127.0.0.1', port=11434): Max retries exceeded with url:",
+          "detected": false
+        }
+      ],
+      "n_detected": 0,
+      "n_tested": 3
+    }
+  ],
+  "owl_summary": {
+    "n_tested": 8,
+    "max_ceiling_score": 0.0277,
+    "mean_ceiling_score": 0.0158,
+    "operational_detections": 0
+  },
+  "vlm_summary": {
+    "n_clips": 8,
+    "total_frames_tested": 24,
+    "total_detected": 0,
+    "detection_rate": 0.0
+  }
+}

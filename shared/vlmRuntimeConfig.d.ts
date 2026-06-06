@@ -6,11 +6,11 @@ export interface VlmRuntimeConfig {
   contextSize: number;
   batchSize: number;
   ubatchSize: number;
+  cacheTypeK: string;
+  cacheTypeV: string;
   startupTimeoutMs: number;
   mtpEnabled: boolean;
   mtpDraftTokens: number;
-  mtpMinDraftTokens: number;
-  mtpMinProbability: number;
 }
 
 export declare function loadVlmRuntimeConfig(env?: NodeJS.ProcessEnv | Record<string, string | undefined>): VlmRuntimeConfig;

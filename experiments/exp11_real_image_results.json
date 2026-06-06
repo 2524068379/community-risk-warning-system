@@ -1,0 +1,227 @@
+{
+  "experiment": "IGCA R011: Real Image Evaluation",
+  "n_total": 18,
+  "by_category": {
+    "fire": {
+      "total": 5,
+      "ig_miss": 3,
+      "yolo_labels": [
+        "teddy bear",
+        "teddy bear"
+      ],
+      "ovod_scores": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    "smoke": {
+      "total": 5,
+      "ig_miss": 0,
+      "yolo_labels": [
+        "toilet",
+        "toilet",
+        "toilet",
+        "toilet",
+        "toilet",
+        "toilet",
+        "toilet",
+        "toilet",
+        "toilet",
+        "toilet",
+        "toilet",
+        "toilet",
+        "toilet",
+        "toilet",
+        "toilet",
+        "toilet",
+        "toilet",
+        "toilet"
+      ],
+      "ovod_scores": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    "blockage": {
+      "total": 5,
+      "ig_miss": 5,
+      "yolo_labels": [],
+      "ovod_scores": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    "person": {
+      "total": 3,
+      "ig_miss": 3,
+      "yolo_labels": [],
+      "ovod_scores": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    }
+  },
+  "yolo_results": {
+    "fire_001.jpg": {
+      "gate_fired": false,
+      "detections": []
+    },
+    "fire_002.jpg": {
+      "gate_fired": false,
+      "detections": []
+    },
+    "fire_003.jpg": {
+      "gate_fired": true,
+      "detections": [
+        "teddy bear:0.30"
+      ]
+    },
+    "fire_004.jpg": {
+      "gate_fired": false,
+      "detections": []
+    },
+    "fire_005.jpg": {
+      "gate_fired": true,
+      "detections": [
+        "teddy bear:0.33"
+      ]
+    },
+    "smoke_001.jpg": {
+      "gate_fired": true,
+      "detections": [
+        "toilet:0.74",
+        "toilet:0.71",
+        "toilet:0.37"
+      ]
+    },
+    "smoke_002.jpg": {
+      "gate_fired": true,
+      "detections": [
+        "toilet:0.46",
+        "toilet:0.31",
+        "toilet:0.26"
+      ]
+    },
+    "smoke_003.jpg": {
+      "gate_fired": true,
+      "detections": [
+        "toilet:0.40",
+        "toilet:0.32",
+        "toilet:0.32"
+      ]
+    },
+    "smoke_004.jpg": {
+      "gate_fired": true,
+      "detections": [
+        "toilet:0.72",
+        "toilet:0.48",
+        "toilet:0.48"
+      ]
+    },
+    "smoke_005.jpg": {
+      "gate_fired": true,
+      "detections": [
+        "toilet:0.51",
+        "toilet:0.44",
+        "toilet:0.39",
+        "toilet:0.35",
+        "toilet:0.25",
+        "toilet:0.25"
+      ]
+    },
+    "blockage_001.jpg": {
+      "gate_fired": false,
+      "detections": []
+    },
+    "blockage_002.jpg": {
+      "gate_fired": false,
+      "detections": []
+    },
+    "blockage_003.jpg": {
+      "gate_fired": false,
+      "detections": []
+    },
+    "blockage_004.jpg": {
+      "gate_fired": false,
+      "detections": []
+    },
+    "blockage_005.jpg": {
+      "gate_fired": false,
+      "detections": []
+    },
+    "person_001.jpg": {
+      "gate_fired": false,
+      "detections": []
+    },
+    "person_002.jpg": {
+      "gate_fired": false,
+      "detections": []
+    },
+    "person_003.jpg": {
+      "gate_fired": false,
+      "detections": []
+    }
+  },
+  "ovod_results": {
+    "fire_001.jpg": {
+      "category": "fire",
+      "max_score": 0.0,
+      "recovered": false
+    },
+    "fire_002.jpg": {
+      "category": "fire",
+      "max_score": 0.0,
+      "recovered": false
+    },
+    "fire_003.jpg": {
+      "category": "fire",
+      "max_score": 0.0,
+      "recovered": false
+    },
+    "fire_004.jpg": {
+      "category": "fire",
+      "max_score": 0.0,
+      "recovered": false
+    },
+    "fire_005.jpg": {
+      "category": "fire",
+      "max_score": 0.0,
+      "recovered": false
+    },
+    "smoke_001.jpg": {
+      "category": "smoke",
+      "max_score": 0.0,
+      "recovered": false
+    },
+    "smoke_002.jpg": {
+      "category": "smoke",
+      "max_score": 0.0,
+      "recovered": false
+    },
+    "smoke_003.jpg": {
+      "category": "smoke",
+      "max_score": 0.0,
+      "recovered": false
+    },
+    "smoke_004.jpg": {
+      "category": "smoke",
+      "max_score": 0.0,
+      "recovered": false
+    },
+    "smoke_005.jpg": {
+      "category": "smoke",
+      "max_score": 0.0,
+      "recovered": false
+    }
+  }
+}

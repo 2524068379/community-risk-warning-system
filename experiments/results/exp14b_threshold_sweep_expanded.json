@@ -1,0 +1,128 @@
+{
+  "experiment": "IGCA Threshold Sensitivity Sweep (Expanded Dataset)",
+  "description": "YOLOv8n COCO gate at 7 thresholds on 290 expanded textured frames",
+  "thresholds": [
+    0.1,
+    0.2,
+    0.3,
+    0.4,
+    0.5,
+    0.6,
+    0.7
+  ],
+  "n_frames": 290,
+  "results_by_threshold": {
+    "0.1": {
+      "visually_unsupported": {
+        "n_risk": 225,
+        "n_ig_miss": 114,
+        "ig_miss_rate": 0.5066666666666667,
+        "ci_lower": 0.4417777824256676,
+        "ci_upper": 0.571331722139936
+      },
+      "proxy_supported": {
+        "n_risk": 50,
+        "n_ig_miss": 35,
+        "ig_miss_rate": 0.7,
+        "ci_lower": 0.562493877226366,
+        "ci_upper": 0.8089661091039063
+      }
+    },
+    "0.2": {
+      "visually_unsupported": {
+        "n_risk": 225,
+        "n_ig_miss": 160,
+        "ig_miss_rate": 0.7111111111111111,
+        "ci_lower": 0.6487353561049519,
+        "ci_upper": 0.7663989551391576
+      },
+      "proxy_supported": {
+        "n_risk": 50,
+        "n_ig_miss": 45,
+        "ig_miss_rate": 0.9,
+        "ci_lower": 0.7863950966521162,
+        "ci_upper": 0.956524876008429
+      }
+    },
+    "0.3": {
+      "visually_unsupported": {
+        "n_risk": 225,
+        "n_ig_miss": 186,
+        "ig_miss_rate": 0.8266666666666667,
+        "ci_lower": 0.7718322258695778,
+        "ci_upper": 0.8705334978449915
+      },
+      "proxy_supported": {
+        "n_risk": 50,
+        "n_ig_miss": 47,
+        "ig_miss_rate": 0.94,
+        "ci_lower": 0.8378265662912299,
+        "ci_upper": 0.9793854036353695
+      }
+    },
+    "0.4": {
+      "visually_unsupported": {
+        "n_risk": 225,
+        "n_ig_miss": 205,
+        "ig_miss_rate": 0.9111111111111111,
+        "ci_lower": 0.8666973040603025,
+        "ci_upper": 0.9417221441519106
+      },
+      "proxy_supported": {
+        "n_risk": 50,
+        "n_ig_miss": 49,
+        "ig_miss_rate": 0.98,
+        "ci_lower": 0.8950431352816304,
+        "ci_upper": 0.9964608319110235
+      }
+    },
+    "0.5": {
+      "visually_unsupported": {
+        "n_risk": 225,
+        "n_ig_miss": 216,
+        "ig_miss_rate": 0.96,
+        "ci_lower": 0.9257400559907317,
+        "ci_upper": 0.9788157590359067
+      },
+      "proxy_supported": {
+        "n_risk": 50,
+        "n_ig_miss": 49,
+        "ig_miss_rate": 0.98,
+        "ci_lower": 0.8950431352816304,
+        "ci_upper": 0.9964608319110235
+      }
+    },
+    "0.6": {
+      "visually_unsupported": {
+        "n_risk": 225,
+        "n_ig_miss": 223,
+        "ig_miss_rate": 0.9911111111111112,
+        "ci_lower": 0.9681745001000698,
+        "ci_upper": 0.9975590028993849
+      },
+      "proxy_supported": {
+        "n_risk": 50,
+        "n_ig_miss": 50,
+        "ig_miss_rate": 1.0,
+        "ci_lower": 0.9286499658256813,
+        "ci_upper": 1.0
+      }
+    },
+    "0.7": {
+      "visually_unsupported": {
+        "n_risk": 225,
+        "n_ig_miss": 223,
+        "ig_miss_rate": 0.9911111111111112,
+        "ci_lower": 0.9681745001000698,
+        "ci_upper": 0.9975590028993849
+      },
+      "proxy_supported": {
+        "n_risk": 50,
+        "n_ig_miss": 50,
+        "ig_miss_rate": 1.0,
+        "ci_lower": 0.9286499658256813,
+        "ci_upper": 1.0
+      }
+    }
+  }
+}

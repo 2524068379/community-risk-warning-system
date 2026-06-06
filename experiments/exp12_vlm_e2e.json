@@ -1,0 +1,41 @@
+{
+  "experiment": "IGCA R012: VLM End-to-End Test",
+  "results": [
+    {
+      "filename": "fire_001.jpg",
+      "category": "fire",
+      "vlm_response": "C",
+      "vlm_has_risk": false
+    },
+    {
+      "filename": "fire_002.jpg",
+      "category": "fire",
+      "vlm_response": "C\n\nThe image appears to be an abstract composition featuring out-of-focus orange lights or particles (bokeh effect) against a gradient background. There are no visible flames, smoke, or burning objects that would indicate an active fire.",
+      "vlm_has_risk": true
+    },
+    {
+      "filename": "fire_003.jpg",
+      "category": "fire",
+      "vlm_response": "C\n\nThe image appears to be an abstract graphic or a bokeh effect featuring out-of-focus orange lights against a dark background. There is no visible fire, burning material, or active ignition source present to indicate a fire risk.",
+      "vlm_has_risk": true
+    },
+    {
+      "filename": "fire_004.jpg",
+      "category": "fire",
+      "vlm_response": "C",
+      "vlm_has_risk": false
+    },
+    {
+      "filename": "fire_005.jpg",
+      "category": "fire",
+      "vlm_response": "A\n\nThe image displays multiple glowing orange circles against a dark, gradient background. This visual pattern is characteristic of flames, embers, or intense heat sources, which indicates a significant fire hazard.",
+      "vlm_has_risk": true
+    },
+    {
+      "filename": "smoke_001.jpg",
+      "category": "smoke",
+      "vlm_response": "C",
+      "vlm_has_risk": false
+    }
+  ]
+}

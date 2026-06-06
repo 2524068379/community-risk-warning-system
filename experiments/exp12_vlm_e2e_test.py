@@ -19,15 +19,17 @@ import base64
 from pathlib import Path
 from PIL import Image
 
-VLM_DIR = 'C:/Users/Xuyuxuan/Downloads/github/community-risk-warning-system/resources/vlm'
-LLAMA_SERVER = f'{VLM_DIR}/llama-server.exe'
-MODEL_GGUF = f'{VLM_DIR}/Qwen3.5-4B-Q4_K_M.gguf'
-MMPROJ = f'{VLM_DIR}/mmproj-BF16.gguf'
+ROOT = Path(__file__).resolve().parent.parent
+VLM_DIR = Path(os.environ.get('VLM_DIR', ROOT / 'resources' / 'vlm'))
+LLAMA_SERVER = VLM_DIR / 'llama-server.exe'
+MODEL_GGUF = VLM_DIR / 'Qwen3.5-4B-Q4_K_M.gguf'
+MMPROJ = VLM_DIR / 'mmproj-BF16.gguf'
 PORT = 11434
 URL = f'http://127.0.0.1:{PORT}'
 
-OUTPUT_FILE = 'C:/Users/Xuyuxuan/Downloads/github/community-risk-warning-system/experiments/exp12_vlm_e2e_all.json'
-os.makedirs(os.path.dirname(OUTPUT_FILE), exist_ok=True)
+OUTPUT_FILE = Path(os.environ.get('OUTPUT_FILE', ROOT / 'experiments' / 'exp12_vlm_e2e_all.json'))
+REAL_FRAMES_DIR = Path(os.environ.get('REAL_FRAMES_DIR', ROOT / 'datasets' / 'real_frames'))
+OUTPUT_FILE.parent.mkdir(parents=True, exist_ok=True)
 
 def check_server():
     """Check if llama-server is running."""
@@ -45,14 +47,14 @@ def start_server():
 
     print("Starting llama-server...")
     cmd = [
-        LLAMA_SERVER,
-        '-m', MODEL_GGUF,
-        '--mmproj', MMPROJ,
+        str(LLAMA_SERVER),
+        '-m', str(MODEL_GGUF),
+        '--mmproj', str(MMPROJ),
         '-c', '4096',
         '--host', '127.0.0.1',
         '--port', str(PORT),
     ]
-    print(f"Command: {' '.join(cmd)}")
+    print(f"Command: {' '.join(map(str, cmd))}")
 
     try:
         proc = subprocess.Popen(cmd, cwd=VLM_DIR, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -142,11 +144,11 @@ print("\n[Test 2] Testing with real frame images")
 # Find real frames
 real_frame_paths = []
 for cat in ['fire', 'smoke', 'blockage', 'person']:
-    cat_dir = f'C:/Users/Xuyuxuan/Downloads/github/community-risk-warning-system/datasets/real_frames/{cat}'
+    cat_dir = REAL_FRAMES_DIR / cat
     if os.path.isdir(cat_dir):
         for f in os.listdir(cat_dir):
             if f.endswith(('.jpg', '.png')):
-                real_frame_paths.append((os.path.join(cat_dir, f), cat))
+                real_frame_paths.append((cat_dir / f, cat))
 
 print(f"Found {len(real_frame_paths)} real frames")
 

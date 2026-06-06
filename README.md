@@ -173,10 +173,12 @@ VLM_CONTEXT_SIZE=4096
 VLM_BATCH_SIZE=512
 VLM_UBATCH_SIZE=256
 VLM_STARTUP_TIMEOUT_MS=60000
-VLM_MTP_ENABLED=true
+# KV cache 量化（f16 默认 / q8_0 省显存、8GB 推荐 / q4_0 最省）
+VLM_CACHE_TYPE_K=f16
+VLM_CACHE_TYPE_V=f16
+# MTP 默认关闭：与视觉编码器互斥、官方预编译包不支持其参数、仅加速文本、低显存不建议
+VLM_MTP_ENABLED=false
 VLM_MTP_DRAFT_TOKENS=4
-VLM_MTP_MIN_DRAFT_TOKENS=1
-VLM_MTP_MIN_PROBABILITY=0.75
 ```
 
 `VITE_*` 变量会进入浏览器代码，不要放入真实密钥。Qwen API Key 只应写入 `.env.server` 或 CI Secret。
@@ -394,6 +396,8 @@ Dependabot 配置位于 `.github/dependabot.yml`，npm 和 GitHub Actions 依赖
 | 浏览器模式调用失败 | 独立代理不会自动启动 VLM；请使用 `npm run dev` 或自行启动兼容 `VLM_HOST:VLM_PORT` 的服务 |
 | GPU 不可用 | 设置 `VLM_FORCE_CPU=true`，或检查 CUDA 12.4 运行时和显卡驱动 |
 | 推理超时 | 增大 `VLM_STARTUP_TIMEOUT_MS`，降低 `VLM_CONTEXT_SIZE` 或 `VLM_GPU_LAYERS` |
+| 显存不足（8GB 如 RTX 4060） | 保持 `VLM_MTP_ENABLED=false`（避免重复加载模型），将 `VLM_CACHE_TYPE_K/V` 设为 `q8_0`，必要时调低 `VLM_CONTEXT_SIZE`；仍不足可减小 `VLM_GPU_LAYERS` 做部分 CPU 卸载 |
+| 启动即退出 / 反复重启 | 多为传入了当前 `llama-server` 不支持的参数；确认 `VLM_MTP_ENABLED=false`（MTP 仅在 llama.cpp 的 MTP 专用构建上可用，官方预编译包不支持） |
 
 ### Qwen 代理异常
 

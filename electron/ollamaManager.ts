@@ -42,24 +42,30 @@ export function buildLlamaServerArgs(options: BuildLlamaServerArgsOptions): stri
     '-b', String(vlmConfig.batchSize),
     '-ub', String(vlmConfig.ubatchSize),
     '--flash-attn', 'on',
+    '--cache-type-k', vlmConfig.cacheTypeK,
+    '--cache-type-v', vlmConfig.cacheTypeV,
     '--no-warmup',
     '--cont-batching',
     '--jinja'
   ]
 
-  if (mmprojPath) {
-    args.push('--mmproj', mmprojPath)
+  // MTP（draft-mtp 推测解码）与 mmproj 视觉编码器在 llama.cpp 的 MTP 分支中互斥：
+  // 启用 MTP 时只能加载主模型，mmproj 不被支持。本项目以视觉研判为核心，因此当两者
+  // 同时出现时优先保留视觉（加载 mmproj、忽略 MTP）并告警。MTP 仅加速文本生成、对视觉
+  // 编码无效，其 --spec-* 参数也只存在于 llama.cpp 的 MTP 专用构建（官方预编译包不含）。
+  if (vlmConfig.mtpEnabled && mmprojPath) {
+    console.warn(
+      '[vlm] VLM_MTP_ENABLED=true 与 mmproj 视觉编码器互斥；已保留视觉能力并忽略 MTP。' +
+        ' 如需 MTP 文本加速，请改用无 mmproj 的纯文本模型，并使用支持 MTP 的 llama.cpp 构建。'
+    )
   }
 
-  if (vlmConfig.mtpEnabled) {
-    args.push(
-      '--spec-type', 'draft-mtp',
-      '--spec-draft-model', modelPath,
-      '--spec-draft-ngl', String(effectiveGpuLayers),
-      '--spec-draft-n-max', String(vlmConfig.mtpDraftTokens),
-      '--spec-draft-n-min', String(vlmConfig.mtpMinDraftTokens),
-      '--spec-draft-p-min', String(vlmConfig.mtpMinProbability)
-    )
+  if (mmprojPath) {
+    args.push('--mmproj', mmprojPath)
+  } else if (vlmConfig.mtpEnabled) {
+    // 真实可用的 MTP 启用方式仅需 --spec-type draft-mtp 与 --spec-draft-n-max，且要求模型
+    // 自带 MTP head；不再加载第二份模型当 draft（原 --spec-draft-model 会翻倍显存）。
+    args.push('--spec-type', 'draft-mtp', '--spec-draft-n-max', String(vlmConfig.mtpDraftTokens))
   }
 
   return args

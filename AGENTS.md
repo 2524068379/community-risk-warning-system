@@ -39,4 +39,9 @@ Copy `.env.example` to `.env` and `.env.server.example` to `.env.server`; never 
 ## ARIS Skill Scope
 For ARIS workflows in this project, use only the project-local ARIS skills under `.agents/skills/aris`.
 Do not use global skills or non-ARIS project skills unless the user explicitly asks to mix them.
+
+ARIS skills installed in this project are listed in `.aris/installed-skills-codex.txt`.
+For ARIS workflows, prefer the project-local skills under `.agents/skills/`.
+Do not edit or delete junctioned skills in place; update upstream or rerun the
+`install_aris.ps1` script with `-Reconcile` from the ARIS repo tools directory.
 <!-- ARIS:END -->
