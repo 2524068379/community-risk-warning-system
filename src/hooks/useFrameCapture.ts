@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { computeFrameDiff, toGrayscale } from '@/utils/frameDiff'
 
 interface FrameCaptureOptions {
-  intervalMs?: number
   quality?: number
   maxWidth?: number
   maxHeight?: number
@@ -33,7 +32,6 @@ export function useFrameCapture(
   options: FrameCaptureOptions = {}
 ): FrameCaptureResult {
   const {
-    intervalMs = 2000,
     quality = 0.7,
     maxWidth = 640,
     maxHeight = 480,
@@ -160,7 +158,7 @@ export function useFrameCapture(
         timerRef.current = null
       }
     }
-  }, [enabled, intervalMs, quality, maxWidth, maxHeight, frameDiffThreshold, activeIntervalMs, idleIntervalMs, idleAfterFrames, videoRef])
+  }, [enabled, quality, maxWidth, maxHeight, frameDiffThreshold, activeIntervalMs, idleIntervalMs, idleAfterFrames, videoRef])
 
   return { frameDataUrl, isProcessing, captureCount, error, hasChanged, markConsumed }
 }

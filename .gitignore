@@ -6,6 +6,12 @@ vite.config.d.ts
 __pycache__/
 .vscode/*
 !.vscode/extensions.json
+.review_render/
+datasets/
+papers/
+*.fdb_latexmk
+*.log
+*.pt
 .agents/
 .aris/
 .codex/

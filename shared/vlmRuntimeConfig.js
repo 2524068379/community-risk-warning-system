@@ -1,32 +1,7 @@
 import { DEFAULT_VLM_MODEL_ALIAS } from './vlmModelConfig.js';
+import { parseBoolean, parseFloatInRange, parseInteger } from './envParsers.js';
 
 const LOCALHOST = '127.0.0.1';
-
-function parseInteger(value, fallback, min) {
-  const parsed = Number(value);
-  if (!Number.isInteger(parsed) || parsed < min) {
-    return fallback;
-  }
-
-  return parsed;
-}
-
-function parseBoolean(value, fallback = false) {
-  if (value === undefined || value === null || value === '') {
-    return fallback;
-  }
-
-  return String(value).toLowerCase() === 'true';
-}
-
-function parseFloatInRange(value, fallback, min, max) {
-  const parsed = Number(value);
-  if (!Number.isFinite(parsed) || parsed < min || parsed > max) {
-    return fallback;
-  }
-
-  return parsed;
-}
 
 function parseHost(value) {
   const host = String(value || '').trim();

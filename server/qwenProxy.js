@@ -10,6 +10,12 @@ import {
 } from '../shared/apiRoutes.js';
 import { DEFAULT_VLM_MODEL_ALIAS } from '../shared/vlmModelConfig.js';
 import { loadVlmRuntimeConfig } from '../shared/vlmRuntimeConfig.js';
+import { parseBoolean, parseInteger } from '../shared/envParsers.js';
+
+function normalizeHost(host) {
+  const trimmed = String(host || '').trim();
+  return trimmed || '127.0.0.1';
+}
 
 function parseCorsOrigin(rawOrigin = 'http://localhost:5173') {
   const trimmed = rawOrigin.trim();
@@ -21,28 +27,6 @@ function parseCorsOrigin(rawOrigin = 'http://localhost:5173') {
     .split(',')
     .map((item) => item.trim())
     .filter(Boolean);
-}
-
-function parseBoolean(value, fallback = false) {
-  if (value === undefined || value === null || value === '') {
-    return fallback;
-  }
-
-  return String(value).toLowerCase() === 'true';
-}
-
-function parseInteger(value, fallback, min = 1) {
-  const parsed = Number(value);
-  if (!Number.isInteger(parsed) || parsed < min) {
-    return fallback;
-  }
-
-  return parsed;
-}
-
-function normalizeHost(host) {
-  const trimmed = String(host || '').trim();
-  return trimmed || '127.0.0.1';
 }
 
 export function isAllowedCorsOrigin(origin, corsOrigin, allowLocalFileOrigins = false) {

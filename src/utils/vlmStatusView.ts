@@ -7,18 +7,10 @@ interface VlmStatusView {
   text: string;
 }
 
-const overviewStatusView: Record<VlmStatus, VlmStatusView> = {
+const statusView: Record<VlmStatus, VlmStatusView> = {
   idle: { color: 'default', text: '等待触发' },
   loading: { color: 'processing', text: '连接中...' },
   analyzing: { color: 'processing', text: '分析中...' },
-  ready: { color: 'success', text: 'VLM 在线' },
-  error: { color: 'error', text: 'VLM 未连接' }
-};
-
-const monitorStatusView: Record<VlmStatus, VlmStatusView> = {
-  idle: { color: 'default', text: '等待触发' },
-  loading: { color: 'processing', text: '连接中...' },
-  analyzing: { color: 'processing', text: '分析中' },
   ready: { color: 'success', text: 'VLM 在线' },
   error: { color: 'error', text: 'VLM 未连接' }
 };
@@ -27,6 +19,9 @@ export function getVlmStatusView(
   status: VlmStatus,
   context: VlmStatusViewContext = 'overview'
 ): VlmStatusView {
-  const statusView = context === 'monitor' ? monitorStatusView : overviewStatusView;
-  return statusView[status] ?? statusView.idle;
+  const view = statusView[status] ?? statusView.idle;
+  if (context === 'monitor' && status === 'analyzing') {
+    return { ...view, text: '分析中' };
+  }
+  return view;
 }
