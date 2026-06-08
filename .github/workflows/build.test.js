@@ -113,11 +113,17 @@ describe('build workflow', () => {
 });
 
 describe('VLM models workflow', () => {
-  it('is manually triggered and produces only the separate vlm-models artifact', () => {
+  it('is manually triggered, also runs after successful Build & Release, and produces only the separate vlm-models artifact', () => {
     const workflow = readWorkflow('vlm-models.yml');
 
     expect(workflow).toContain('name: VLM Models');
     expect(workflow).toContain('workflow_dispatch:');
+    expect(workflow).toContain('workflow_run:');
+    expect(workflow).toContain('workflows: ["Build & Release"]');
+    expect(workflow).toContain('types: [completed]');
+    expect(workflow).toContain("github.event.workflow_run.conclusion == 'success'");
+    expect(workflow).toContain("github.event.workflow_run.event != 'pull_request'");
+    expect(workflow).toContain("ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.ref }}");
     expect(workflow).not.toContain('push:');
     expect(workflow).not.toContain('pull_request:');
     expect(workflow).toContain('- name: Upload VLM model package');

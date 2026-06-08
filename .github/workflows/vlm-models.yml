@@ -2,13 +2,21 @@ name: VLM Models
 
 on:
   workflow_dispatch:
+  workflow_run:
+    workflows: ["Build & Release"]
+    types: [completed]
 
 jobs:
   build-vlm-models:
+    if: >-
+      ${{ github.event_name == 'workflow_dispatch' ||
+          (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event != 'pull_request') }}
     runs-on: windows-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.ref }}
 
       - name: Cache VLM model files
         id: cache-vlm
