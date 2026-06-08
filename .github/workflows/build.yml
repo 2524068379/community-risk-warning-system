@@ -196,7 +196,6 @@ jobs:
           path: dist-electron/*.zip
 
   vlm-models:
-    needs: build
     if: github.event_name != 'pull_request'
     uses: ./.github/workflows/vlm-models.yml
 
