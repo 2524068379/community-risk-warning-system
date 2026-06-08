@@ -22,8 +22,8 @@ function read(path) {
 }
 
 describe('VLM model packaging configuration', () => {
-  it('downloads the configured Qwen GGUF and bundled mmproj in the GitHub build workflow', () => {
-    const workflow = read('.github/workflows/build.yml');
+  it('downloads the configured Qwen GGUF and bundled mmproj in the manual VLM models workflow', () => {
+    const workflow = read('.github/workflows/vlm-models.yml');
 
     expect(workflow).toContain(VLM_MODEL_REPO);
     expect(workflow).toContain(VLM_MODEL_FILE);
@@ -36,7 +36,7 @@ describe('VLM model packaging configuration', () => {
     expect(workflow.indexOf('Verify VLM model file hashes')).toBeGreaterThan(
       workflow.indexOf('Prepare VLM model files')
     );
-    expect(workflow.indexOf('Verify VLM model file hashes')).toBeLessThan(workflow.indexOf('- name: Build'));
+    expect(workflow.indexOf('Verify VLM model file hashes')).toBeLessThan(workflow.indexOf('Create VLM model package'));
     expect(workflow).not.toContain(oldSompoaRepo);
     expect(workflow).not.toContain(oldSompoaModelFile);
     expect(workflow).not.toContain(oldHauhaucsRepo);

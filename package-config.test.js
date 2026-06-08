@@ -44,6 +44,7 @@ describe('package configuration', () => {
 
   it('keeps the local VLM resource download script available', () => {
     expect(packageJson.scripts['download-model']).toBe('node scripts/download-model.js');
+    expect(packageJson.scripts['package:ci']).toBe('electron-builder --win');
     expect(packageJson.scripts.prepackage).toBe('npm run download-model');
     expect(existsSync('scripts/download-model.js')).toBe(true);
 

@@ -43,15 +43,21 @@ jobs:
             Set-Content -Path '.env' -Value $envContent -NoNewline
           }
 
-      - name: Cache VLM model files
+      - name: Build
+        run: npm run build
+
+      - name: Skip packaging for Dependabot PRs
+        if: env.IS_DEPENDABOT_PR == 'true'
+        run: echo "Skipping Windows packaging for Dependabot pull requests."
+
+      - name: Cache CPU VLM runtime files
         if: env.IS_DEPENDABOT_PR != 'true'
-        id: cache-vlm
         uses: actions/cache@v5
         with:
           path: resources/vlm
-          key: vlm-qwen35-mtp-q4km-unsloth-mmproj-b9484-sha256-v1
+          key: vlm-runtime-b9484-cuda-12.4-v1
 
-      - name: Prepare VLM model files
+      - name: Prepare CPU VLM runtime files
         if: env.IS_DEPENDABOT_PR != 'true'
         shell: pwsh
         run: |
@@ -93,11 +99,7 @@ jobs:
             "ggml-base.dll",
             "ggml-rpc.dll",
             "ggml-cpu-x64.dll",
-            "libomp140.x86_64.dll",
-            "cudart64_12.dll",
-            "cublas64_12.dll",
-            "cublasLt64_12.dll",
-            "ggml-cuda.dll"
+            "libomp140.x86_64.dll"
           )
           $missingRuntimeFiles = @($runtimeFiles | Where-Object { -not (Test-Path "resources/vlm/$_") })
           $hasCurrentRuntime = (Test-Path $runtimeVersionPath) -and ((Get-Content $runtimeVersionPath -Raw).Trim() -eq $runtimeVersion)
@@ -106,68 +108,22 @@ jobs:
             if (-not $hasCurrentRuntime) {
               Write-Host "VLM runtime marker is missing or stale. Expected: $runtimeVersion"
             }
-            Write-Host "Downloading llama-server (CUDA build)..."
+            Write-Host "Downloading llama-server runtime..."
             $llamaUrl = "https://github.com/ggml-org/llama.cpp/releases/download/b9484/llama-b9484-bin-win-cuda-12.4-x64.zip"
-            $cudartUrl = "https://github.com/ggml-org/llama.cpp/releases/download/b9484/cudart-llama-bin-win-cuda-12.4-x64.zip"
             $llamaZip = "resources/vlm/llama-b9484-bin-win-cuda-12.4-x64.zip"
-            $cudartZip = "resources/vlm/cudart-llama-bin-win-cuda-12.4-x64.zip"
 
             Save-WithRetry $llamaUrl $llamaZip 300
-            Save-WithRetry $cudartUrl $cudartZip 300
 
             Write-Host "Extracting llama-server runtime..."
             Expand-Archive -Path $llamaZip -DestinationPath resources/vlm -Force
-            Expand-Archive -Path $cudartZip -DestinationPath resources/vlm -Force
             Set-Content -Path $runtimeVersionPath -Value $runtimeVersion -NoNewline
-            Remove-Item $llamaZip, $cudartZip -Force -ErrorAction SilentlyContinue
+            Remove-Item $llamaZip -Force -ErrorAction SilentlyContinue
           } else {
-            Write-Host "VLM runtime files already present in cache/source."
+            Write-Host "CPU VLM runtime files already present."
           }
 
-          $modelUrl = "https://huggingface.co/unsloth/Qwen3.5-4B-MTP-GGUF/resolve/main/Qwen3.5-4B-Q4_K_M.gguf"
-          $modelPath = "resources/vlm/Qwen3.5-4B-Q4_K_M.gguf"
-          if (-not (Test-Path $modelPath)) {
-            Write-Host "Downloading Qwen3.5-4B-Q4_K_M.gguf (~2.83 GB)..."
-            Save-WithRetry $modelUrl $modelPath 600
-          } else {
-            Write-Host "Qwen3.5-4B-Q4_K_M.gguf already present, skipping download."
-          }
-
-          $mmprojUrl = "https://huggingface.co/unsloth/Qwen3.5-4B-MTP-GGUF/resolve/main/mmproj-BF16.gguf"
-          $mmprojPath = "resources/vlm/mmproj-BF16.gguf"
-          if (-not (Test-Path $mmprojPath)) {
-            Write-Host "Downloading mmproj-BF16.gguf (~676 MB)..."
-            Save-WithRetry $mmprojUrl $mmprojPath 300
-          } else {
-            Write-Host "mmproj-BF16.gguf already present, skipping download."
-          }
-
-          Write-Host "Prepared VLM files:"
-          Get-ChildItem resources/vlm | Where-Object { $_.Extension -in '.exe', '.dll', '.gguf' } | Format-Table Name, Length
-
-      - name: Verify VLM model file hashes
-        if: env.IS_DEPENDABOT_PR != 'true'
-        shell: pwsh
-        run: |
-          $expectedModelSha256 = "3874209241c9a397e2f62cd3f70f80fd2dfbf0dfccb6838416bdb48a714e8630"
-          $expectedMmprojSha256 = "169ee40fb1e234ff38b2d814eb8633611a54b6f941f11b700d96dec02cb44ddf"
-
-          function Assert-FileSha256($Path, $Expected) {
-            $actual = (Get-FileHash -Algorithm SHA256 -Path $Path).Hash.ToLowerInvariant()
-            if ($actual -ne $Expected) {
-              throw "SHA256 mismatch for $Path. Expected $Expected, got $actual"
-            }
-          }
-
-          Assert-FileSha256 "resources/vlm/Qwen3.5-4B-Q4_K_M.gguf" $expectedModelSha256
-          Assert-FileSha256 "resources/vlm/mmproj-BF16.gguf" $expectedMmprojSha256
-
-      - name: Build
-        run: npm run build
-
-      - name: Skip packaging for Dependabot PRs
-        if: env.IS_DEPENDABOT_PR == 'true'
-        run: echo "Skipping VLM download and Windows packaging for Dependabot pull requests."
+          Write-Host "Prepared CPU VLM runtime files:"
+          Get-ChildItem resources/vlm | Where-Object { $_.Extension -in '.exe', '.dll' } | Format-Table Name, Length
 
       - name: Package
         if: env.IS_DEPENDABOT_PR != 'true'
@@ -177,7 +133,7 @@ jobs:
           $maxAttempts = 3
           for ($i = 1; $i -le $maxAttempts; $i++) {
             Write-Host "Package attempt $i of $maxAttempts..."
-            npm run package
+            npm run package:ci
             if ($LASTEXITCODE -eq 0) {
               Write-Host "Package succeeded on attempt $i"
               break
@@ -232,100 +188,12 @@ jobs:
 
           Write-Host "Portable package includes CPU-only VLM runtime, excludes CUDA-only DLLs and model files: $($portableZip.Name)"
 
-      - name: Create VLM model package
-        if: env.IS_DEPENDABOT_PR != 'true'
-        shell: pwsh
-        run: |
-          $modelReadme = @"
-          VLM 模型 + CUDA 运行时 — 解压说明
-          ====================================
-
-          本压缩包包含视觉语言模型文件与 GPU 加速所需的 CUDA 运行时：
-            - Qwen3.5-4B-Q4_K_M.gguf      (主模型 ~2.83 GB)
-            - mmproj-BF16.gguf            (视觉编码器 ~676 MB)
-            - cudart64_12.dll            (CUDA Runtime)
-            - cublas64_12.dll            (cuBLAS)
-            - cublasLt64_12.dll          (cuBLASLt)
-            - ggml-cuda.dll              (llama.cpp CUDA backend)
-
-          llama-server.exe、llama-server-impl.dll 与 CPU 通用 runtime DLL 已随 Windows portable 应用包发布。
-          仅当需要 GPU 加速时才需要解压本包；CPU 推理只需扩展 .gguf 模型文件。
-
-          解压位置
-          --------
-          将压缩包内所有文件解压到应用程序的 resources\vlm\ 目录下。
-
-          完整路径应类似：
-            <应用安装目录>\resources\vlm\Qwen3.5-4B-Q4_K_M.gguf
-            <应用安装目录>\resources\vlm\mmproj-BF16.gguf
-            <应用安装目录>\resources\vlm\ggml-cuda.dll
-
-          Windows portable 应用包会预置 resources\vlm 目录和 CPU 运行时文件。
-
-          验证
-          ----
-          解压后启动应用，右上角 "VLM 实时数据" 面板状态应从 "等待连接" 变为 "VLM 在线"。
-          "@
-
-          New-Item -ItemType Directory -Force -Path dist-models
-
-          $modelFiles = @("Qwen3.5-4B-Q4_K_M.gguf", "mmproj-BF16.gguf")
-          $cudaFiles = @("cudart64_12.dll", "cublas64_12.dll", "cublasLt64_12.dll", "ggml-cuda.dll")
-          $allRequiredFiles = $modelFiles + $cudaFiles
-
-          $missingFiles = @()
-          foreach ($f in $allRequiredFiles) {
-            $path = "resources/vlm\$f"
-            if (-not (Test-Path $path)) {
-              Write-Host "Missing: $path"
-              $missingFiles += $f
-            } else {
-              Write-Host "Found: $path ($(Get-Item $path).Length) bytes"
-            }
-          }
-
-          if ($missingFiles.Count -gt 0) {
-            Write-Host "ERROR: Missing required VLM files: $($missingFiles -join ', ')"
-            exit 1
-          }
-
-          Write-Host "Copying required files to dist-models..."
-          foreach ($f in $allRequiredFiles) {
-            Copy-Item "resources/vlm\$f" -Destination "dist-models/" -Force
-          }
-          Set-Content -Path "dist-models/README-解压说明.txt" -Value $modelReadme -Encoding UTF8
-
-          Write-Host "Creating vlm-models.zip..."
-          $filesToZip = ($allRequiredFiles | ForEach-Object { "dist-models/$_" }) + @("dist-models/README-解压说明.txt")
-          7z a -tzip "dist-models/vlm-models.zip" $filesToZip
-
-          Write-Host "Cleaning up intermediate files..."
-          foreach ($f in ($allRequiredFiles + @("README-解压说明.txt"))) {
-            Remove-Item "dist-models/$f" -Force -ErrorAction SilentlyContinue
-          }
-
-          $zipPath = "dist-models/vlm-models.zip"
-          if (Test-Path $zipPath) {
-            $zipSize = (Get-Item $zipPath).Length
-            Write-Host "Model package created: $zipPath ($([Math]::Round($zipSize/1MB, 2)) MB)"
-          } else {
-            Write-Host "ERROR: Failed to create model package"
-            exit 1
-          }
-
       - name: Upload portable zip
         if: env.IS_DEPENDABOT_PR != 'true'
         uses: actions/upload-artifact@v7
         with:
           name: windows-portable
           path: dist-electron/*.zip
-
-      - name: Upload VLM model package
-        if: env.IS_DEPENDABOT_PR != 'true'
-        uses: actions/upload-artifact@v7
-        with:
-          name: vlm-models
-          path: dist-models/vlm-models.zip
 
   release:
     needs: build
@@ -340,16 +208,9 @@ jobs:
           name: windows-portable
           path: ./artifacts/app
 
-      - name: Download model artifact
-        uses: actions/download-artifact@v8
-        with:
-          name: vlm-models
-          path: ./artifacts/models
-
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v3
         with:
           files: |
             ./artifacts/app/*.zip
-            ./artifacts/models/*.zip
           generate_release_notes: true

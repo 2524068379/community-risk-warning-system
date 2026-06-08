@@ -16,6 +16,7 @@
     "preview": "electron-vite preview",
     "download-model": "node scripts/download-model.js",
     "package": "electron-builder --win",
+    "package:ci": "electron-builder --win",
     "dev:web": "vite",
     "dev:server": "node server/index.js",
     "dev:all": "concurrently \"npm run dev:web\" \"npm run dev:server\"",
