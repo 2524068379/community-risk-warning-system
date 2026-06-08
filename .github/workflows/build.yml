@@ -195,8 +195,13 @@ jobs:
           name: windows-portable
           path: dist-electron/*.zip
 
-  release:
+  vlm-models:
     needs: build
+    if: github.event_name != 'pull_request'
+    uses: ./.github/workflows/vlm-models.yml
+
+  release:
+    needs: [build, vlm-models]
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     permissions:
@@ -208,9 +213,16 @@ jobs:
           name: windows-portable
           path: ./artifacts/app
 
+      - name: Download model artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: vlm-models
+          path: ./artifacts/models
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v3
         with:
           files: |
             ./artifacts/app/*.zip
+            ./artifacts/models/*.zip
           generate_release_notes: true

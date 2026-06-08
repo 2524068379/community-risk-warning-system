@@ -29,19 +29,22 @@ describe('build workflow', () => {
     expect(workflow).toContain('Skipping Windows packaging for Dependabot pull requests.');
   });
 
-  it('keeps Build & Release focused on app packaging without downloading model assets', () => {
+  it('keeps Build & Release app packaging job focused without downloading model assets', () => {
     const workflow = readWorkflow('build.yml');
+    const buildJobIndex = workflow.indexOf('  build:');
+    const vlmJobIndex = workflow.indexOf('  vlm-models:');
+    const buildJob = workflow.slice(buildJobIndex, vlmJobIndex);
 
-    expect(workflow).toContain('- name: Prepare CPU VLM runtime files');
-    expect(workflow).toContain('- name: Cache CPU VLM runtime files');
-    expect(workflow).toContain('npm run package:ci');
-    expect(workflow).not.toContain('- name: Prepare VLM model files');
-    expect(workflow).not.toContain('- name: Verify VLM model file hashes');
-    expect(workflow).not.toContain('- name: Create VLM model package');
-    expect(workflow).not.toContain('- name: Upload VLM model package');
-    expect(workflow).not.toContain('Save-WithRetry $modelUrl $modelPath 600');
-    expect(workflow).not.toContain('Save-WithRetry $mmprojUrl $mmprojPath 300');
-    expect(workflow).not.toContain('Download model artifact');
+    expect(buildJob).toContain('- name: Prepare CPU VLM runtime files');
+    expect(buildJob).toContain('- name: Cache CPU VLM runtime files');
+    expect(buildJob).toContain('npm run package:ci');
+    expect(buildJob).not.toContain('- name: Prepare VLM model files');
+    expect(buildJob).not.toContain('- name: Verify VLM model file hashes');
+    expect(buildJob).not.toContain('- name: Create VLM model package');
+    expect(buildJob).not.toContain('- name: Upload VLM model package');
+    expect(buildJob).not.toContain('Save-WithRetry $modelUrl $modelPath 600');
+    expect(buildJob).not.toContain('Save-WithRetry $mmprojUrl $mmprojPath 300');
+    expect(buildJob).not.toContain('Download model artifact');
   });
 
   it('only prepares CPU llama.cpp runtime files needed by the portable app', () => {
@@ -74,6 +77,24 @@ describe('build workflow', () => {
     expect(prepareBlock).toContain('$downloadedSize = (Get-Item $Path).Length');
     expect(prepareBlock).not.toContain('WriteAllBytes');
     expect(prepareBlock).not.toContain('$response.Content');
+  });
+
+  it('calls the VLM models workflow synchronously after app packaging succeeds', () => {
+    const workflow = readWorkflow('build.yml');
+
+    const buildJobIndex = workflow.indexOf('  build:');
+    const vlmJobIndex = workflow.indexOf('  vlm-models:');
+    const releaseJobIndex = workflow.indexOf('  release:');
+
+    expect(vlmJobIndex).toBeGreaterThan(buildJobIndex);
+    expect(vlmJobIndex).toBeLessThan(releaseJobIndex);
+    expect(workflow).toContain('needs: build');
+    expect(workflow).toContain("if: github.event_name != 'pull_request'");
+    expect(workflow).toContain('uses: ./.github/workflows/vlm-models.yml');
+    expect(workflow).toContain('needs: [build, vlm-models]');
+    expect(workflow).toContain('- name: Download model artifact');
+    expect(workflow).toContain('name: vlm-models');
+    expect(workflow).toContain('./artifacts/models/*.zip');
   });
 
   it('verifies the portable app keeps runtime files but excludes VLM model files before uploading artifacts', () => {
@@ -113,17 +134,13 @@ describe('build workflow', () => {
 });
 
 describe('VLM models workflow', () => {
-  it('is manually triggered, also runs after successful Build & Release, and produces only the separate vlm-models artifact', () => {
+  it('is manually triggered, reusable by Build & Release, and produces only the separate vlm-models artifact', () => {
     const workflow = readWorkflow('vlm-models.yml');
 
     expect(workflow).toContain('name: VLM Models');
     expect(workflow).toContain('workflow_dispatch:');
-    expect(workflow).toContain('workflow_run:');
-    expect(workflow).toContain('workflows: ["Build & Release"]');
-    expect(workflow).toContain('types: [completed]');
-    expect(workflow).toContain("github.event.workflow_run.conclusion == 'success'");
-    expect(workflow).toContain("github.event.workflow_run.event != 'pull_request'");
-    expect(workflow).toContain("ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.ref }}");
+    expect(workflow).toContain('workflow_call:');
+    expect(workflow).not.toContain('workflow_run:');
     expect(workflow).not.toContain('push:');
     expect(workflow).not.toContain('pull_request:');
     expect(workflow).toContain('- name: Upload VLM model package');
