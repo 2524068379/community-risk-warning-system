@@ -1,10 +1,23 @@
 import { describe, expect, it } from 'vitest'
-import { OLLAMA_MODEL, parseVlmResponse } from './ollamaClient'
+import { OLLAMA_MODEL, buildOllamaChatRequestBody, parseVlmResponse } from './ollamaClient'
 import { DEFAULT_VLM_MODEL_ALIAS } from '../../../shared/vlmModelConfig.js'
 
 describe('ollamaClient model configuration', () => {
   it('uses the configured Unsloth Qwen3.5 MTP GGUF model alias', () => {
     expect(OLLAMA_MODEL).toBe(DEFAULT_VLM_MODEL_ALIAS)
+  })
+})
+
+describe('ollamaClient request payload', () => {
+  it('requests JSON output with Qwen no-thinking mode enabled', () => {
+    const body = buildOllamaChatRequestBody('data:image/jpeg;base64,abc', 'cam-1', '入口')
+
+    expect(body).toMatchObject({
+      response_format: { type: 'json_object' },
+      chat_template_kwargs: { enable_thinking: false },
+      stream: false
+    })
+    expect(JSON.stringify(body)).toContain('/no_think')
   })
 })
 

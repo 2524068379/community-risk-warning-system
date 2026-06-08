@@ -70,6 +70,22 @@ describe('qwenProxy', () => {
       messages: [{ role: 'user', content: 'ok' }]
     }, 'local-vlm')).toEqual({
       model: 'local-vlm',
+      messages: [{ role: 'user', content: 'ok' }],
+      response_format: { type: 'json_object' },
+      chat_template_kwargs: { enable_thinking: false }
+    });
+  });
+
+  it('preserves explicit response format and still disables thinking for local VLM', () => {
+    expect(buildOllamaRequestBody({
+      model: 'stale-browser-model',
+      response_format: { type: 'text' },
+      chat_template_kwargs: { other: true, enable_thinking: true },
+      messages: [{ role: 'user', content: 'ok' }]
+    }, 'local-vlm')).toEqual({
+      model: 'local-vlm',
+      response_format: { type: 'text' },
+      chat_template_kwargs: { other: true, enable_thinking: false },
       messages: [{ role: 'user', content: 'ok' }]
     });
   });

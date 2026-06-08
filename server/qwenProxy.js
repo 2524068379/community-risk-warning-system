@@ -87,7 +87,12 @@ export function buildQwenRequestBody(body = {}, defaultModel) {
 export function buildOllamaRequestBody(body = {}, model) {
   return {
     ...body,
-    model
+    model,
+    response_format: body.response_format ?? { type: 'json_object' },
+    chat_template_kwargs: {
+      ...(body.chat_template_kwargs || {}),
+      enable_thinking: false
+    }
   };
 }
 

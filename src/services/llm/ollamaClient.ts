@@ -6,10 +6,11 @@ import { DEFAULT_VLM_MODEL_ALIAS } from '../../../shared/vlmModelConfig.js'
 const OLLAMA_PROXY_PATH = OLLAMA_CHAT_COMPLETIONS_ROUTE
 export const OLLAMA_MODEL = DEFAULT_VLM_MODEL_ALIAS
 
-const SYSTEM_PROMPT = `你是社区安全监控系统的结构化分析模块。你的输出会被程序直接 JSON.parse，因此必须严格遵守以下规则：
+const SYSTEM_PROMPT = `你是社区安全监控系统的结构化分析模块。必须使用 no_thinking 模式，禁止输出思考过程。你的输出会被程序直接 JSON.parse，因此必须严格遵守以下规则：
 
 1. 仅输出一段合法 JSON，不要输出任何解释、前言、markdown 代码块（\`\`\`）、思考过程（<think>）、注释或多余空白。
-2. JSON 顶层字段及类型（全部必填）：
+2. 不要在 JSON 前后添加任何自然语言；如果无法判断，也必须按字段给出低置信度 JSON。
+3. JSON 顶层字段及类型（全部必填）：
    - hasRisk: boolean
    - riskScore: integer，范围 0-100
    - level: 字符串，仅可为 "A"、"B" 或 "C"
@@ -595,18 +596,14 @@ export function parseVlmResponse(raw: unknown): { analysis: VlmAnalysis; boxes: 
   return { analysis: buildFallbackFromRaw(raw), boxes: [] }
 }
 
-export async function analyzeFrameWithOllama(
-  imageBase64: string,
-  cameraId: string,
-  scene: string,
-  signal?: AbortSignal
-): Promise<{ analysis: VlmAnalysis; boxes: DetectionBox[] }> {
-  const response = await http.post(OLLAMA_PROXY_PATH, {
+export function buildOllamaChatRequestBody(imageBase64: string, cameraId: string, scene: string): Record<string, unknown> {
+  return {
     model: OLLAMA_MODEL,
     temperature: 0.15,
     max_tokens: 800,
     stream: false,
     response_format: { type: 'json_object' },
+    chat_template_kwargs: { enable_thinking: false },
     messages: [
       {
         role: 'system',
@@ -615,12 +612,21 @@ export async function analyzeFrameWithOllama(
       {
         role: 'user',
         content: [
-          { type: 'text', text: buildUserPrompt(cameraId, scene) },
+          { type: 'text', text: `${buildUserPrompt(cameraId, scene)} /no_think` },
           { type: 'image_url', image_url: { url: imageBase64 } }
         ]
       }
     ]
-  }, { signal })
+  }
+}
+
+export async function analyzeFrameWithOllama(
+  imageBase64: string,
+  cameraId: string,
+  scene: string,
+  signal?: AbortSignal
+): Promise<{ analysis: VlmAnalysis; boxes: DetectionBox[] }> {
+  const response = await http.post(OLLAMA_PROXY_PATH, buildOllamaChatRequestBody(imageBase64, cameraId, scene), { signal })
 
   const content = response.data?.choices?.[0]?.message?.content ?? ''
   return parseVlmResponse(content)
