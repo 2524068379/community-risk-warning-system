@@ -40,6 +40,14 @@ export default defineConfig({
             return 'video-vendor';
           }
 
+          if (id.includes('@tensorflow')) {
+            return 'tf-vendor';
+          }
+
+          if (id.includes('recharts') || id.includes('d3-') || id.includes('victory-vendor')) {
+            return 'charts-vendor';
+          }
+
           return undefined;
         }
       }

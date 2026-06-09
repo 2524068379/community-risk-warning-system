@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Tag } from 'antd';
 import { useLocalCamera } from '@/hooks/useLocalCamera';
+import { useVideoContentRect } from '@/hooks/useVideoContentRect';
 import { useAppStore } from '@/store/useAppStore';
 import { useVlmAnalysis } from '@/hooks/useVlmAnalysis';
 import { riskColorMap, riskLevelTextMap } from '@/utils/risk';
@@ -13,7 +14,9 @@ import {
 
 export function MonitorPage() {
   const videoRef = useRef<HTMLVideoElement>(null);
+  const videoStageRef = useRef<HTMLDivElement>(null);
   const { stream, loading, error } = useLocalCamera(videoRef);
+  const videoContentRect = useVideoContentRect(videoRef, videoStageRef, stream);
   const [timestamp, setTimestamp] = useState(() => new Date().toLocaleString());
 
   const { cameras, activeCameraId, setActiveCamera, vlmStatus, vlmError, detectionBoxes } = useAppStore();
@@ -54,7 +57,7 @@ export function MonitorPage() {
           </div>
         </div>
 
-        <div className="monitor-video-stage">
+        <div ref={videoStageRef} className="monitor-video-stage">
           {loading && (
             <div className="monitor-video-loading">正在启动摄像头…</div>
           )}
@@ -87,7 +90,7 @@ export function MonitorPage() {
             <div
               key={i}
               className={getDetectionBoxClassName(box)}
-              style={getDetectionBoxStyle(box)}
+              style={getDetectionBoxStyle(box, videoContentRect)}
             >
               <span>{box.label} {formatDetectionBoxConfidence(box)}</span>
             </div>

@@ -83,6 +83,17 @@ export function finalizeVlmFrame(options: FinalizeVlmFrameOptions): void {
   options.releaseAnalysisLock()
 }
 
+export function isRequestCanceled(error: unknown): boolean {
+  if (!error || typeof error !== 'object') {
+    return false
+  }
+
+  const candidate = error as { code?: unknown; name?: unknown }
+  return candidate.name === 'AbortError' ||
+    candidate.name === 'CanceledError' ||
+    candidate.code === 'ERR_CANCELED'
+}
+
 export function consumeUnchangedVlmFrame(options: ConsumeUnchangedFrameOptions): boolean {
   if (!options.frameDataUrl || options.hasChanged) {
     return false
@@ -351,7 +362,7 @@ export function useVlmAnalysis(options: VlmAnalysisOptions) {
           }
         } catch (err) {
           // Ignore aborted requests — not real errors
-          if (err instanceof DOMException && err.name === 'AbortError') return
+          if (isRequestCanceled(err)) return
           if (cancelled) return
           throw err
         } finally {

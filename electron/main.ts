@@ -2,6 +2,7 @@ import { app, BrowserWindow, ipcMain } from 'electron'
 import { is } from '@electron-toolkit/utils'
 import path from 'node:path'
 import fs from 'node:fs'
+import crypto from 'node:crypto'
 import dotenv from 'dotenv'
 import { createQwenProxyApp, loadQwenProxyConfig } from '../server/qwenProxy.js'
 import {
@@ -28,27 +29,52 @@ if (!app.isPackaged) {
   }
 }
 
+const localProxyToken = crypto.randomBytes(32).toString('hex')
 const proxyConfig = {
   ...loadQwenProxyConfig(),
   host: '127.0.0.1',
-  allowLocalFileOrigins: true
+  allowLocalFileOrigins: true,
+  localProxyToken
 }
 const server = createQwenProxyApp(proxyConfig)
 
 let apiPort = 0
+let resolveApiBase!: (apiBase: string) => void
+let rejectApiBase!: (error: Error) => void
+const apiBaseReady = new Promise<string>((resolve, reject) => {
+  resolveApiBase = resolve
+  rejectApiBase = reject
+})
+apiBaseReady.catch((error) => {
+  console.error('[proxy] Failed to start local proxy:', error)
+})
 const httpServer = server.listen(0, proxyConfig.host, () => {
   const addr = httpServer.address()
   if (addr && typeof addr === 'object') {
     apiPort = addr.port
+    const apiBase = `http://${proxyConfig.host}:${apiPort}`
+    console.log(`Qwen proxy server is running at ${apiBase}`)
+    resolveApiBase(apiBase)
+    return
   }
-  console.log(`Qwen proxy server is running at http://${proxyConfig.host}:${apiPort}`)
+  rejectApiBase(new Error('Qwen proxy server did not expose a TCP address'))
+})
+
+httpServer.on('error', (error) => {
+  rejectApiBase(error)
 })
 
 // 设置 5 分钟超时，防止慢客户端无限占用连接
 httpServer.timeout = 300_000
 
-ipcMain.handle('get-api-base', () => {
-  return `http://${proxyConfig.host}:${apiPort}`
+ipcMain.handle('get-api-base', async () => {
+  return apiBaseReady
+})
+
+ipcMain.handle('get-api-auth-headers', () => {
+  return {
+    'X-Local-Proxy-Token': localProxyToken
+  }
 })
 
 ipcMain.handle('get-ollama-status', async () => {
@@ -85,6 +111,7 @@ function createWindow(): void {
 }
 
 app.on('ready', async () => {
+  await apiBaseReady
   createWindow()
   await startOllama()
 })

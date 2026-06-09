@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
+  buildExpressErrorResponse,
   buildOllamaRequestBody,
   buildProxyErrorResponse,
   buildQwenRequestBody,
   isAllowedCorsOrigin,
+  isLocalProxyTokenAuthorized,
+  isLocalProxyTokenProtectedPath,
   loadQwenProxyConfig,
   parseProxyResponseText,
   validateChatCompletionPayload
@@ -25,6 +28,7 @@ describe('qwenProxy', () => {
       CHAT_REQUESTS_PER_MINUTE: '20',
       MAX_CHAT_MESSAGES: '8',
       MAX_CHAT_TOKENS: '1600',
+      LOCAL_PROXY_TOKEN: 'local-token',
       LOG_MODEL_OUTPUT: 'true',
       VLM_MODEL: 'local-vlm',
       VLM_PORT: '12345'
@@ -41,6 +45,7 @@ describe('qwenProxy', () => {
     expect(config.chatRequestsPerMinute).toBe(20);
     expect(config.maxChatMessages).toBe(8);
     expect(config.maxChatTokens).toBe(1600);
+    expect(config.localProxyToken).toBe('local-token');
     expect(config.logModelOutput).toBe(true);
     expect(config.ollamaModel).toBe('local-vlm');
     expect(config.ollamaBaseUrl).toBe('http://127.0.0.1:12345');
@@ -125,6 +130,19 @@ describe('qwenProxy', () => {
     });
   });
 
+  it('protects chat completion endpoints with an optional local proxy token', () => {
+    const config = loadQwenProxyConfig({ LOCAL_PROXY_TOKEN: 'secret' });
+
+    expect(isLocalProxyTokenProtectedPath('/api/qwen/chat/completions')).toBe(true);
+    expect(isLocalProxyTokenProtectedPath('/api/ollama/chat/completions')).toBe(true);
+    expect(isLocalProxyTokenProtectedPath('/api/health')).toBe(false);
+
+    expect(isLocalProxyTokenAuthorized('/api/qwen/chat/completions', 'secret', config)).toBe(true);
+    expect(isLocalProxyTokenAuthorized('/api/qwen/chat/completions', 'wrong', config)).toBe(false);
+    expect(isLocalProxyTokenAuthorized('/api/health', 'wrong', config)).toBe(true);
+    expect(isLocalProxyTokenAuthorized('/api/qwen/chat/completions', undefined, loadQwenProxyConfig({}))).toBe(true);
+  });
+
   it('maps Ollama health responses without treating 503 as ready', () => {
     expect(resolveOllamaHealthStatus(200)).toEqual({ ready: true, status: 'ready', gpu: 'unknown' });
     expect(resolveOllamaHealthStatus(503)).toEqual({ ready: false, status: 'loading', gpu: 'unknown' });
@@ -191,6 +209,31 @@ describe('qwenProxy', () => {
         error: {
           message: 'Ollama 推理超时',
           type: 'timeout'
+        }
+      }
+    });
+  });
+
+  it('preserves Express client error status codes instead of turning them into 500s', () => {
+    const badJsonError = Object.assign(new Error('Unexpected token } in JSON'), { status: 400 });
+    const tooLargeError = Object.assign(new Error('request entity too large'), { statusCode: 413 });
+
+    expect(buildExpressErrorResponse(badJsonError)).toEqual({
+      statusCode: 400,
+      body: {
+        error: {
+          message: 'Unexpected token } in JSON',
+          type: 'invalid_request'
+        }
+      }
+    });
+    expect(buildExpressErrorResponse(tooLargeError).statusCode).toBe(413);
+    expect(buildExpressErrorResponse(new Error('boom'))).toEqual({
+      statusCode: 500,
+      body: {
+        error: {
+          message: 'boom',
+          type: 'internal_error'
         }
       }
     });

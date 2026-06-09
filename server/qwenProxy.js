@@ -12,6 +12,8 @@ import { DEFAULT_VLM_MODEL_ALIAS } from '../shared/vlmModelConfig.js';
 import { loadVlmRuntimeConfig } from '../shared/vlmRuntimeConfig.js';
 import { parseBoolean, parseInteger } from '../shared/envParsers.js';
 
+export const LOCAL_PROXY_TOKEN_HEADER = 'x-local-proxy-token';
+
 function normalizeHost(host) {
   const trimmed = String(host || '').trim();
   return trimmed || '127.0.0.1';
@@ -69,6 +71,7 @@ export function loadQwenProxyConfig(env = process.env) {
     chatRequestsPerMinute: parseInteger(env.CHAT_REQUESTS_PER_MINUTE, 30, 0),
     maxChatMessages: parseInteger(env.MAX_CHAT_MESSAGES, 16),
     maxChatTokens: parseInteger(env.MAX_CHAT_TOKENS, 2048),
+    localProxyToken: env.LOCAL_PROXY_TOKEN || '',
     logModelOutput: parseBoolean(env.LOG_MODEL_OUTPUT, false),
     ollamaBaseUrl: `http://${vlmRuntimeConfig.host}:${vlmRuntimeConfig.port}`
   };
@@ -117,6 +120,56 @@ export function buildProxyErrorResponse(error, options) {
             ? error.message
             : options.fallbackMessage,
         type: isAbortError ? options.timeoutType : options.fallbackType
+      }
+    }
+  };
+}
+
+export function isLocalProxyTokenProtectedPath(pathname) {
+  return pathname === QWEN_CHAT_COMPLETIONS_ROUTE || pathname === OLLAMA_CHAT_COMPLETIONS_ROUTE;
+}
+
+export function isLocalProxyTokenAuthorized(pathname, token, config = loadQwenProxyConfig()) {
+  if (!config.localProxyToken || !isLocalProxyTokenProtectedPath(pathname)) {
+    return true;
+  }
+
+  return token === config.localProxyToken;
+}
+
+function createLocalProxyTokenGuard(config) {
+  return (req, res, next) => {
+    const token = req.get(LOCAL_PROXY_TOKEN_HEADER);
+    if (isLocalProxyTokenAuthorized(req.path, token, config)) {
+      return next();
+    }
+
+    return res.status(403).json({
+      error: {
+        message: '本地代理请求未授权',
+        type: 'forbidden'
+      }
+    });
+  };
+}
+
+export function buildExpressErrorResponse(error) {
+  const statusCandidate = Number(error?.status ?? error?.statusCode);
+  const statusCode = Number.isInteger(statusCandidate) && statusCandidate >= 400 && statusCandidate < 600
+    ? statusCandidate
+    : 500;
+  const message = error instanceof Error && error.message
+    ? error.message
+    : statusCode >= 500
+      ? 'Internal server error'
+      : 'Invalid request';
+
+  return {
+    statusCode,
+    body: {
+      error: {
+        message,
+        type: statusCode >= 500 ? 'internal_error' : 'invalid_request'
       }
     }
   };
@@ -226,6 +279,7 @@ export function createQwenProxyApp(config = loadQwenProxyConfig()) {
       credentials: config.corsOrigin !== true
     })
   );
+  app.use(createLocalProxyTokenGuard(config));
   app.use(express.json({ limit: config.requestBodyLimit }));
 
   createOllamaProxyRoutes(app, config, chatRateLimiter, chatPayloadValidator);
@@ -283,13 +337,11 @@ export function createQwenProxyApp(config = loadQwenProxyConfig()) {
 
   // 全局错误处理，避免 Express 返回 HTML 500 页面
   app.use((err, _req, res, _next) => {
-    console.error('[ollama-proxy] Unhandled error:', err);
-    res.status(500).json({
-      error: {
-        message: err instanceof Error ? err.message : 'Internal server error',
-        type: 'internal_error'
-      }
-    });
+    const errorResponse = buildExpressErrorResponse(err);
+    if (errorResponse.statusCode >= 500) {
+      console.error('[ollama-proxy] Unhandled error:', err);
+    }
+    res.status(errorResponse.statusCode).json(errorResponse.body);
   });
 
   return app;

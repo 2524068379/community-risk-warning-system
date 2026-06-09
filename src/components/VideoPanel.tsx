@@ -1,8 +1,9 @@
-import { memo } from 'react';
+import { memo, useRef } from 'react';
 import { Space, Tag } from 'antd';
 import type { CameraPoint } from '@/types';
 import { riskColorMap, riskLevelTextMap } from '@/utils/risk';
 import { LiveVideoPlayer } from '@/components/player/LiveVideoPlayer';
+import { useVideoContentRect } from '@/hooks/useVideoContentRect';
 import { useAppStore } from '@/store/useAppStore';
 import {
   formatDetectionBoxConfidence,
@@ -26,6 +27,9 @@ export const VideoPanel = memo(function VideoPanel({
   const isCompact = density === 'compact';
   const shouldShowInfoStrip = showInfoStrip ?? !isCompact;
   const detectionBoxes = useAppStore((s) => s.detectionBoxes);
+  const frameRef = useRef<HTMLDivElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const videoContentRect = useVideoContentRect(videoRef, frameRef, `${camera.streamType || ''}:${camera.streamUrl || ''}`);
 
   return (
     <div className={`video-panel ${isCompact ? 'compact' : ''} ${shouldShowInfoStrip ? '' : 'condensed'}`}>
@@ -42,8 +46,9 @@ export const VideoPanel = memo(function VideoPanel({
         </Space>
       </div>
 
-      <div className="video-frame real-video-frame">
+      <div ref={frameRef} className="video-frame real-video-frame">
         <LiveVideoPlayer
+          ref={videoRef}
           url={camera.streamUrl}
           type={camera.streamType}
           posterText={`当前点位：${camera.streamCover}。后续可替换为真实 ${String(camera.streamType || 'flv').toUpperCase()} 实时流。`}
@@ -52,7 +57,7 @@ export const VideoPanel = memo(function VideoPanel({
           <div
             key={i}
             className={getDetectionBoxClassName(box)}
-            style={getDetectionBoxStyle(box)}
+            style={getDetectionBoxStyle(box, videoContentRect)}
           >
             <span>{box.label} {formatDetectionBoxConfidence(box)}</span>
           </div>

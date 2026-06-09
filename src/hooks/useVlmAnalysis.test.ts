@@ -3,6 +3,7 @@ import {
   checkVlmConnectionStatus,
   consumeUnchangedVlmFrame,
   finalizeVlmFrame,
+  isRequestCanceled,
   planVlmDispatch
 } from './useVlmAnalysis'
 
@@ -18,6 +19,19 @@ describe('finalizeVlmFrame', () => {
 
     expect(markConsumed).toHaveBeenCalledTimes(1)
     expect(releaseAnalysisLock).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('isRequestCanceled', () => {
+  it('recognizes browser and axios cancellation errors', () => {
+    expect(isRequestCanceled(Object.assign(new Error('aborted'), { name: 'AbortError' }))).toBe(true)
+    expect(isRequestCanceled(Object.assign(new Error('canceled'), { name: 'CanceledError' }))).toBe(true)
+    expect(isRequestCanceled({ code: 'ERR_CANCELED' })).toBe(true)
+  })
+
+  it('does not hide real VLM failures', () => {
+    expect(isRequestCanceled(new Error('model failed'))).toBe(false)
+    expect(isRequestCanceled(null)).toBe(false)
   })
 })
 
