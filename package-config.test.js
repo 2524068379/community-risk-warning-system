@@ -5,6 +5,14 @@ import { VLM_MODEL_FILE, VLM_MMPROJ_FILE } from './shared/vlmModelConfig.js';
 const packageJson = JSON.parse(readFileSync('package.json', 'utf8'));
 
 describe('package configuration', () => {
+  it('targets Node.js 24 and npm 11', () => {
+    expect(readFileSync('.nvmrc', 'utf8').trim()).toBe('24');
+    expect(packageJson.engines).toEqual({
+      node: '>=24 <25',
+      npm: '>=11'
+    });
+  });
+
   it('keeps Windows packages branded with metadata and an icon', () => {
     expect(packageJson.description).toBeTruthy();
     expect(packageJson.author).toBeTruthy();

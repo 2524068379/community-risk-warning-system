@@ -6,6 +6,13 @@ function readWorkflow(name) {
 }
 
 describe('build workflow', () => {
+  it('uses Node.js 24 for CI dependency installation and builds', () => {
+    const workflow = readWorkflow('build.yml');
+
+    expect(workflow).toContain('node-version: 24');
+    expect(workflow).not.toContain('node-version: 22');
+  });
+
   it('runs tests and typecheck before the production build', () => {
     const workflow = readWorkflow('build.yml');
 

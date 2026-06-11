@@ -18,18 +18,18 @@
 
 | 层级 | 技术 | 当前版本 | 说明 |
 |------|------|----------|------|
-| 前端框架 | React + TypeScript | 19.2 / 5.8 | 渲染进程 UI 与类型约束 |
+| 前端框架 | React + TypeScript | 19.2 / 5.9 | 渲染进程 UI 与类型约束 |
 | UI 组件 | Ant Design | 6.4 | 管理端组件体系 |
 | 数据可视化 | Recharts | 3.8 | 风险构成与趋势图表 |
 | 状态管理 | Zustand | 5.0 | 全局摄像头、事件和分析状态 |
-| 路由 | react-router-dom | 7.15 | SPA 路由与懒加载 |
-| HTTP 客户端 | Axios | 1.16 | 请求封装与拦截 |
+| 路由 | react-router-dom | 7.17 | SPA 路由与懒加载 |
+| HTTP 客户端 | Axios | 1.17 | 请求封装与拦截 |
 | 视频播放 | mpegts.js | 1.8 | FLV、MPEG-TS、HLS、MP4 播放能力 |
 | 目标检测 | TensorFlow.js + COCO-SSD | 4.22 / 2.2 | 浏览器侧轻量目标预筛 |
 | 地图服务 | 百度地图 JSAPI GL | 3.x | WebGL 地图与摄像头标注 |
-| 桌面框架 | Electron | 41.6 | 主进程窗口、代理和 VLM 子进程管理 |
-| 构建工具 | electron-vite + Vite | 5.0 / 7.0 | Electron 三进程构建与浏览器调试 |
-| 后端代理 | Node.js + Express | 22 / 5.2 | Qwen 和本地 VLM 代理 |
+| 桌面框架 | Electron | 41.7 | 主进程窗口、代理和 VLM 子进程管理 |
+| 构建工具 | electron-vite + Vite | 5.0 / 7.3 | Electron 三进程构建与浏览器调试 |
+| 后端代理 | Node.js + Express | 24 / 5.2 | Qwen 和本地 VLM 代理 |
 | VLM 推理 | llama.cpp `llama-server` | b9484 | Windows CUDA 12.4 构建 |
 
 ## 项目结构
@@ -96,8 +96,8 @@
 
 ### 环境要求
 
-- Node.js 22.x（仓库通过 `.nvmrc` 与 `package.json#engines` 固定为 `>=22 <23`）
-- npm 10.x 或更高版本
+- Node.js 24.x（仓库通过 `.nvmrc` 与 `package.json#engines` 固定为 `>=24 <25`）
+- npm 11.x 或更高版本
 - Windows 10/11 x64（完整桌面打包和内置 `llama-server.exe` 流程）
 - 可用摄像头（用于总览和监控页面实时画面）
 - 百度地图浏览器端 AK（地图功能需要）
@@ -344,7 +344,7 @@ npm run build
 GitHub Actions 工作流位于 `.github/workflows/build.yml`：
 
 - 触发：push 到 `main`、PR 到 `main`、`v*` 标签和手动触发。
-- 环境：`windows-latest`，Node.js 22。
+- 环境：`windows-latest`，Node.js 24。
 - 步骤：`npm ci`、测试、类型检查、VLM 资源缓存/下载、SHA256 校验、构建、打包。
 - Dependabot PR：跳过 VLM 下载和 Windows 打包，只执行必要质量检查。
 - Release：推送 `v*` 标签时上传 `windows-portable` 与 `vlm-models` 两类产物。

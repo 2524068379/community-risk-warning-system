@@ -5,8 +5,8 @@
   "description": "Electron desktop app for community risk warning and VLM-assisted monitoring.",
   "author": "community-risk-warning-system contributors",
   "engines": {
-    "node": ">=22 <23",
-    "npm": ">=10"
+    "node": ">=24 <25",
+    "npm": ">=11"
   },
   "main": "./dist/main/main.cjs",
   "type": "module",
@@ -26,38 +26,38 @@
     "prepackage": "npm run download-model"
   },
   "dependencies": {
-    "@ant-design/icons": "^6.2.3",
+    "@ant-design/icons": "^6.2.5",
     "@tensorflow-models/coco-ssd": "^2.2.3",
     "@tensorflow/tfjs": "^4.22.0",
     "antd": "^6.4.3",
-    "axios": "^1.16.1",
+    "axios": "^1.17.0",
     "compression": "^1.8.1",
-    "cors": "^2.8.5",
+    "cors": "^2.8.6",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
     "mpegts.js": "^1.8.0",
-    "react": "^19.2.6",
-    "react-dom": "^19.2.6",
-    "react-router-dom": "^7.15.1",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7",
+    "react-router-dom": "^7.17.0",
     "recharts": "^3.8.1",
-    "zustand": "^5.0.13"
+    "zustand": "^5.0.14"
   },
   "devDependencies": {
     "@electron-toolkit/preload": "^3.0.2",
     "@electron-toolkit/utils": "^4.0.0",
     "@types/compression": "^1.8.1",
     "@types/express": "^5.0.6",
-    "@types/node": "^25.9.1",
-    "@types/react": "^19.1.9",
-    "@types/react-dom": "^19.1.7",
-    "@vitejs/plugin-react": "^5.0.0",
-    "concurrently": "^9.1.2",
-    "electron": "^41.6.1",
-    "electron-builder": "^26.8.1",
+    "@types/node": "^24.13.2",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^5.2.0",
+    "concurrently": "^10.0.3",
+    "electron": "^41.7.2",
+    "electron-builder": "^26.15.2",
     "electron-vite": "^5.0.0",
-    "typescript": "^5.8.3",
-    "vite": "^7.0.4",
-    "vitest": "^4.1.7"
+    "typescript": "^5.9.3",
+    "vite": "^7.3.5",
+    "vitest": "^4.1.8"
   },
   "overrides": {
     "cacache": {
