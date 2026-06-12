@@ -425,7 +425,7 @@ Dependabot 配置位于 `.github/dependabot.yml`，npm 和 GitHub Actions 依赖
 
 ## 许可证
 
-本项目遵循 [Apache License 2.0](LICENSE)。
+本项目遵循 [Creative Commons Attribution-NonCommercial 4.0 International (CC BY-NC 4.0)](LICENSE)。
 
 ---
 
