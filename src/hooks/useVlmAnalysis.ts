@@ -319,7 +319,11 @@ export function useVlmAnalysis(options: VlmAnalysisOptions) {
             if (video && video.readyState >= 2) {
               detections = await detect(video)
             }
-            useAppStore.getState().setDetectorStatus(getDetectorStatus())
+            const detectorStatus = getDetectorStatus()
+            useAppStore.getState().setDetectorStatus(detectorStatus)
+            if (detectorStatus === 'error') {
+              detectorFailedRef.current = true
+            }
             useAppStore.getState().setDetectedObjects(detections)
           } catch {
             detectorFailedRef.current = true

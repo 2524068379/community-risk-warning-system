@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { filterDetections, parseDetectionLabels, parseDetectionMinScore } from './objectDetector'
+import { DetectorLoadError, filterDetections, parseDetectionLabels, parseDetectionMinScore } from './objectDetector'
 
 const makeDet = (cls: string, score: number) => ({
   class: cls,
@@ -71,5 +71,16 @@ describe('parseDetectionMinScore', () => {
   it('falls back when score is invalid', () => {
     expect(parseDetectionMinScore('2')).toBe(0.35)
     expect(parseDetectionMinScore('invalid')).toBe(0.35)
+  })
+})
+
+describe('DetectorLoadError', () => {
+  it('preserves the original detector loading failure as cause', () => {
+    const cause = new Error('network unavailable')
+    const error = new DetectorLoadError(cause)
+
+    expect(error.name).toBe('DetectorLoadError')
+    expect(error.message).toContain('network unavailable')
+    expect(error.cause).toBe(cause)
   })
 })

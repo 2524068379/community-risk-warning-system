@@ -86,7 +86,7 @@ describe('build workflow', () => {
     expect(prepareBlock).not.toContain('$response.Content');
   });
 
-  it('calls the VLM models workflow in the same run alongside app packaging', () => {
+  it('calls the VLM models workflow only for releases or manual packaging', () => {
     const workflow = readWorkflow('build.yml');
 
     const buildJobIndex = workflow.indexOf('  build:');
@@ -97,7 +97,7 @@ describe('build workflow', () => {
     expect(vlmJobIndex).toBeGreaterThan(buildJobIndex);
     expect(vlmJobIndex).toBeLessThan(releaseJobIndex);
     expect(vlmJob).not.toContain('needs: build');
-    expect(vlmJob).toContain("if: github.event_name != 'pull_request'");
+    expect(vlmJob).toContain("if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'");
     expect(vlmJob).toContain('uses: ./.github/workflows/vlm-models.yml');
     expect(workflow).toContain('needs: [build, vlm-models]');
     expect(workflow).toContain('- name: Download model artifact');

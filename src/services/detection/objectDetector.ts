@@ -28,6 +28,19 @@ interface RawDetection {
   bbox: [number, number, number, number]
 }
 
+export class DetectorLoadError extends Error {
+  readonly cause: unknown
+
+  constructor(cause: unknown) {
+    const message = cause instanceof Error && cause.message
+      ? `Object detector failed to load: ${cause.message}`
+      : 'Object detector failed to load'
+    super(message)
+    this.name = 'DetectorLoadError'
+    this.cause = cause
+  }
+}
+
 export function parseDetectionLabels(raw?: string): Set<string> {
   const labels = raw
     ?.split(',')
@@ -87,9 +100,9 @@ export async function detect(
         unloadListenerAttached = true
         window.addEventListener('beforeunload', disposeDetector)
       }
-    } catch {
+    } catch (err) {
       status = 'error'
-      return []
+      throw new DetectorLoadError(err)
     }
   }
   const predictions = await model.detect(source)

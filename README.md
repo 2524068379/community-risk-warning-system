@@ -158,6 +158,7 @@ CHAT_REQUESTS_PER_MINUTE=30
 MAX_CHAT_MESSAGES=16
 MAX_CHAT_TOKENS=2048
 LOG_MODEL_OUTPUT=false
+LOCAL_PROXY_TOKEN=
 
 QWEN_BASE_URL=http://127.0.0.1:1234/v1
 QWEN_API_KEY=
@@ -181,7 +182,7 @@ VLM_MTP_ENABLED=false
 VLM_MTP_DRAFT_TOKENS=4
 ```
 
-`VITE_*` 变量会进入浏览器代码，不要放入真实密钥。Qwen API Key 只应写入 `.env.server` 或 CI Secret。
+`VITE_*` 变量会进入浏览器代码，不要放入真实密钥。Qwen API Key 只应写入 `.env.server` 或 CI Secret。`LOCAL_PROXY_TOKEN` 为空时不会启用 token 校验；当独立代理绑定非本机地址或放开跨域来源时，应设置一个高熵随机值，并由调用方通过 `X-Local-Proxy-Token` 请求头传入。
 
 ### 下载本地 VLM 资源
 
@@ -347,6 +348,7 @@ GitHub Actions 工作流位于 `.github/workflows/build.yml`：
 - 环境：`windows-latest`，Node.js 24。
 - 步骤：`npm ci`、测试、类型检查、VLM 资源缓存/下载、SHA256 校验、构建、打包。
 - Dependabot PR：跳过 VLM 下载和 Windows 打包，只执行必要质量检查。
+- VLM 模型包：仅在 `v*` 标签发布或手动触发时生成，普通 `main` push 不再打包数 GB 模型产物。
 - Release：推送 `v*` 标签时上传 `windows-portable` 与 `vlm-models` 两类产物。
 
 Dependabot 配置位于 `.github/dependabot.yml`，npm 和 GitHub Actions 依赖每天检查，每次最多打开 1 个 PR。小版本和补丁版本更新会尝试自动合并，主版本更新会打上 `needs-review` 与 `dependencies` 标签。
@@ -367,6 +369,7 @@ Dependabot 配置位于 `.github/dependabot.yml`，npm 和 GitHub Actions 依赖
 - Qwen API Key 只放在服务端环境或 CI Secret 中。
 - 百度地图浏览器 AK 必须配置 Referer 白名单；本地开发通常需要加入 `http://localhost:5173`。
 - `ALLOW_LOCAL_FILE_ORIGINS` 仅在 Electron 内嵌代理场景由主进程覆盖为 `true`，普通浏览器代理默认关闭。
+- 独立代理若绑定到非本机地址，或将 `CORS_ORIGIN` 设为 `*`，应配置 `LOCAL_PROXY_TOKEN` 并要求调用方携带 `X-Local-Proxy-Token`。
 - 生产环境保持 `LOG_MODEL_OUTPUT=false`，避免记录模型输出内容。
 - VLM 模型文件下载后会校验 SHA256，哈希配置集中在 `shared/vlmModelConfig.js`。
 
