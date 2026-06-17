@@ -1,5 +1,11 @@
 import fs from 'node:fs';
 import { describe, expect, it } from 'vitest';
+import {
+  LLAMA_CPP_CUDA_VERSION,
+  LLAMA_CPP_VERSION,
+  VLM_MODEL_SHA256,
+  VLM_MMPROJ_SHA256
+} from '../../shared/vlmModelConfig.js';
 
 function readWorkflow(name) {
   return fs.readFileSync(new URL(`./${name}`, import.meta.url), 'utf8');
@@ -197,5 +203,18 @@ describe('VLM models workflow', () => {
     expect(workflow).toContain('llama-server.exe、llama-server-impl.dll 与 CPU 通用 runtime DLL 已随 Windows portable 应用包发布。');
     expect(workflow).toContain('$modelFiles = @("Qwen3.5-4B-Q4_K_M.gguf", "mmproj-BF16.gguf")');
     expect(workflow).toContain('$cudaFiles = @("cudart64_12.dll", "cublas64_12.dll", "cublasLt64_12.dll", "ggml-cuda.dll")');
+  });
+
+  it('keeps hardcoded VLM hashes and llama.cpp versions in sync with shared/vlmModelConfig.js', () => {
+    const workflow = readWorkflow('vlm-models.yml');
+
+    // SHA256 hashes are the source of truth in shared/vlmModelConfig.js;
+    // the workflow must not drift from them.
+    expect(workflow).toContain(VLM_MODEL_SHA256);
+    expect(workflow).toContain(VLM_MMPROJ_SHA256);
+
+    // llama.cpp release tag and CUDA version must also match the shared config.
+    expect(workflow).toContain(`releases/download/${LLAMA_CPP_VERSION}/`);
+    expect(workflow).toContain(`cuda-${LLAMA_CPP_CUDA_VERSION}`);
   });
 });
