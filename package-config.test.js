@@ -13,6 +13,10 @@ describe('package configuration', () => {
     });
   });
 
+  it('keeps security overrides for vulnerable transitive build dependencies', () => {
+    expect(packageJson.overrides.esbuild).toBe('^0.28.1');
+  });
+
   it('keeps Windows packages branded with metadata and an icon', () => {
     expect(packageJson.description).toBeTruthy();
     expect(packageJson.author).toBeTruthy();

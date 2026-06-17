@@ -7,6 +7,7 @@ describe('dependabot auto-merge workflow', () => {
   it('has required permissions', () => {
     expect(workflow).toContain('pull-requests: write');
     expect(workflow).toContain('contents: write');
+    expect(workflow).toContain('issues: write');
   });
 
   it('auto-merges minor and patch updates', () => {

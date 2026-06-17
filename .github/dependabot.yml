@@ -1,7 +1,7 @@
 version: 2
 
 updates:
-  # npm: 每天检查，每次只推一个 PR
+  # npm: 每天检查，最多保留 2 个 PR，避免待审核主版本更新占满唯一槽位
   - package-ecosystem: 'npm'
     directory: '/'
     schedule:
@@ -9,7 +9,7 @@ updates:
       time: '09:00'
       timezone: 'Asia/Shanghai'
     rebase-strategy: auto
-    open-pull-requests-limit: 1
+    open-pull-requests-limit: 2
     cooldown:
       semver-major-days: 7
       semver-minor-days: 1
@@ -19,7 +19,7 @@ updates:
       prefix-development: 'chore(dev)'
       include: 'scope'
 
-  # GitHub Actions: 每天检查，每次只推一个 PR
+  # GitHub Actions: 每天检查，最多保留 2 个 PR，避免待审核更新阻塞后续检查
   - package-ecosystem: 'github-actions'
     directory: '/'
     schedule:
@@ -27,7 +27,7 @@ updates:
       time: '09:30'
       timezone: 'Asia/Shanghai'
     rebase-strategy: auto
-    open-pull-requests-limit: 1
+    open-pull-requests-limit: 2
     cooldown:
       default-days: 1
     commit-message:

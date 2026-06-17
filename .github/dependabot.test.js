@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 describe('dependabot config', () => {
-  it('covers npm and GitHub Actions with daily schedule and grouped updates', () => {
+  it('covers npm and GitHub Actions with daily schedule and enough PR capacity', () => {
     const config = fs.readFileSync(new URL('./dependabot.yml', import.meta.url), 'utf8');
     const githubActionsBlock = config.split("  - package-ecosystem: 'github-actions'")[1];
 
@@ -11,8 +11,9 @@ describe('dependabot config', () => {
     expect(config).toContain("timezone: 'Asia/Shanghai'");
     expect(config).toContain("interval: 'daily'");
 
-    // One PR at a time, no grouping
-    expect(config).toContain("open-pull-requests-limit: 1");
+    // Keep Dependabot quiet, but leave one spare slot when a major update awaits review.
+    expect(config.match(/open-pull-requests-limit: 2/g)).toHaveLength(2);
+    expect(config).not.toContain('open-pull-requests-limit: 1');
     expect(config).not.toContain('groups:');
 
     expect(config).toContain("prefix-development: 'chore(dev)'");

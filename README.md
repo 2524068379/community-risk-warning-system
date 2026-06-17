@@ -351,7 +351,7 @@ GitHub Actions 工作流位于 `.github/workflows/build.yml`：
 - VLM 模型包：仅在 `v*` 标签发布或手动触发时生成，普通 `main` push 不再打包数 GB 模型产物。
 - Release：推送 `v*` 标签时上传 `windows-portable` 与 `vlm-models` 两类产物。
 
-Dependabot 配置位于 `.github/dependabot.yml`，npm 和 GitHub Actions 依赖每天检查，每次最多打开 1 个 PR。小版本和补丁版本更新会尝试自动合并，主版本更新会打上 `needs-review` 与 `dependencies` 标签。
+Dependabot 配置位于 `.github/dependabot.yml`，npm 和 GitHub Actions 依赖每天检查，每类最多保留 2 个开放 PR，避免待审核的主版本更新占满唯一槽位。小版本和补丁版本更新会尝试自动合并，主版本更新会打上 `needs-review` 与 `dependencies` 标签。
 
 ## 编码约定
 
