@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import compression from 'compression';
+import rateLimit from 'express-rate-limit';
 import http from 'node:http';
 import { resolveOllamaHealthStatus } from './ollamaHealthStatus.js';
 import {
@@ -322,35 +323,12 @@ function createChatRateLimiter(config) {
     return (_req, _res, next) => next();
   }
 
-  const windowMs = 60_000;
-  const buckets = new Map();
-
-  // 每 5 分钟清理一次过期 bucket，防止内存泄漏
-  const cleanupInterval = setInterval(() => {
-    const now = Date.now();
-    for (const [key, bucket] of buckets) {
-      if (now - bucket.startedAt >= windowMs) {
-        buckets.delete(key);
-      }
-    }
-  }, 300_000);
-
-  // 允许 Node.js 正常退出，不因定时器阻塞
-  if (cleanupInterval.unref) {
-    cleanupInterval.unref();
-  }
-
-  return (req, res, next) => {
-    const now = Date.now();
-    const key = req.ip || req.socket?.remoteAddress || 'unknown';
-    const bucket = buckets.get(key);
-
-    if (!bucket || now - bucket.startedAt >= windowMs) {
-      buckets.set(key, { startedAt: now, count: 1 });
-      return next();
-    }
-
-    if (bucket.count >= limit) {
+  return rateLimit({
+    windowMs: 60_000,
+    limit,
+    standardHeaders: true,
+    legacyHeaders: false,
+    handler: (_req, res) => {
       return res.status(429).json({
         error: {
           message: '请求过于频繁，请稍后再试',
@@ -358,41 +336,19 @@ function createChatRateLimiter(config) {
         }
       });
     }
-
-    bucket.count += 1;
-    return next();
-  };
+  });
 }
 
-export function createQwenProxyApp(config = loadQwenProxyConfig()) {
-  const app = express();
-  const chatRateLimiter = createChatRateLimiter(config);
-  const chatPayloadValidator = createChatPayloadValidator(config);
-  const localProxyTokenGuard = createLocalProxyTokenGuard(config);
+function createDisabledRateLimiter() {
+  return (_req, _res, next) => next();
+}
 
-  app.use(compression());
+function resolveChatRateLimiter(config) {
+  return config.chatRequestsPerMinute ? createChatRateLimiter(config) : createDisabledRateLimiter();
+}
 
-  app.use(
-    cors({
-      origin: createCorsOriginOption(config),
-      credentials: config.corsOrigin !== true
-    })
-  );
-  app.use(express.json({ limit: config.requestBodyLimit }));
-
-  createOllamaProxyRoutes(app, config, chatRateLimiter, chatPayloadValidator, localProxyTokenGuard);
-
-  app.get(API_HEALTH_ROUTE, (_req, res) => {
-    res.json({
-      ok: true,
-      service: 'community-risk-warning-proxy',
-      qwenConfigured: Boolean(config.qwenBaseUrl && config.qwenApiKey),
-      model: config.qwenModel,
-      timestamp: new Date().toISOString()
-    });
-  });
-
-  app.post(QWEN_CHAT_COMPLETIONS_ROUTE, chatRateLimiter, localProxyTokenGuard, chatPayloadValidator, async (req, res) => {
+function createQwenChatHandler(config) {
+  return async (req, res) => {
     if (!config.qwenChatCompletionsUrl || !config.qwenApiKey) {
       return res.status(500).json({
         error: {
@@ -431,27 +387,13 @@ export function createQwenProxyApp(config = loadQwenProxyConfig()) {
     } finally {
       clearTimeout(timer);
     }
-  });
-
-  // 全局错误处理，避免 Express 返回 HTML 500 页面
-  app.use((err, _req, res, _next) => {
-    const errorResponse = buildExpressErrorResponse(err);
-    if (errorResponse.statusCode >= 500) {
-      console.error('[ollama-proxy] Unhandled error:', err);
-    }
-    res.status(errorResponse.statusCode).json(errorResponse.body);
-  });
-
-  return app;
+  };
 }
 
-export function createOllamaProxyRoutes(app, config = loadQwenProxyConfig(), chatRateLimiter, chatPayloadValidator, localProxyTokenGuard) {
+function createOllamaChatHandler(config) {
   const OLLAMA_MODEL = config.ollamaModel || DEFAULT_VLM_MODEL_ALIAS;
-  const rateLimiter = chatRateLimiter ?? createChatRateLimiter(config);
-  const payloadValidator = chatPayloadValidator ?? createChatPayloadValidator(config);
-  const tokenGuard = localProxyTokenGuard ?? createLocalProxyTokenGuard(config);
 
-  app.post(OLLAMA_CHAT_COMPLETIONS_ROUTE, rateLimiter, tokenGuard, payloadValidator, async (req, res) => {
+  return async (req, res) => {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), config.ollamaTimeout);
 
@@ -488,7 +430,69 @@ export function createOllamaProxyRoutes(app, config = loadQwenProxyConfig(), cha
     } finally {
       clearTimeout(timer);
     }
+  };
+}
+
+export function createQwenProxyApp(config = loadQwenProxyConfig()) {
+  const app = express();
+  const chatRateLimiter = resolveChatRateLimiter(config);
+  const chatPayloadValidator = createChatPayloadValidator(config);
+  const localProxyTokenGuard = createLocalProxyTokenGuard(config);
+
+  app.use(compression());
+
+  app.use(
+    cors({
+      origin: createCorsOriginOption(config),
+      credentials: config.corsOrigin !== true
+    })
+  );
+  app.use(express.json({ limit: config.requestBodyLimit }));
+
+  createOllamaProxyRoutes(app, config, chatRateLimiter, chatPayloadValidator, localProxyTokenGuard);
+
+  app.get(API_HEALTH_ROUTE, (_req, res) => {
+    res.json({
+      ok: true,
+      service: 'community-risk-warning-proxy',
+      qwenConfigured: Boolean(config.qwenBaseUrl && config.qwenApiKey),
+      model: config.qwenModel,
+      timestamp: new Date().toISOString()
+    });
   });
+
+  app.post(
+    QWEN_CHAT_COMPLETIONS_ROUTE,
+    chatRateLimiter,
+    localProxyTokenGuard,
+    chatPayloadValidator,
+    createQwenChatHandler(config)
+  );
+
+  // 全局错误处理，避免 Express 返回 HTML 500 页面
+  app.use((err, _req, res, _next) => {
+    const errorResponse = buildExpressErrorResponse(err);
+    if (errorResponse.statusCode >= 500) {
+      console.error('[ollama-proxy] Unhandled error:', err);
+    }
+    res.status(errorResponse.statusCode).json(errorResponse.body);
+  });
+
+  return app;
+}
+
+export function createOllamaProxyRoutes(app, config = loadQwenProxyConfig(), chatRateLimiter, chatPayloadValidator, localProxyTokenGuard) {
+  const rateLimiter = chatRateLimiter ?? resolveChatRateLimiter(config);
+  const payloadValidator = chatPayloadValidator ?? createChatPayloadValidator(config);
+  const tokenGuard = localProxyTokenGuard ?? createLocalProxyTokenGuard(config);
+
+  app.post(
+    OLLAMA_CHAT_COMPLETIONS_ROUTE,
+    rateLimiter,
+    tokenGuard,
+    payloadValidator,
+    createOllamaChatHandler(config)
+  );
 
   app.get(OLLAMA_STATUS_ROUTE, async (_req, res) => {
     const controller = new AbortController();
