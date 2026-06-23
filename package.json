@@ -30,7 +30,7 @@
     "@tensorflow-models/coco-ssd": "^2.2.3",
     "@tensorflow/tfjs": "^4.22.0",
     "antd": "^6.4.4",
-    "axios": "^1.17.0",
+    "axios": "^1.18.0",
     "compression": "^1.8.1",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
