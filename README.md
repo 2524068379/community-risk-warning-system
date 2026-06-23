@@ -182,7 +182,7 @@ VLM_MTP_ENABLED=false
 VLM_MTP_DRAFT_TOKENS=4
 ```
 
-`VITE_*` 变量会进入浏览器代码，不要放入真实密钥。Qwen API Key 只应写入 `.env.server` 或 CI Secret。`LOCAL_PROXY_TOKEN` 为空时不会启用 token 校验；当独立代理绑定非本机地址或放开跨域来源时，应设置一个高熵随机值，并由调用方通过 `X-Local-Proxy-Token` 请求头传入。
+`VITE_*` 变量会进入浏览器代码，不要放入真实密钥。Qwen API Key 只应写入 `.env.server` 或 CI Secret。`LOCAL_PROXY_TOKEN` 为空时不会启用 token 校验；当独立代理绑定非本机地址时，应设置一个高熵随机值，并由调用方通过 `X-Local-Proxy-Token` 请求头传入。`QWEN_BASE_URL` 只接受代理内置白名单中的 OpenAI-compatible 上游地址，例如本机 LM Studio/Ollama 兼容端点或 DashScope 兼容模式端点。
 
 ### 下载本地 VLM 资源
 
@@ -369,7 +369,8 @@ Dependabot 配置位于 `.github/dependabot.yml`，npm 和 GitHub Actions 依赖
 - Qwen API Key 只放在服务端环境或 CI Secret 中。
 - 百度地图浏览器 AK 必须配置 Referer 白名单；本地开发通常需要加入 `http://localhost:5173`。
 - `ALLOW_LOCAL_FILE_ORIGINS` 仅在 Electron 内嵌代理场景由主进程覆盖为 `true`，普通浏览器代理默认关闭。
-- 独立代理若绑定到非本机地址，或将 `CORS_ORIGIN` 设为 `*`，应配置 `LOCAL_PROXY_TOKEN` 并要求调用方携带 `X-Local-Proxy-Token`。
+- 独立代理若绑定到非本机地址，应配置 `LOCAL_PROXY_TOKEN` 并要求调用方携带 `X-Local-Proxy-Token`。
+- `CORS_ORIGIN` 必须配置为明确的来源白名单；出于安全考虑，`*` 会回退到默认本地开发来源。
 - 生产环境保持 `LOG_MODEL_OUTPUT=false`，避免记录模型输出内容。
 - VLM 模型文件下载后会校验 SHA256，哈希配置集中在 `shared/vlmModelConfig.js`。
 

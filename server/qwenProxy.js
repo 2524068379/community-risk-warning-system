@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import compression from 'compression';
+import http from 'node:http';
 import { resolveOllamaHealthStatus } from './ollamaHealthStatus.js';
 import {
   API_HEALTH_ROUTE,
@@ -14,40 +15,95 @@ import { parseBoolean, parseInteger } from '../shared/envParsers.js';
 
 export const LOCAL_PROXY_TOKEN_HEADER = 'x-local-proxy-token';
 
+const DEFAULT_CORS_ORIGINS = ['http://localhost:5173'];
+const QWEN_TIMEOUT_OPTIONS_MS = [15_000, 30_000, 60_000, 90_000, 120_000];
+const OLLAMA_TIMEOUT_OPTIONS_MS = [30_000, 60_000, 120_000, 180_000, 300_000];
+const OLLAMA_HEALTH_TIMEOUT_MS = 3000;
+const LOCAL_OLLAMA_HOST = '127.0.0.1';
+const LOOPBACK_HOST_NAMES = new Set(['127.0.0.1', 'localhost']);
+const ALLOWED_QWEN_BASE_URLS = [
+  'http://127.0.0.1:1234/v1',
+  'http://localhost:1234/v1',
+  'http://127.0.0.1:11434/v1',
+  'http://localhost:11434/v1',
+  'https://dashscope.aliyuncs.com/compatible-mode/v1'
+];
+const QWEN_CHAT_COMPLETIONS_URLS = new Map([
+  ['http://127.0.0.1:1234/v1', 'http://127.0.0.1:1234/v1/chat/completions'],
+  ['http://localhost:1234/v1', 'http://localhost:1234/v1/chat/completions'],
+  ['http://127.0.0.1:11434/v1', 'http://127.0.0.1:11434/v1/chat/completions'],
+  ['http://localhost:11434/v1', 'http://localhost:11434/v1/chat/completions'],
+  ['https://dashscope.aliyuncs.com/compatible-mode/v1', 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions']
+]);
+
 function normalizeHost(host) {
   const trimmed = String(host || '').trim();
   return trimmed || '127.0.0.1';
 }
 
+function normalizeLoopbackHost(host) {
+  const trimmed = String(host || '').trim();
+  return LOOPBACK_HOST_NAMES.has(trimmed) ? trimmed : LOCAL_OLLAMA_HOST;
+}
+
+function parseTimeoutOption(value, fallback, options) {
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < options[0]) {
+    return fallback;
+  }
+
+  return options.find((option) => parsed <= option) ?? fallback;
+}
+
+function normalizeBaseUrl(rawUrl) {
+  const trimmed = String(rawUrl || '').trim();
+  if (!trimmed) {
+    return '';
+  }
+
+  try {
+    const url = new URL(trimmed);
+    url.hash = '';
+    url.search = '';
+    url.pathname = url.pathname.replace(/\/+$/, '');
+    return url.toString().replace(/\/$/, '');
+  } catch {
+    return '';
+  }
+}
+
+function resolveAllowedQwenBaseUrl(rawUrl) {
+  const normalized = normalizeBaseUrl(rawUrl);
+  return ALLOWED_QWEN_BASE_URLS.find((allowedUrl) => allowedUrl === normalized) || '';
+}
+
+function resolveAllowedQwenChatCompletionsUrl(baseUrl) {
+  return QWEN_CHAT_COMPLETIONS_URLS.get(baseUrl) || '';
+}
+
 function parseCorsOrigin(rawOrigin = 'http://localhost:5173') {
   const trimmed = rawOrigin.trim();
   if (trimmed === '*') {
-    return true;
+    return [...DEFAULT_CORS_ORIGINS];
   }
 
-  return trimmed
+  const origins = trimmed
     .split(',')
     .map((item) => item.trim())
     .filter(Boolean);
+
+  return origins.length > 0 ? origins : [...DEFAULT_CORS_ORIGINS];
 }
 
 export function isAllowedCorsOrigin(origin, corsOrigin, allowLocalFileOrigins = false) {
-  if (corsOrigin === true) {
-    return true;
-  }
-
   if (!origin || origin === 'null' || origin.startsWith('file://')) {
     return allowLocalFileOrigins;
   }
 
-  return corsOrigin.includes(origin);
+  return Array.isArray(corsOrigin) && corsOrigin.includes(origin);
 }
 
 function createCorsOriginOption(config) {
-  if (config.corsOrigin === true) {
-    return true;
-  }
-
   return (origin, callback) => {
     callback(null, isAllowedCorsOrigin(origin, config.corsOrigin, config.allowLocalFileOrigins));
   };
@@ -55,17 +111,21 @@ function createCorsOriginOption(config) {
 
 export function loadQwenProxyConfig(env = process.env) {
   const vlmRuntimeConfig = loadVlmRuntimeConfig(env);
+  const qwenBaseUrl = resolveAllowedQwenBaseUrl(env.QWEN_BASE_URL);
+  const ollamaHost = normalizeLoopbackHost(vlmRuntimeConfig.host);
+  const ollamaPort = parseInteger(vlmRuntimeConfig.port, 11434, 1);
 
   return {
     host: normalizeHost(env.SERVER_HOST || '127.0.0.1'),
     port: parseInteger(env.SERVER_PORT, 8787),
     corsOrigin: parseCorsOrigin(env.CORS_ORIGIN || 'http://localhost:5173'),
     allowLocalFileOrigins: parseBoolean(env.ALLOW_LOCAL_FILE_ORIGINS, false),
-    qwenBaseUrl: (env.QWEN_BASE_URL || '').replace(/\/$/, ''),
+    qwenBaseUrl,
+    qwenChatCompletionsUrl: resolveAllowedQwenChatCompletionsUrl(qwenBaseUrl),
     qwenApiKey: env.QWEN_API_KEY || '',
     qwenModel: env.QWEN_MODEL || DEFAULT_VLM_MODEL_ALIAS,
-    qwenTimeout: parseInteger(env.QWEN_TIMEOUT, 60000),
-    ollamaTimeout: parseInteger(env.OLLAMA_TIMEOUT, 120000),
+    qwenTimeout: parseTimeoutOption(env.QWEN_TIMEOUT, 60_000, QWEN_TIMEOUT_OPTIONS_MS),
+    ollamaTimeout: parseTimeoutOption(env.OLLAMA_TIMEOUT, 120_000, OLLAMA_TIMEOUT_OPTIONS_MS),
     ollamaModel: vlmRuntimeConfig.modelAlias,
     requestBodyLimit: env.REQUEST_BODY_LIMIT || '2mb',
     chatRequestsPerMinute: parseInteger(env.CHAT_REQUESTS_PER_MINUTE, 30, 0),
@@ -73,7 +133,9 @@ export function loadQwenProxyConfig(env = process.env) {
     maxChatTokens: parseInteger(env.MAX_CHAT_TOKENS, 2048),
     localProxyToken: env.LOCAL_PROXY_TOKEN || '',
     logModelOutput: parseBoolean(env.LOG_MODEL_OUTPUT, false),
-    ollamaBaseUrl: `http://${vlmRuntimeConfig.host}:${vlmRuntimeConfig.port}`
+    ollamaHost,
+    ollamaPort,
+    ollamaBaseUrl: `http://${ollamaHost}:${ollamaPort}`
   };
 }
 
@@ -123,6 +185,42 @@ export function buildProxyErrorResponse(error, options) {
       }
     }
   };
+}
+
+function requestLocalOllamaText(config, options) {
+  const hostname = config.ollamaHost === 'localhost' ? 'localhost' : LOCAL_OLLAMA_HOST;
+
+  return new Promise((resolve, reject) => {
+    const upstreamRequest = http.request({
+      hostname,
+      port: config.ollamaPort,
+      path: options.path,
+      method: options.method,
+      headers: options.headers,
+      signal: options.signal
+    }, (upstreamResponse) => {
+      upstreamResponse.setEncoding('utf8');
+
+      let text = '';
+      upstreamResponse.on('data', (chunk) => {
+        text += chunk;
+      });
+      upstreamResponse.on('end', () => {
+        resolve({
+          status: upstreamResponse.statusCode || 502,
+          text
+        });
+      });
+    });
+
+    upstreamRequest.on('error', reject);
+
+    if (options.body) {
+      upstreamRequest.write(options.body);
+    }
+
+    upstreamRequest.end();
+  });
 }
 
 export function isLocalProxyTokenProtectedPath(pathname) {
@@ -270,6 +368,7 @@ export function createQwenProxyApp(config = loadQwenProxyConfig()) {
   const app = express();
   const chatRateLimiter = createChatRateLimiter(config);
   const chatPayloadValidator = createChatPayloadValidator(config);
+  const localProxyTokenGuard = createLocalProxyTokenGuard(config);
 
   app.use(compression());
 
@@ -279,10 +378,9 @@ export function createQwenProxyApp(config = loadQwenProxyConfig()) {
       credentials: config.corsOrigin !== true
     })
   );
-  app.use(createLocalProxyTokenGuard(config));
   app.use(express.json({ limit: config.requestBodyLimit }));
 
-  createOllamaProxyRoutes(app, config, chatRateLimiter, chatPayloadValidator);
+  createOllamaProxyRoutes(app, config, chatRateLimiter, chatPayloadValidator, localProxyTokenGuard);
 
   app.get(API_HEALTH_ROUTE, (_req, res) => {
     res.json({
@@ -294,8 +392,8 @@ export function createQwenProxyApp(config = loadQwenProxyConfig()) {
     });
   });
 
-  app.post(QWEN_CHAT_COMPLETIONS_ROUTE, chatRateLimiter, chatPayloadValidator, async (req, res) => {
-    if (!config.qwenBaseUrl || !config.qwenApiKey) {
+  app.post(QWEN_CHAT_COMPLETIONS_ROUTE, chatRateLimiter, localProxyTokenGuard, chatPayloadValidator, async (req, res) => {
+    if (!config.qwenChatCompletionsUrl || !config.qwenApiKey) {
       return res.status(500).json({
         error: {
           message: 'QWEN_BASE_URL 或 QWEN_API_KEY 未配置，请检查 .env.server',
@@ -308,7 +406,7 @@ export function createQwenProxyApp(config = loadQwenProxyConfig()) {
     const timer = setTimeout(() => controller.abort(), config.qwenTimeout);
 
     try {
-      const response = await fetch(`${config.qwenBaseUrl}/chat/completions`, {
+      const response = await fetch(config.qwenChatCompletionsUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -347,25 +445,26 @@ export function createQwenProxyApp(config = loadQwenProxyConfig()) {
   return app;
 }
 
-export function createOllamaProxyRoutes(app, config = loadQwenProxyConfig(), chatRateLimiter, chatPayloadValidator) {
-  const OLLAMA_BASE = config.ollamaBaseUrl || 'http://127.0.0.1:11434';
+export function createOllamaProxyRoutes(app, config = loadQwenProxyConfig(), chatRateLimiter, chatPayloadValidator, localProxyTokenGuard) {
   const OLLAMA_MODEL = config.ollamaModel || DEFAULT_VLM_MODEL_ALIAS;
   const rateLimiter = chatRateLimiter ?? createChatRateLimiter(config);
   const payloadValidator = chatPayloadValidator ?? createChatPayloadValidator(config);
+  const tokenGuard = localProxyTokenGuard ?? createLocalProxyTokenGuard(config);
 
-  app.post(OLLAMA_CHAT_COMPLETIONS_ROUTE, rateLimiter, payloadValidator, async (req, res) => {
+  app.post(OLLAMA_CHAT_COMPLETIONS_ROUTE, rateLimiter, tokenGuard, payloadValidator, async (req, res) => {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), config.ollamaTimeout);
 
     try {
-      const response = await fetch(`${OLLAMA_BASE}/v1/chat/completions`, {
+      const response = await requestLocalOllamaText(config, {
+        path: '/v1/chat/completions',
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(buildOllamaRequestBody(req.body, OLLAMA_MODEL)),
         signal: controller.signal
       });
 
-      const text = await response.text();
+      const text = response.text;
       const payload = parseProxyResponseText(text, () => {
         console.error('[ollama-proxy] Non-JSON response from upstream');
       });
@@ -392,11 +491,20 @@ export function createOllamaProxyRoutes(app, config = loadQwenProxyConfig(), cha
   });
 
   app.get(OLLAMA_STATUS_ROUTE, async (_req, res) => {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), OLLAMA_HEALTH_TIMEOUT_MS);
+
     try {
-      const r = await fetch(`${OLLAMA_BASE}/health`, { signal: AbortSignal.timeout(3000) });
-      res.json(resolveOllamaHealthStatus(r.status));
+      const response = await requestLocalOllamaText(config, {
+        path: '/health',
+        method: 'GET',
+        signal: controller.signal
+      });
+      res.json(resolveOllamaHealthStatus(response.status));
     } catch {
       res.json({ ready: false, status: 'error', gpu: 'unknown' });
+    } finally {
+      clearTimeout(timer);
     }
   });
 }

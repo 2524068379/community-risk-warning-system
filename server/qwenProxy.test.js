@@ -21,7 +21,7 @@ describe('qwenProxy', () => {
       QWEN_BASE_URL: 'http://127.0.0.1:1234/v1/',
       QWEN_API_KEY: 'test-key',
       QWEN_MODEL: 'qwen-vl',
-      QWEN_TIMEOUT: '12000',
+      QWEN_TIMEOUT: '90000',
       SERVER_HOST: '127.0.0.1',
       ALLOW_LOCAL_FILE_ORIGINS: 'true',
       REQUEST_BODY_LIMIT: '6mb',
@@ -38,9 +38,10 @@ describe('qwenProxy', () => {
     expect(config.corsOrigin).toEqual(['http://localhost:5173', 'http://localhost:4173']);
     expect(config.allowLocalFileOrigins).toBe(true);
     expect(config.qwenBaseUrl).toBe('http://127.0.0.1:1234/v1');
+    expect(config.qwenChatCompletionsUrl).toBe('http://127.0.0.1:1234/v1/chat/completions');
     expect(config.qwenApiKey).toBe('test-key');
     expect(config.qwenModel).toBe('qwen-vl');
-    expect(config.qwenTimeout).toBe(12000);
+    expect(config.qwenTimeout).toBe(90000);
     expect(config.requestBodyLimit).toBe('6mb');
     expect(config.chatRequestsPerMinute).toBe(20);
     expect(config.maxChatMessages).toBe(8);
@@ -48,6 +49,8 @@ describe('qwenProxy', () => {
     expect(config.localProxyToken).toBe('local-token');
     expect(config.logModelOutput).toBe(true);
     expect(config.ollamaModel).toBe('local-vlm');
+    expect(config.ollamaHost).toBe('127.0.0.1');
+    expect(config.ollamaPort).toBe(12345);
     expect(config.ollamaBaseUrl).toBe('http://127.0.0.1:12345');
   });
 
@@ -55,6 +58,17 @@ describe('qwenProxy', () => {
     const config = loadQwenProxyConfig({});
 
     expect(config.qwenModel).toBe(DEFAULT_VLM_MODEL_ALIAS);
+  });
+
+  it('uses explicit allow-lists for CORS and Qwen upstream URLs', () => {
+    const wildcardCorsConfig = loadQwenProxyConfig({ CORS_ORIGIN: '*' });
+    const unsupportedQwenConfig = loadQwenProxyConfig({
+      QWEN_BASE_URL: 'http://169.254.169.254/latest/meta-data'
+    });
+
+    expect(wildcardCorsConfig.corsOrigin).toEqual(['http://localhost:5173']);
+    expect(unsupportedQwenConfig.qwenBaseUrl).toBe('');
+    expect(unsupportedQwenConfig.qwenChatCompletionsUrl).toBe('');
   });
 
   it('uses the default model only when the request body omits model', () => {
