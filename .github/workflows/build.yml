@@ -59,7 +59,7 @@ jobs:
 
       - name: Cache CPU VLM runtime files
         if: env.IS_DEPENDABOT_PR != 'true'
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: resources/vlm
           key: vlm-runtime-b9484-cuda-12.4-v1
