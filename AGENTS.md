@@ -35,13 +35,13 @@ Recent commits use Conventional Commit-style prefixes, often with scopes: `feat:
 
 Copy `.env.example` to `.env` and `.env.server.example` to `.env.server`; never commit real `.env` files. Keep Qwen API keys only in the server environment. Restrict Baidu Map browser AK usage by Referer, and ensure local development origins such as `http://localhost:5173` are explicitly allowed.
 
-<!-- ARIS:BEGIN -->
-## ARIS Skill Scope
-For ARIS workflows in this project, use only the project-local ARIS skills under `.agents/skills/aris`.
-Do not use global skills or non-ARIS project skills unless the user explicitly asks to mix them.
-
-ARIS skills installed in this project are listed in `.aris/installed-skills-codex.txt`.
+<!-- ARIS-CODEX:BEGIN -->
+## ARIS Codex Skill Scope
+ARIS skills installed in this project: 80 entries.
+Manifest: `.aris/installed-skills-codex.txt`
+ARIS repo root: `C:\Users\Xuyuxuan\Downloads\github\Auto-claude-code-research-in-sleep`
+Project skill path: `.agents/skills/<skill-name>`
 For ARIS workflows, prefer the project-local skills under `.agents/skills/`.
-Do not edit or delete junctioned skills in place; update upstream or rerun the
-`install_aris.ps1` script with `-Reconcile` from the ARIS repo tools directory.
-<!-- ARIS:END -->
+Do not edit or delete junctioned skills in place; update upstream or rerun:
+`powershell -NoProfile -ExecutionPolicy Bypass -File "C:\Users\Xuyuxuan\Downloads\github\Auto-claude-code-research-in-sleep\tools\install_aris.ps1" "C:\Users\Xuyuxuan\Downloads\github\community-risk-warning-system" -Platform codex -Reconcile`
+<!-- ARIS-CODEX:END -->
