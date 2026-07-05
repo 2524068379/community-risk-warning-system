@@ -81,6 +81,14 @@ describe('qwenProxy', () => {
       'https://workspace-abc123.cn-beijing.maas.aliyuncs.com/compatible-mode/v1/chat/completions'
     );
   });
+  it('allows BigModel OpenAI-compatible VLM endpoints', () => {
+    const config = loadQwenProxyConfig({
+      QWEN_BASE_URL: 'https://open.bigmodel.cn/api/paas/v4/'
+    });
+
+    expect(config.qwenBaseUrl).toBe('https://open.bigmodel.cn/api/paas/v4');
+    expect(config.qwenChatCompletionsUrl).toBe('https://open.bigmodel.cn/api/paas/v4/chat/completions');
+  });
 
   it('uses the default model only when the request body omits model', () => {
     expect(buildQwenRequestBody({ messages: [] }, 'qwen-default')).toEqual({

@@ -29,7 +29,8 @@ const ALLOWED_QWEN_BASE_URLS = [
   'http://localhost:11434/v1',
   'https://dashscope.aliyuncs.com/compatible-mode/v1',
   'https://dashscope-intl.aliyuncs.com/compatible-mode/v1',
-  'https://dashscope-us.aliyuncs.com/compatible-mode/v1'
+  'https://dashscope-us.aliyuncs.com/compatible-mode/v1',
+  'https://open.bigmodel.cn/api/paas/v4'
 ];
 const QWEN_CHAT_COMPLETIONS_URLS = new Map([
   ['http://127.0.0.1:1234/v1', 'http://127.0.0.1:1234/v1/chat/completions'],
@@ -38,7 +39,8 @@ const QWEN_CHAT_COMPLETIONS_URLS = new Map([
   ['http://localhost:11434/v1', 'http://localhost:11434/v1/chat/completions'],
   ['https://dashscope.aliyuncs.com/compatible-mode/v1', 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions'],
   ['https://dashscope-intl.aliyuncs.com/compatible-mode/v1', 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions'],
-  ['https://dashscope-us.aliyuncs.com/compatible-mode/v1', 'https://dashscope-us.aliyuncs.com/compatible-mode/v1/chat/completions']
+  ['https://dashscope-us.aliyuncs.com/compatible-mode/v1', 'https://dashscope-us.aliyuncs.com/compatible-mode/v1/chat/completions'],
+  ['https://open.bigmodel.cn/api/paas/v4', 'https://open.bigmodel.cn/api/paas/v4/chat/completions']
 ]);
 const ALLOWED_QWEN_MAAS_HOST_RE = /^[a-zA-Z0-9][a-zA-Z0-9-]{0,62}\.(cn-beijing|ap-southeast-1|ap-northeast-1)\.maas\.aliyuncs\.com$/;
 
