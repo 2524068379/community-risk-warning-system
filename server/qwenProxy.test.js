@@ -12,7 +12,7 @@ import {
   validateChatCompletionPayload
 } from './qwenProxy.js';
 import { resolveOllamaHealthStatus } from './ollamaHealthStatus.js';
-import { DEFAULT_VLM_MODEL_ALIAS } from '../shared/vlmModelConfig.js';
+import { DEFAULT_QWEN_VLM_API_MODEL } from '../shared/vlmModelConfig.js';
 
 describe('qwenProxy', () => {
   it('normalizes config from environment variables', () => {
@@ -54,10 +54,10 @@ describe('qwenProxy', () => {
     expect(config.ollamaBaseUrl).toBe('http://127.0.0.1:12345');
   });
 
-  it('defaults to the configured Unsloth Qwen3.5 MTP model', () => {
+  it('defaults remote Qwen calls to a hosted VLM model', () => {
     const config = loadQwenProxyConfig({});
 
-    expect(config.qwenModel).toBe(DEFAULT_VLM_MODEL_ALIAS);
+    expect(config.qwenModel).toBe(DEFAULT_QWEN_VLM_API_MODEL);
   });
 
   it('uses explicit allow-lists for CORS and Qwen upstream URLs', () => {
@@ -69,6 +69,17 @@ describe('qwenProxy', () => {
     expect(wildcardCorsConfig.corsOrigin).toEqual(['http://localhost:5173']);
     expect(unsupportedQwenConfig.qwenBaseUrl).toBe('');
     expect(unsupportedQwenConfig.qwenChatCompletionsUrl).toBe('');
+  });
+
+  it('allows Bailian workspace-specific OpenAI-compatible VLM endpoints', () => {
+    const config = loadQwenProxyConfig({
+      QWEN_BASE_URL: 'https://workspace-abc123.cn-beijing.maas.aliyuncs.com/compatible-mode/v1/'
+    });
+
+    expect(config.qwenBaseUrl).toBe('https://workspace-abc123.cn-beijing.maas.aliyuncs.com/compatible-mode/v1');
+    expect(config.qwenChatCompletionsUrl).toBe(
+      'https://workspace-abc123.cn-beijing.maas.aliyuncs.com/compatible-mode/v1/chat/completions'
+    );
   });
 
   it('uses the default model only when the request body omits model', () => {

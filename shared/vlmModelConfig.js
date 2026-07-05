@@ -1,4 +1,5 @@
 export const DEFAULT_VLM_MODEL_ALIAS = 'qwen3.5-4b-mtp:q4_k_m';
+export const DEFAULT_QWEN_VLM_API_MODEL = 'qwen3-vl-plus';
 export const VLM_MODEL_REPO = 'unsloth/Qwen3.5-4B-MTP-GGUF';
 export const VLM_MODEL_FILE = 'Qwen3.5-4B-Q4_K_M.gguf';
 export const VLM_MMPROJ_REPO = 'unsloth/Qwen3.5-4B-MTP-GGUF';

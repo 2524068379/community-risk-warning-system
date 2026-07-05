@@ -10,7 +10,7 @@ import {
   OLLAMA_STATUS_ROUTE,
   QWEN_CHAT_COMPLETIONS_ROUTE
 } from '../shared/apiRoutes.js';
-import { DEFAULT_VLM_MODEL_ALIAS } from '../shared/vlmModelConfig.js';
+import { DEFAULT_QWEN_VLM_API_MODEL, DEFAULT_VLM_MODEL_ALIAS } from '../shared/vlmModelConfig.js';
 import { loadVlmRuntimeConfig } from '../shared/vlmRuntimeConfig.js';
 import { parseBoolean, parseInteger } from '../shared/envParsers.js';
 
@@ -27,15 +27,20 @@ const ALLOWED_QWEN_BASE_URLS = [
   'http://localhost:1234/v1',
   'http://127.0.0.1:11434/v1',
   'http://localhost:11434/v1',
-  'https://dashscope.aliyuncs.com/compatible-mode/v1'
+  'https://dashscope.aliyuncs.com/compatible-mode/v1',
+  'https://dashscope-intl.aliyuncs.com/compatible-mode/v1',
+  'https://dashscope-us.aliyuncs.com/compatible-mode/v1'
 ];
 const QWEN_CHAT_COMPLETIONS_URLS = new Map([
   ['http://127.0.0.1:1234/v1', 'http://127.0.0.1:1234/v1/chat/completions'],
   ['http://localhost:1234/v1', 'http://localhost:1234/v1/chat/completions'],
   ['http://127.0.0.1:11434/v1', 'http://127.0.0.1:11434/v1/chat/completions'],
   ['http://localhost:11434/v1', 'http://localhost:11434/v1/chat/completions'],
-  ['https://dashscope.aliyuncs.com/compatible-mode/v1', 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions']
+  ['https://dashscope.aliyuncs.com/compatible-mode/v1', 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions'],
+  ['https://dashscope-intl.aliyuncs.com/compatible-mode/v1', 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions'],
+  ['https://dashscope-us.aliyuncs.com/compatible-mode/v1', 'https://dashscope-us.aliyuncs.com/compatible-mode/v1/chat/completions']
 ]);
+const ALLOWED_QWEN_MAAS_HOST_RE = /^[a-zA-Z0-9][a-zA-Z0-9-]{0,62}\.(cn-beijing|ap-southeast-1|ap-northeast-1)\.maas\.aliyuncs\.com$/;
 
 function normalizeHost(host) {
   const trimmed = String(host || '').trim();
@@ -75,11 +80,45 @@ function normalizeBaseUrl(rawUrl) {
 
 function resolveAllowedQwenBaseUrl(rawUrl) {
   const normalized = normalizeBaseUrl(rawUrl);
-  return ALLOWED_QWEN_BASE_URLS.find((allowedUrl) => allowedUrl === normalized) || '';
+  if (ALLOWED_QWEN_BASE_URLS.includes(normalized)) {
+    return normalized;
+  }
+
+  try {
+    const url = new URL(normalized);
+    if (
+      url.protocol === 'https:' &&
+      url.pathname === '/compatible-mode/v1' &&
+      ALLOWED_QWEN_MAAS_HOST_RE.test(url.hostname)
+    ) {
+      return normalized;
+    }
+  } catch {
+    return '';
+  }
+
+  return '';
 }
 
 function resolveAllowedQwenChatCompletionsUrl(baseUrl) {
-  return QWEN_CHAT_COMPLETIONS_URLS.get(baseUrl) || '';
+  if (QWEN_CHAT_COMPLETIONS_URLS.has(baseUrl)) {
+    return QWEN_CHAT_COMPLETIONS_URLS.get(baseUrl);
+  }
+
+  try {
+    const url = new URL(baseUrl);
+    if (
+      url.protocol === 'https:' &&
+      url.pathname === '/compatible-mode/v1' &&
+      ALLOWED_QWEN_MAAS_HOST_RE.test(url.hostname)
+    ) {
+      return `${baseUrl}/chat/completions`;
+    }
+  } catch {
+    return '';
+  }
+
+  return '';
 }
 
 function parseCorsOrigin(rawOrigin = 'http://localhost:5173') {
@@ -124,7 +163,7 @@ export function loadQwenProxyConfig(env = process.env) {
     qwenBaseUrl,
     qwenChatCompletionsUrl: resolveAllowedQwenChatCompletionsUrl(qwenBaseUrl),
     qwenApiKey: env.QWEN_API_KEY || '',
-    qwenModel: env.QWEN_MODEL || DEFAULT_VLM_MODEL_ALIAS,
+    qwenModel: env.QWEN_MODEL || DEFAULT_QWEN_VLM_API_MODEL,
     qwenTimeout: parseTimeoutOption(env.QWEN_TIMEOUT, 60_000, QWEN_TIMEOUT_OPTIONS_MS),
     ollamaTimeout: parseTimeoutOption(env.OLLAMA_TIMEOUT, 120_000, OLLAMA_TIMEOUT_OPTIONS_MS),
     ollamaModel: vlmRuntimeConfig.modelAlias,

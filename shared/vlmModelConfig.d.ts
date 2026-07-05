@@ -1,4 +1,5 @@
 export declare const DEFAULT_VLM_MODEL_ALIAS: string;
+export declare const DEFAULT_QWEN_VLM_API_MODEL: string;
 export declare const VLM_MODEL_REPO: string;
 export declare const VLM_MMPROJ_REPO: string;
 export declare const VLM_MODEL_FILE: string;

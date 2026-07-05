@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   DEFAULT_VLM_MODEL_ALIAS,
+  DEFAULT_QWEN_VLM_API_MODEL,
   LLAMA_CPP_CUDA_VERSION,
   LLAMA_CPP_VERSION,
   VLM_HAS_MMPROJ,
@@ -17,6 +18,7 @@ import {
 describe('vlmModelConfig', () => {
   it('keeps the current Unsloth Qwen3.5 MTP model and bundled mmproj configuration', () => {
     expect(DEFAULT_VLM_MODEL_ALIAS).toBe('qwen3.5-4b-mtp:q4_k_m');
+    expect(DEFAULT_QWEN_VLM_API_MODEL).toBe('qwen3-vl-plus');
     expect(VLM_MODEL_REPO).toBe('unsloth/Qwen3.5-4B-MTP-GGUF');
     expect(VLM_MODEL_FILE).toBe('Qwen3.5-4B-Q4_K_M.gguf');
     expect(VLM_MMPROJ_REPO).toBe('unsloth/Qwen3.5-4B-MTP-GGUF');

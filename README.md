@@ -128,7 +128,7 @@ VITE_BAIDU_MAP_CENTER_LAT=32.060255
 VITE_BAIDU_MAP_ZOOM=16
 
 VITE_QWEN_PROXY_PATH=/api/qwen/chat/completions
-VITE_QWEN_MODEL=qwen3.5-4b-mtp:q4_k_m
+VITE_QWEN_MODEL=qwen3-vl-plus
 
 VITE_DEMO_STREAM_URL=
 VITE_DEMO_STREAM_TYPE=flv
@@ -160,9 +160,9 @@ MAX_CHAT_TOKENS=2048
 LOG_MODEL_OUTPUT=false
 LOCAL_PROXY_TOKEN=
 
-QWEN_BASE_URL=http://127.0.0.1:1234/v1
+QWEN_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
 QWEN_API_KEY=
-QWEN_MODEL=qwen3.5-4b-mtp:q4_k_m
+QWEN_MODEL=qwen3-vl-plus
 QWEN_TIMEOUT=60000
 
 VLM_HOST=127.0.0.1
@@ -182,7 +182,7 @@ VLM_MTP_ENABLED=false
 VLM_MTP_DRAFT_TOKENS=4
 ```
 
-`VITE_*` 变量会进入浏览器代码，不要放入真实密钥。Qwen API Key 只应写入 `.env.server` 或 CI Secret。`LOCAL_PROXY_TOKEN` 为空时不会启用 token 校验；当独立代理绑定非本机地址时，应设置一个高熵随机值，并由调用方通过 `X-Local-Proxy-Token` 请求头传入。`QWEN_BASE_URL` 只接受代理内置白名单中的 OpenAI-compatible 上游地址，例如本机 LM Studio/Ollama 兼容端点或 DashScope 兼容模式端点。
+`VITE_*` 变量会进入浏览器代码，不要放入真实密钥。Qwen API Key 只应写入 `.env.server`、CI Secret 或 ESA Pages 环境变量。`LOCAL_PROXY_TOKEN` 为空时不会启用 token 校验；当独立代理绑定非本机地址时，应设置一个高熵随机值，并由调用方通过 `X-Local-Proxy-Token` 请求头传入。`QWEN_BASE_URL` 只接受代理内置白名单中的 OpenAI-compatible 上游地址，例如本机 LM Studio/Ollama 兼容端点、DashScope 兼容模式端点或百炼业务空间专属域名。
 
 ### 下载本地 VLM 资源
 
@@ -235,14 +235,27 @@ npm run dev:all
 
 同时启动浏览器渲染进程与 Express 代理。
 
+## ESA Pages 部署
+
+仓库根目录已提供 `esa.jsonc`，ESA Pages 会执行 `npm ci` 与 `npm run build:pages`，将 Vite 构建产物 `dist/` 作为 SPA 静态资源发布，并使用 `esa/index.js` 作为边缘函数入口处理 `/api/*` 请求。
+
+在 ESA Pages 控制台的环境变量中至少配置：
+
+```env
+QWEN_API_KEY=你的百炼API Key
+QWEN_MODEL=qwen3-vl-plus
+```
+
+`QWEN_BASE_URL` 可不填，默认使用 `https://dashscope.aliyuncs.com/compatible-mode/v1`；如果使用百炼业务空间专属域名，可设置为 `https://{WorkspaceId}.cn-beijing.maas.aliyuncs.com/compatible-mode/v1` 等官方 OpenAI-compatible Vision 地址。`/api/ollama/chat/completions` 在 ESA Pages 上会被边缘函数转发到 Qwen VLM API，以保持前端调用路径不变。
+
 ## API 路由
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
 | GET | `/api/health` | 代理健康检查，返回 Qwen 配置状态和默认模型 |
 | POST | `/api/qwen/chat/completions` | Qwen OpenAI-compatible 远程接口代理 |
-| POST | `/api/ollama/chat/completions` | 本地 llama.cpp VLM 代理，命名沿用 `ollama` |
-| GET | `/api/ollama/status` | 本地 VLM 健康状态查询 |
+| POST | `/api/ollama/chat/completions` | 本地 llama.cpp VLM 代理；ESA Pages 中作为云端 Qwen VLM 兼容别名 |
+| GET | `/api/ollama/status` | 本地 VLM 健康状态查询；ESA Pages 中返回 Qwen VLM API 配置状态 |
 
 代理层会统一执行请求体大小限制、消息数量限制、`max_tokens` 上限校验、每 IP 每分钟限流、CORS 白名单和上游请求超时控制。
 
@@ -322,6 +335,9 @@ npm run typecheck
 
 # Electron/Vite 生产构建
 npm run build
+
+# ESA Pages 静态构建
+npm run build:pages
 
 # Windows portable zip 打包
 npm run package
