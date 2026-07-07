@@ -37,6 +37,7 @@ describe('qwenProxy', () => {
     expect(config.host).toBe('127.0.0.1');
     expect(config.corsOrigin).toEqual(['http://localhost:5173', 'http://localhost:4173']);
     expect(config.allowLocalFileOrigins).toBe(true);
+    expect(config.qwenEndpointKey).toBe('local-lm-studio');
     expect(config.qwenBaseUrl).toBe('http://127.0.0.1:1234/v1');
     expect(config.qwenChatCompletionsUrl).toBe('http://127.0.0.1:1234/v1/chat/completions');
     expect(config.qwenApiKey).toBe('test-key');
@@ -71,21 +72,22 @@ describe('qwenProxy', () => {
     expect(unsupportedQwenConfig.qwenChatCompletionsUrl).toBe('');
   });
 
-  it('allows Bailian workspace-specific OpenAI-compatible VLM endpoints', () => {
+  it('rejects workspace-specific MaaS URLs unless they are added to the fixed endpoint table', () => {
     const config = loadQwenProxyConfig({
       QWEN_BASE_URL: 'https://workspace-abc123.cn-beijing.maas.aliyuncs.com/compatible-mode/v1/'
     });
 
-    expect(config.qwenBaseUrl).toBe('https://workspace-abc123.cn-beijing.maas.aliyuncs.com/compatible-mode/v1');
-    expect(config.qwenChatCompletionsUrl).toBe(
-      'https://workspace-abc123.cn-beijing.maas.aliyuncs.com/compatible-mode/v1/chat/completions'
-    );
+    expect(config.qwenEndpointKey).toBe('');
+    expect(config.qwenBaseUrl).toBe('');
+    expect(config.qwenChatCompletionsUrl).toBe('');
   });
+
   it('allows BigModel OpenAI-compatible VLM endpoints', () => {
     const config = loadQwenProxyConfig({
       QWEN_BASE_URL: 'https://open.bigmodel.cn/api/paas/v4/'
     });
 
+    expect(config.qwenEndpointKey).toBe('bigmodel');
     expect(config.qwenBaseUrl).toBe('https://open.bigmodel.cn/api/paas/v4');
     expect(config.qwenChatCompletionsUrl).toBe('https://open.bigmodel.cn/api/paas/v4/chat/completions');
   });

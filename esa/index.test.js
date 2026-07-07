@@ -9,6 +9,7 @@ import {
 describe('ESA Pages API config', () => {
   it('uses Qwen VL hosted API defaults', () => {
     expect(loadPagesApiConfig({ DASHSCOPE_API_KEY: 'sk-test' })).toMatchObject({
+      endpointKey: 'dashscope-cn',
       baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
       chatCompletionsUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions',
       apiKey: 'sk-test',
@@ -16,10 +17,21 @@ describe('ESA Pages API config', () => {
     });
   });
 
-  it('allows Bailian workspace-specific OpenAI-compatible endpoints', () => {
+  it('rejects workspace-specific MaaS URLs unless they are added to the fixed endpoint table', () => {
     expect(resolveAllowedQwenBaseUrl(
       'https://workspace-abc123.cn-beijing.maas.aliyuncs.com/compatible-mode/v1/'
-    )).toBe('https://workspace-abc123.cn-beijing.maas.aliyuncs.com/compatible-mode/v1');
+    )).toBe('');
+  });
+
+  it('allows the fixed BigModel OpenAI-compatible endpoint', () => {
+    expect(loadPagesApiConfig({
+      QWEN_BASE_URL: 'https://open.bigmodel.cn/api/paas/v4/',
+      QWEN_API_KEY: 'sk-test'
+    })).toMatchObject({
+      endpointKey: 'bigmodel',
+      baseUrl: 'https://open.bigmodel.cn/api/paas/v4',
+      chatCompletionsUrl: 'https://open.bigmodel.cn/api/paas/v4/chat/completions'
+    });
   });
 
   it('blocks unsupported upstream URLs', () => {

@@ -8,12 +8,35 @@ export const DEFAULT_QWEN_VLM_API_MODEL = 'qwen3-vl-plus';
 
 const JSON_CONTENT_TYPE = 'application/json; charset=utf-8';
 const DEFAULT_QWEN_TIMEOUT_MS = 120000;
-const ALLOWED_QWEN_BASE_URLS = [
-  'https://dashscope.aliyuncs.com/compatible-mode/v1',
-  'https://dashscope-intl.aliyuncs.com/compatible-mode/v1',
-  'https://dashscope-us.aliyuncs.com/compatible-mode/v1'
-];
-const ALLOWED_QWEN_MAAS_HOST_RE = /^[a-zA-Z0-9][a-zA-Z0-9-]{0,62}\.(cn-beijing|ap-southeast-1|ap-northeast-1)\.maas\.aliyuncs\.com$/;
+const QWEN_ENDPOINT_KEYS = {
+  DASHSCOPE_CN: 'dashscope-cn',
+  DASHSCOPE_INTL: 'dashscope-intl',
+  DASHSCOPE_US: 'dashscope-us',
+  BIGMODEL: 'bigmodel'
+};
+
+const QWEN_ENDPOINTS = {
+  DASHSCOPE_CN: {
+    key: QWEN_ENDPOINT_KEYS.DASHSCOPE_CN,
+    baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+    chatCompletionsUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions'
+  },
+  DASHSCOPE_INTL: {
+    key: QWEN_ENDPOINT_KEYS.DASHSCOPE_INTL,
+    baseUrl: 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1',
+    chatCompletionsUrl: 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions'
+  },
+  DASHSCOPE_US: {
+    key: QWEN_ENDPOINT_KEYS.DASHSCOPE_US,
+    baseUrl: 'https://dashscope-us.aliyuncs.com/compatible-mode/v1',
+    chatCompletionsUrl: 'https://dashscope-us.aliyuncs.com/compatible-mode/v1/chat/completions'
+  },
+  BIGMODEL: {
+    key: QWEN_ENDPOINT_KEYS.BIGMODEL,
+    baseUrl: 'https://open.bigmodel.cn/api/paas/v4',
+    chatCompletionsUrl: 'https://open.bigmodel.cn/api/paas/v4/chat/completions'
+  }
+};
 
 function getEnv() {
   return typeof process !== 'undefined' && process.env ? process.env : {};
@@ -37,29 +60,22 @@ function normalizeBaseUrl(rawUrl) {
 }
 
 export function resolveAllowedQwenBaseUrl(rawUrl = DEFAULT_QWEN_BASE_URL) {
-  const normalized = normalizeBaseUrl(rawUrl);
-  if (ALLOWED_QWEN_BASE_URLS.includes(normalized)) {
-    return normalized;
-  }
-
-  try {
-    const url = new URL(normalized);
-    if (
-      url.protocol === 'https:' &&
-      url.pathname === '/compatible-mode/v1' &&
-      ALLOWED_QWEN_MAAS_HOST_RE.test(url.hostname)
-    ) {
-      return normalized;
-    }
-  } catch {
-    return '';
-  }
-
-  return '';
+  return resolveQwenEndpoint(rawUrl).baseUrl;
 }
 
-function resolveQwenChatCompletionsUrl(baseUrl) {
-  return baseUrl ? `${baseUrl}/chat/completions` : '';
+function resolveQwenEndpoint(rawBaseUrl = DEFAULT_QWEN_BASE_URL) {
+  switch (normalizeBaseUrl(rawBaseUrl || DEFAULT_QWEN_BASE_URL)) {
+    case QWEN_ENDPOINTS.DASHSCOPE_CN.baseUrl:
+      return QWEN_ENDPOINTS.DASHSCOPE_CN;
+    case QWEN_ENDPOINTS.DASHSCOPE_INTL.baseUrl:
+      return QWEN_ENDPOINTS.DASHSCOPE_INTL;
+    case QWEN_ENDPOINTS.DASHSCOPE_US.baseUrl:
+      return QWEN_ENDPOINTS.DASHSCOPE_US;
+    case QWEN_ENDPOINTS.BIGMODEL.baseUrl:
+      return QWEN_ENDPOINTS.BIGMODEL;
+    default:
+      return { key: '', baseUrl: '', chatCompletionsUrl: '' };
+  }
 }
 
 function parseTimeout(value) {
@@ -70,13 +86,14 @@ function parseTimeout(value) {
 }
 
 export function loadPagesApiConfig(env = getEnv()) {
-  const baseUrl = resolveAllowedQwenBaseUrl(
+  const endpoint = resolveQwenEndpoint(
     env.QWEN_BASE_URL || env.DASHSCOPE_BASE_URL || DEFAULT_QWEN_BASE_URL
   );
 
   return {
-    baseUrl,
-    chatCompletionsUrl: resolveQwenChatCompletionsUrl(baseUrl),
+    endpointKey: endpoint.key,
+    baseUrl: endpoint.baseUrl,
+    chatCompletionsUrl: endpoint.chatCompletionsUrl,
     apiKey: env.QWEN_API_KEY || env.DASHSCOPE_API_KEY || '',
     model: env.QWEN_MODEL || env.DASHSCOPE_MODEL || DEFAULT_QWEN_VLM_API_MODEL,
     timeoutMs: parseTimeout(env.QWEN_TIMEOUT || env.DASHSCOPE_TIMEOUT)
@@ -155,7 +172,7 @@ export function buildVlmApiRequestBody(body = {}, model = DEFAULT_QWEN_VLM_API_M
   return requestBody;
 }
 
-async function fetchWithTimeout(url, init, timeoutMs) {
+async function fetchStaticQwenEndpoint(url, init, timeoutMs) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
 
@@ -169,12 +186,27 @@ async function fetchWithTimeout(url, init, timeoutMs) {
   }
 }
 
+function fetchKnownQwenChatCompletions(endpointKey, init, timeoutMs) {
+  switch (endpointKey) {
+    case QWEN_ENDPOINT_KEYS.DASHSCOPE_CN:
+      return fetchStaticQwenEndpoint('https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions', init, timeoutMs);
+    case QWEN_ENDPOINT_KEYS.DASHSCOPE_INTL:
+      return fetchStaticQwenEndpoint('https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions', init, timeoutMs);
+    case QWEN_ENDPOINT_KEYS.DASHSCOPE_US:
+      return fetchStaticQwenEndpoint('https://dashscope-us.aliyuncs.com/compatible-mode/v1/chat/completions', init, timeoutMs);
+    case QWEN_ENDPOINT_KEYS.BIGMODEL:
+      return fetchStaticQwenEndpoint('https://open.bigmodel.cn/api/paas/v4/chat/completions', init, timeoutMs);
+    default:
+      throw new Error('Unsupported Qwen upstream endpoint');
+  }
+}
+
 async function handleChatCompletions(request, config) {
   if (request.method !== 'POST') {
     return methodNotAllowed(request, 'POST, OPTIONS');
   }
 
-  if (!config.chatCompletionsUrl || !config.apiKey) {
+  if (!config.endpointKey || !config.apiKey) {
     return jsonResponse(request, {
       error: {
         message: 'QWEN_BASE_URL 或 QWEN_API_KEY 未配置，请在 ESA Pages 环境变量中设置',
@@ -206,7 +238,7 @@ async function handleChatCompletions(request, config) {
   }
 
   try {
-    const upstreamResponse = await fetchWithTimeout(config.chatCompletionsUrl, {
+    const upstreamResponse = await fetchKnownQwenChatCompletions(config.endpointKey, {
       method: 'POST',
       headers: {
         'content-type': JSON_CONTENT_TYPE,

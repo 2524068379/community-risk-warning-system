@@ -22,27 +22,59 @@ const OLLAMA_TIMEOUT_OPTIONS_MS = [30_000, 60_000, 120_000, 180_000, 300_000];
 const OLLAMA_HEALTH_TIMEOUT_MS = 3000;
 const LOCAL_OLLAMA_HOST = '127.0.0.1';
 const LOOPBACK_HOST_NAMES = new Set(['127.0.0.1', 'localhost']);
-const ALLOWED_QWEN_BASE_URLS = [
-  'http://127.0.0.1:1234/v1',
-  'http://localhost:1234/v1',
-  'http://127.0.0.1:11434/v1',
-  'http://localhost:11434/v1',
-  'https://dashscope.aliyuncs.com/compatible-mode/v1',
-  'https://dashscope-intl.aliyuncs.com/compatible-mode/v1',
-  'https://dashscope-us.aliyuncs.com/compatible-mode/v1',
-  'https://open.bigmodel.cn/api/paas/v4'
-];
-const QWEN_CHAT_COMPLETIONS_URLS = new Map([
-  ['http://127.0.0.1:1234/v1', 'http://127.0.0.1:1234/v1/chat/completions'],
-  ['http://localhost:1234/v1', 'http://localhost:1234/v1/chat/completions'],
-  ['http://127.0.0.1:11434/v1', 'http://127.0.0.1:11434/v1/chat/completions'],
-  ['http://localhost:11434/v1', 'http://localhost:11434/v1/chat/completions'],
-  ['https://dashscope.aliyuncs.com/compatible-mode/v1', 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions'],
-  ['https://dashscope-intl.aliyuncs.com/compatible-mode/v1', 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions'],
-  ['https://dashscope-us.aliyuncs.com/compatible-mode/v1', 'https://dashscope-us.aliyuncs.com/compatible-mode/v1/chat/completions'],
-  ['https://open.bigmodel.cn/api/paas/v4', 'https://open.bigmodel.cn/api/paas/v4/chat/completions']
-]);
-const ALLOWED_QWEN_MAAS_HOST_RE = /^[a-zA-Z0-9][a-zA-Z0-9-]{0,62}\.(cn-beijing|ap-southeast-1|ap-northeast-1)\.maas\.aliyuncs\.com$/;
+const QWEN_ENDPOINT_KEYS = {
+  LOCAL_LM_STUDIO: 'local-lm-studio',
+  LOCAL_LM_STUDIO_HOSTNAME: 'local-lm-studio-hostname',
+  LOCAL_OLLAMA: 'local-ollama',
+  LOCAL_OLLAMA_HOSTNAME: 'local-ollama-hostname',
+  DASHSCOPE_CN: 'dashscope-cn',
+  DASHSCOPE_INTL: 'dashscope-intl',
+  DASHSCOPE_US: 'dashscope-us',
+  BIGMODEL: 'bigmodel'
+};
+
+const QWEN_ENDPOINTS = {
+  LOCAL_LM_STUDIO: {
+    key: QWEN_ENDPOINT_KEYS.LOCAL_LM_STUDIO,
+    baseUrl: 'http://127.0.0.1:1234/v1',
+    chatCompletionsUrl: 'http://127.0.0.1:1234/v1/chat/completions'
+  },
+  LOCAL_LM_STUDIO_HOSTNAME: {
+    key: QWEN_ENDPOINT_KEYS.LOCAL_LM_STUDIO_HOSTNAME,
+    baseUrl: 'http://localhost:1234/v1',
+    chatCompletionsUrl: 'http://localhost:1234/v1/chat/completions'
+  },
+  LOCAL_OLLAMA: {
+    key: QWEN_ENDPOINT_KEYS.LOCAL_OLLAMA,
+    baseUrl: 'http://127.0.0.1:11434/v1',
+    chatCompletionsUrl: 'http://127.0.0.1:11434/v1/chat/completions'
+  },
+  LOCAL_OLLAMA_HOSTNAME: {
+    key: QWEN_ENDPOINT_KEYS.LOCAL_OLLAMA_HOSTNAME,
+    baseUrl: 'http://localhost:11434/v1',
+    chatCompletionsUrl: 'http://localhost:11434/v1/chat/completions'
+  },
+  DASHSCOPE_CN: {
+    key: QWEN_ENDPOINT_KEYS.DASHSCOPE_CN,
+    baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+    chatCompletionsUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions'
+  },
+  DASHSCOPE_INTL: {
+    key: QWEN_ENDPOINT_KEYS.DASHSCOPE_INTL,
+    baseUrl: 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1',
+    chatCompletionsUrl: 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions'
+  },
+  DASHSCOPE_US: {
+    key: QWEN_ENDPOINT_KEYS.DASHSCOPE_US,
+    baseUrl: 'https://dashscope-us.aliyuncs.com/compatible-mode/v1',
+    chatCompletionsUrl: 'https://dashscope-us.aliyuncs.com/compatible-mode/v1/chat/completions'
+  },
+  BIGMODEL: {
+    key: QWEN_ENDPOINT_KEYS.BIGMODEL,
+    baseUrl: 'https://open.bigmodel.cn/api/paas/v4',
+    chatCompletionsUrl: 'https://open.bigmodel.cn/api/paas/v4/chat/completions'
+  }
+};
 
 function normalizeHost(host) {
   const trimmed = String(host || '').trim();
@@ -80,47 +112,50 @@ function normalizeBaseUrl(rawUrl) {
   }
 }
 
-function resolveAllowedQwenBaseUrl(rawUrl) {
-  const normalized = normalizeBaseUrl(rawUrl);
-  if (ALLOWED_QWEN_BASE_URLS.includes(normalized)) {
-    return normalized;
+function resolveQwenEndpoint(rawBaseUrl) {
+  switch (normalizeBaseUrl(rawBaseUrl)) {
+    case QWEN_ENDPOINTS.LOCAL_LM_STUDIO.baseUrl:
+      return QWEN_ENDPOINTS.LOCAL_LM_STUDIO;
+    case QWEN_ENDPOINTS.LOCAL_LM_STUDIO_HOSTNAME.baseUrl:
+      return QWEN_ENDPOINTS.LOCAL_LM_STUDIO_HOSTNAME;
+    case QWEN_ENDPOINTS.LOCAL_OLLAMA.baseUrl:
+      return QWEN_ENDPOINTS.LOCAL_OLLAMA;
+    case QWEN_ENDPOINTS.LOCAL_OLLAMA_HOSTNAME.baseUrl:
+      return QWEN_ENDPOINTS.LOCAL_OLLAMA_HOSTNAME;
+    case QWEN_ENDPOINTS.DASHSCOPE_CN.baseUrl:
+      return QWEN_ENDPOINTS.DASHSCOPE_CN;
+    case QWEN_ENDPOINTS.DASHSCOPE_INTL.baseUrl:
+      return QWEN_ENDPOINTS.DASHSCOPE_INTL;
+    case QWEN_ENDPOINTS.DASHSCOPE_US.baseUrl:
+      return QWEN_ENDPOINTS.DASHSCOPE_US;
+    case QWEN_ENDPOINTS.BIGMODEL.baseUrl:
+      return QWEN_ENDPOINTS.BIGMODEL;
+    default:
+      return { key: '', baseUrl: '', chatCompletionsUrl: '' };
   }
-
-  try {
-    const url = new URL(normalized);
-    if (
-      url.protocol === 'https:' &&
-      url.pathname === '/compatible-mode/v1' &&
-      ALLOWED_QWEN_MAAS_HOST_RE.test(url.hostname)
-    ) {
-      return normalized;
-    }
-  } catch {
-    return '';
-  }
-
-  return '';
 }
 
-function resolveAllowedQwenChatCompletionsUrl(baseUrl) {
-  if (QWEN_CHAT_COMPLETIONS_URLS.has(baseUrl)) {
-    return QWEN_CHAT_COMPLETIONS_URLS.get(baseUrl);
+function fetchKnownQwenChatCompletions(endpointKey, init) {
+  switch (endpointKey) {
+    case QWEN_ENDPOINT_KEYS.LOCAL_LM_STUDIO:
+      return fetch('http://127.0.0.1:1234/v1/chat/completions', init);
+    case QWEN_ENDPOINT_KEYS.LOCAL_LM_STUDIO_HOSTNAME:
+      return fetch('http://localhost:1234/v1/chat/completions', init);
+    case QWEN_ENDPOINT_KEYS.LOCAL_OLLAMA:
+      return fetch('http://127.0.0.1:11434/v1/chat/completions', init);
+    case QWEN_ENDPOINT_KEYS.LOCAL_OLLAMA_HOSTNAME:
+      return fetch('http://localhost:11434/v1/chat/completions', init);
+    case QWEN_ENDPOINT_KEYS.DASHSCOPE_CN:
+      return fetch('https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions', init);
+    case QWEN_ENDPOINT_KEYS.DASHSCOPE_INTL:
+      return fetch('https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions', init);
+    case QWEN_ENDPOINT_KEYS.DASHSCOPE_US:
+      return fetch('https://dashscope-us.aliyuncs.com/compatible-mode/v1/chat/completions', init);
+    case QWEN_ENDPOINT_KEYS.BIGMODEL:
+      return fetch('https://open.bigmodel.cn/api/paas/v4/chat/completions', init);
+    default:
+      throw new Error('Unsupported Qwen upstream endpoint');
   }
-
-  try {
-    const url = new URL(baseUrl);
-    if (
-      url.protocol === 'https:' &&
-      url.pathname === '/compatible-mode/v1' &&
-      ALLOWED_QWEN_MAAS_HOST_RE.test(url.hostname)
-    ) {
-      return `${baseUrl}/chat/completions`;
-    }
-  } catch {
-    return '';
-  }
-
-  return '';
 }
 
 function parseCorsOrigin(rawOrigin = 'http://localhost:5173') {
@@ -153,7 +188,7 @@ function createCorsOriginOption(config) {
 
 export function loadQwenProxyConfig(env = process.env) {
   const vlmRuntimeConfig = loadVlmRuntimeConfig(env);
-  const qwenBaseUrl = resolveAllowedQwenBaseUrl(env.QWEN_BASE_URL);
+  const qwenEndpoint = resolveQwenEndpoint(env.QWEN_BASE_URL);
   const ollamaHost = normalizeLoopbackHost(vlmRuntimeConfig.host);
   const ollamaPort = parseInteger(vlmRuntimeConfig.port, 11434, 1);
 
@@ -162,8 +197,9 @@ export function loadQwenProxyConfig(env = process.env) {
     port: parseInteger(env.SERVER_PORT, 8787),
     corsOrigin: parseCorsOrigin(env.CORS_ORIGIN || 'http://localhost:5173'),
     allowLocalFileOrigins: parseBoolean(env.ALLOW_LOCAL_FILE_ORIGINS, false),
-    qwenBaseUrl,
-    qwenChatCompletionsUrl: resolveAllowedQwenChatCompletionsUrl(qwenBaseUrl),
+    qwenEndpointKey: qwenEndpoint.key,
+    qwenBaseUrl: qwenEndpoint.baseUrl,
+    qwenChatCompletionsUrl: qwenEndpoint.chatCompletionsUrl,
     qwenApiKey: env.QWEN_API_KEY || '',
     qwenModel: env.QWEN_MODEL || DEFAULT_QWEN_VLM_API_MODEL,
     qwenTimeout: parseTimeoutOption(env.QWEN_TIMEOUT, 60_000, QWEN_TIMEOUT_OPTIONS_MS),
@@ -390,7 +426,7 @@ function resolveChatRateLimiter(config) {
 
 function createQwenChatHandler(config) {
   return async (req, res) => {
-    if (!config.qwenChatCompletionsUrl || !config.qwenApiKey) {
+    if (!config.qwenEndpointKey || !config.qwenApiKey) {
       return res.status(500).json({
         error: {
           message: 'QWEN_BASE_URL 或 QWEN_API_KEY 未配置，请检查 .env.server',
@@ -403,7 +439,7 @@ function createQwenChatHandler(config) {
     const timer = setTimeout(() => controller.abort(), config.qwenTimeout);
 
     try {
-      const response = await fetch(config.qwenChatCompletionsUrl, {
+      const response = await fetchKnownQwenChatCompletions(config.qwenEndpointKey, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

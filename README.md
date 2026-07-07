@@ -182,7 +182,7 @@ VLM_MTP_ENABLED=false
 VLM_MTP_DRAFT_TOKENS=4
 ```
 
-`VITE_*` 变量会进入浏览器代码，不要放入真实密钥。Qwen API Key 只应写入 `.env.server`、CI Secret 或 ESA Pages 环境变量。`LOCAL_PROXY_TOKEN` 为空时不会启用 token 校验；当独立代理绑定非本机地址时，应设置一个高熵随机值，并由调用方通过 `X-Local-Proxy-Token` 请求头传入。`QWEN_BASE_URL` 只接受代理内置白名单中的 OpenAI-compatible 上游地址，例如本机 LM Studio/Ollama 兼容端点、DashScope 兼容模式端点、百炼业务空间专属域名或智谱 BigModel 兼容端点。
+`VITE_*` 变量会进入浏览器代码，不要放入真实密钥。Qwen API Key 只应写入 `.env.server`、CI Secret 或 ESA Pages 环境变量。`LOCAL_PROXY_TOKEN` 为空时不会启用 token 校验；当独立代理绑定非本机地址时，应设置一个高熵随机值，并由调用方通过 `X-Local-Proxy-Token` 请求头传入。`QWEN_BASE_URL` 只接受代理源码中固定列出的 OpenAI-compatible 上游地址，例如本机 LM Studio/Ollama 兼容端点、DashScope 兼容模式端点或智谱 BigModel 兼容端点；如需接入其他专属域名，应先把完整 base URL 显式加入代理 endpoint 表后再部署。
 
 ### 下载本地 VLM 资源
 
@@ -246,7 +246,7 @@ QWEN_API_KEY=你的百炼API Key
 QWEN_MODEL=qwen3-vl-plus
 ```
 
-`QWEN_BASE_URL` 可不填，默认使用 `https://dashscope.aliyuncs.com/compatible-mode/v1`；如果使用百炼业务空间专属域名，可设置为 `https://{WorkspaceId}.cn-beijing.maas.aliyuncs.com/compatible-mode/v1` 等官方 OpenAI-compatible Vision 地址；使用智谱 BigModel 时可设置为 `https://open.bigmodel.cn/api/paas/v4`。`/api/ollama/chat/completions` 在 ESA Pages 上会被边缘函数转发到 Qwen VLM API，以保持前端调用路径不变。
+`QWEN_BASE_URL` 可不填，默认使用 `https://dashscope.aliyuncs.com/compatible-mode/v1`；使用智谱 BigModel 时可设置为 `https://open.bigmodel.cn/api/paas/v4`。出于 SSRF 防护，ESA Pages 边缘函数只会请求源码中固定列出的 endpoint；如需接入其他专属域名，应先把完整 base URL 显式加入 ESA endpoint 表后再部署。`/api/ollama/chat/completions` 在 ESA Pages 上会被边缘函数转发到 Qwen VLM API，以保持前端调用路径不变。
 
 ## API 路由
 
@@ -423,7 +423,7 @@ Dependabot 配置位于 `.github/dependabot.yml`，npm 和 GitHub Actions 依赖
 
 | 现象 | 排查 |
 |------|------|
-| 500 配置错误 | 检查 `.env.server` 中的 `QWEN_BASE_URL` 与 `QWEN_API_KEY` |
+| 500 配置错误 | 检查 `.env.server` 中的 `QWEN_BASE_URL` 是否为源码内置 endpoint，以及 `QWEN_API_KEY` 是否存在 |
 | 504 超时 | 增大 `QWEN_TIMEOUT`，并确认上游 OpenAI-compatible 服务可访问 |
 | 429 限流 | 调整 `CHAT_REQUESTS_PER_MINUTE`，或降低前端请求频率 |
 
