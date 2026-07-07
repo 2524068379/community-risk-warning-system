@@ -38,8 +38,18 @@ const QWEN_ENDPOINTS = {
   }
 };
 
-function getEnv() {
-  return typeof process !== 'undefined' && process.env ? process.env : {};
+function normalizeRuntimeEnv(runtimeEnv = {}) {
+  return runtimeEnv && typeof runtimeEnv === 'object' && !Array.isArray(runtimeEnv)
+    ? runtimeEnv
+    : {};
+}
+
+function getEnv(runtimeEnv = {}) {
+  const processEnv = typeof process !== 'undefined' && process.env ? process.env : {};
+  return {
+    ...processEnv,
+    ...normalizeRuntimeEnv(runtimeEnv)
+  };
 }
 
 function normalizeBaseUrl(rawUrl) {
@@ -107,14 +117,14 @@ function normalizeCorsOrigins(rawOrigin = '') {
     .filter(Boolean);
 }
 
-function buildCorsHeaders(request) {
+function buildCorsHeaders(request, env = getEnv()) {
   const origin = request.headers.get('origin');
   if (!origin) {
     return {};
   }
 
   const requestOrigin = new URL(request.url).origin;
-  const extraOrigins = normalizeCorsOrigins(getEnv().CORS_ORIGIN);
+  const extraOrigins = normalizeCorsOrigins(env.CORS_ORIGIN);
   if (origin !== requestOrigin && !extraOrigins.includes(origin)) {
     return {};
   }
@@ -128,25 +138,25 @@ function buildCorsHeaders(request) {
   };
 }
 
-function jsonResponse(request, body, status = 200, extraHeaders = {}) {
+function jsonResponse(request, body, status = 200, extraHeaders = {}, env = getEnv()) {
   return new Response(JSON.stringify(body), {
     status,
     headers: {
       'content-type': JSON_CONTENT_TYPE,
       'cache-control': 'no-store',
-      ...buildCorsHeaders(request),
+      ...buildCorsHeaders(request, env),
       ...extraHeaders
     }
   });
 }
 
-function methodNotAllowed(request, allow) {
+function methodNotAllowed(request, allow, env = getEnv()) {
   return jsonResponse(request, {
     error: {
       message: 'Method not allowed',
       type: 'method_not_allowed'
     }
-  }, 405, { allow });
+  }, 405, { allow }, env);
 }
 
 function validateChatCompletionPayload(body) {
@@ -201,9 +211,9 @@ function fetchKnownQwenChatCompletions(endpointKey, init, timeoutMs) {
   }
 }
 
-async function handleChatCompletions(request, config) {
+async function handleChatCompletions(request, config, env) {
   if (request.method !== 'POST') {
-    return methodNotAllowed(request, 'POST, OPTIONS');
+    return methodNotAllowed(request, 'POST, OPTIONS', env);
   }
 
   if (!config.endpointKey || !config.apiKey) {
@@ -212,7 +222,7 @@ async function handleChatCompletions(request, config) {
         message: 'QWEN_BASE_URL 或 QWEN_API_KEY 未配置，请在 ESA Pages 环境变量中设置',
         type: 'configuration_error'
       }
-    }, 500);
+    }, 500, {}, env);
   }
 
   let body;
@@ -224,7 +234,7 @@ async function handleChatCompletions(request, config) {
         message: 'request body must be valid JSON',
         type: 'invalid_request'
       }
-    }, 400);
+    }, 400, {}, env);
   }
 
   const validationMessage = validateChatCompletionPayload(body);
@@ -234,7 +244,7 @@ async function handleChatCompletions(request, config) {
         message: validationMessage,
         type: 'invalid_request'
       }
-    }, 400);
+    }, 400, {}, env);
   }
 
   try {
@@ -253,7 +263,7 @@ async function handleChatCompletions(request, config) {
       headers: {
         'content-type': upstreamResponse.headers.get('content-type') || JSON_CONTENT_TYPE,
         'cache-control': 'no-store',
-        ...buildCorsHeaders(request)
+        ...buildCorsHeaders(request, env)
       }
     });
   } catch (error) {
@@ -263,13 +273,13 @@ async function handleChatCompletions(request, config) {
         message: isTimeout ? 'Qwen VLM 接口请求超时' : 'Qwen VLM 代理请求失败',
         type: isTimeout ? 'timeout_error' : 'proxy_error'
       }
-    }, isTimeout ? 504 : 500);
+    }, isTimeout ? 504 : 500, {}, env);
   }
 }
 
-function handleHealth(request, config) {
+function handleHealth(request, config, env) {
   if (request.method !== 'GET') {
-    return methodNotAllowed(request, 'GET, OPTIONS');
+    return methodNotAllowed(request, 'GET, OPTIONS', env);
   }
 
   return jsonResponse(request, {
@@ -278,12 +288,12 @@ function handleHealth(request, config) {
     qwenConfigured: Boolean(config.chatCompletionsUrl && config.apiKey),
     model: config.model,
     timestamp: new Date().toISOString()
-  });
+  }, 200, {}, env);
 }
 
-function handleVlmStatus(request, config) {
+function handleVlmStatus(request, config, env) {
   if (request.method !== 'GET') {
-    return methodNotAllowed(request, 'GET, OPTIONS');
+    return methodNotAllowed(request, 'GET, OPTIONS', env);
   }
 
   const ready = Boolean(config.chatCompletionsUrl && config.apiKey);
@@ -291,30 +301,31 @@ function handleVlmStatus(request, config) {
     ready,
     status: ready ? 'ready' : 'error',
     gpu: 'unknown'
-  });
+  }, 200, {}, env);
 }
 
-export async function handleRequest(request) {
-  const config = loadPagesApiConfig();
+export async function handleRequest(request, runtimeEnv = {}) {
+  const env = getEnv(runtimeEnv);
+  const config = loadPagesApiConfig(env);
 
   if (request.method === 'OPTIONS') {
     return new Response(null, {
       status: 204,
-      headers: buildCorsHeaders(request)
+      headers: buildCorsHeaders(request, env)
     });
   }
 
   const pathname = new URL(request.url).pathname;
   if (pathname === API_HEALTH_ROUTE) {
-    return handleHealth(request, config);
+    return handleHealth(request, config, env);
   }
 
   if (pathname === OLLAMA_STATUS_ROUTE) {
-    return handleVlmStatus(request, config);
+    return handleVlmStatus(request, config, env);
   }
 
   if (pathname === QWEN_CHAT_COMPLETIONS_ROUTE || pathname === OLLAMA_CHAT_COMPLETIONS_ROUTE) {
-    return handleChatCompletions(request, config);
+    return handleChatCompletions(request, config, env);
   }
 
   return jsonResponse(request, {
@@ -322,11 +333,11 @@ export async function handleRequest(request) {
       message: 'Not found',
       type: 'not_found'
     }
-  }, 404);
+  }, 404, {}, env);
 }
 
 export default {
-  fetch(request) {
-    return handleRequest(request);
+  fetch(request, env) {
+    return handleRequest(request, env);
   }
 };

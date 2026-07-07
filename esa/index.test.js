@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   DEFAULT_QWEN_VLM_API_MODEL,
   buildVlmApiRequestBody,
+  handleRequest,
   loadPagesApiConfig,
   resolveAllowedQwenBaseUrl
 } from './index.js';
@@ -50,6 +51,33 @@ describe('ESA Pages API config', () => {
       stream: false,
       response_format: { type: 'json_object' },
       messages: [{ role: 'user', content: 'JSON only' }]
+    });
+  });
+
+  it('reads ESA runtime env bindings passed to the fetch handler', async () => {
+    const runtimeEnv = {
+      QWEN_BASE_URL: 'https://open.bigmodel.cn/api/paas/v4',
+      QWEN_API_KEY: 'test-key',
+      QWEN_MODEL: 'glm-4v-flash'
+    };
+
+    const health = await handleRequest(new Request('https://demo.example/api/health'), runtimeEnv);
+    const healthJson = await health.json();
+
+    expect(health.status).toBe(200);
+    expect(healthJson).toMatchObject({
+      ok: true,
+      qwenConfigured: true,
+      model: 'glm-4v-flash'
+    });
+
+    const status = await handleRequest(new Request('https://demo.example/api/ollama/status'), runtimeEnv);
+    const statusJson = await status.json();
+
+    expect(status.status).toBe(200);
+    expect(statusJson).toMatchObject({
+      ready: true,
+      status: 'ready'
     });
   });
 });
