@@ -128,31 +128,42 @@ export async function checkVlmConnectionStatus(
     ?? (typeof window === 'undefined' ? undefined : window.electronAPI)
   const httpGet = options.httpGet ?? ((url, config) => http.get(url, config))
 
+  const readProxyStatus = async (): Promise<VlmConnectionStatus | null> => {
+    try {
+      const res = await httpGet(OLLAMA_STATUS_ROUTE, { timeout: 3000 })
+      const ready = res.data?.ready === true
+      return {
+        ready,
+        status: normalizeRuntimeStatus(res.data?.status, ready),
+        source: 'proxy'
+      }
+    } catch {
+      return null
+    }
+  }
+
   if (electronApi) {
     try {
       const status = await electronApi.getOllamaStatus()
       const ready = status.ready === true
-      return {
+      const electronStatus = {
         ready,
         status: normalizeRuntimeStatus(status.status, ready),
         source: 'electron'
+      } satisfies VlmConnectionStatus
+
+      if (electronStatus.ready) {
+        return electronStatus
       }
+
+      const proxyStatus = await readProxyStatus()
+      return proxyStatus?.ready ? proxyStatus : electronStatus
     } catch {
       // Fall back to the proxy status endpoint in browser-like test/dev contexts.
     }
   }
 
-  try {
-    const res = await httpGet(OLLAMA_STATUS_ROUTE, { timeout: 3000 })
-    const ready = res.data?.ready === true
-    return {
-      ready,
-      status: normalizeRuntimeStatus(res.data?.status, ready),
-      source: 'proxy'
-    }
-  } catch {
-    return { ready: false, status: 'error', source: 'proxy' }
-  }
+  return await readProxyStatus() ?? { ready: false, status: 'error', source: 'proxy' }
 }
 
 const FALLBACK_INTERVAL_MS = 6000

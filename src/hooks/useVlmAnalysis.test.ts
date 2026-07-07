@@ -169,8 +169,41 @@ describe('planVlmDispatch', () => {
 })
 
 describe('checkVlmConnectionStatus', () => {
-  it('prefers Electron main-process VLM status while llama-server is still starting', async () => {
-    const httpGet = vi.fn()
+  it('uses proxy cloud fallback status when Electron local VLM is still starting', async () => {
+    const httpGet = vi.fn().mockResolvedValue({
+      data: {
+        ready: true,
+        status: 'ready'
+      }
+    })
+
+    await expect(checkVlmConnectionStatus({
+      electronApi: {
+        getApiBase: async () => 'http://127.0.0.1:1234',
+        getOllamaStatus: async () => ({
+          ready: false,
+          status: 'starting',
+          baseUrl: 'http://127.0.0.1:11434',
+          gpu: 'unknown'
+        })
+      },
+      httpGet
+    })).resolves.toEqual({
+      ready: true,
+      status: 'ready',
+      source: 'proxy'
+    })
+
+    expect(httpGet).toHaveBeenCalledWith('/api/ollama/status', { timeout: 3000 })
+  })
+
+  it('keeps Electron status when neither local nor proxy fallback is ready', async () => {
+    const httpGet = vi.fn().mockResolvedValue({
+      data: {
+        ready: false,
+        status: 'error'
+      }
+    })
 
     await expect(checkVlmConnectionStatus({
       electronApi: {
@@ -188,7 +221,5 @@ describe('checkVlmConnectionStatus', () => {
       status: 'starting',
       source: 'electron'
     })
-
-    expect(httpGet).not.toHaveBeenCalled()
   })
 })

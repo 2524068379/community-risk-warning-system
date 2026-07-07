@@ -88,7 +88,7 @@
       "dist/main/**/*",
       "dist/preload/**/*",
       "dist/renderer/**/*",
-      ".env.server.example"
+      ".env.example"
     ],
     "win": {
       "icon": "build/icon.ico",

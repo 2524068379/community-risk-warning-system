@@ -3,12 +3,16 @@ import {
   buildExpressErrorResponse,
   buildOllamaRequestBody,
   buildProxyErrorResponse,
+  buildQwenFallbackRequestBody,
   buildQwenRequestBody,
   isAllowedCorsOrigin,
   isLocalProxyTokenAuthorized,
   isLocalProxyTokenProtectedPath,
+  isQwenProxyConfigured,
   loadQwenProxyConfig,
   parseProxyResponseText,
+  resolveVlmProxyStatus,
+  shouldFallbackToQwen,
   validateChatCompletionPayload
 } from './qwenProxy.js';
 import { resolveOllamaHealthStatus } from './ollamaHealthStatus.js';
@@ -104,6 +108,21 @@ describe('qwenProxy', () => {
     });
   });
 
+  it('forces the configured cloud model when falling back from local VLM', () => {
+    expect(buildQwenFallbackRequestBody({
+      model: 'local-vlm',
+      stream: true,
+      response_format: { type: 'json_object' },
+      chat_template_kwargs: { enable_thinking: false },
+      messages: [{ role: 'user', content: 'ok' }]
+    }, 'glm-4v-flash')).toEqual({
+      model: 'glm-4v-flash',
+      stream: false,
+      response_format: { type: 'json_object' },
+      messages: [{ role: 'user', content: 'ok' }]
+    });
+  });
+
   it('rewrites local VLM requests to the managed llama-server alias', () => {
     expect(buildOllamaRequestBody({
       model: 'stale-browser-model',
@@ -182,6 +201,37 @@ describe('qwenProxy', () => {
     expect(resolveOllamaHealthStatus(200)).toEqual({ ready: true, status: 'ready', gpu: 'unknown' });
     expect(resolveOllamaHealthStatus(503)).toEqual({ ready: false, status: 'loading', gpu: 'unknown' });
     expect(resolveOllamaHealthStatus(500)).toEqual({ ready: false, status: 'error', gpu: 'unknown' });
+  });
+
+  it('marks the VLM proxy ready through cloud fallback when local VLM is unavailable', () => {
+    const cloudConfig = loadQwenProxyConfig({
+      QWEN_BASE_URL: 'https://open.bigmodel.cn/api/paas/v4',
+      QWEN_API_KEY: 'test-key'
+    });
+    const localOnlyConfig = loadQwenProxyConfig({});
+
+    expect(isQwenProxyConfigured(cloudConfig)).toBe(true);
+    expect(isQwenProxyConfigured(localOnlyConfig)).toBe(false);
+    expect(resolveVlmProxyStatus({ ready: false, status: 'error', gpu: 'unknown' }, cloudConfig)).toEqual({
+      ready: true,
+      status: 'ready',
+      gpu: 'unknown',
+      source: 'cloud'
+    });
+    expect(resolveVlmProxyStatus({ ready: false, status: 'error', gpu: 'unknown' }, localOnlyConfig)).toEqual({
+      ready: false,
+      status: 'error',
+      gpu: 'unknown',
+      source: 'local'
+    });
+  });
+
+  it('falls back to cloud only for local VLM service failures', () => {
+    expect(shouldFallbackToQwen({ status: 200 })).toBe(false);
+    expect(shouldFallbackToQwen({ status: 400 })).toBe(false);
+    expect(shouldFallbackToQwen({ status: 404 })).toBe(true);
+    expect(shouldFallbackToQwen({ status: 500 })).toBe(true);
+    expect(shouldFallbackToQwen({ status: 503 })).toBe(true);
   });
 
   it('parses upstream JSON responses', () => {

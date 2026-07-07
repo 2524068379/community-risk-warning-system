@@ -1,10 +1,8 @@
 import dotenv from 'dotenv';
 import { createQwenProxyApp, loadQwenProxyConfig } from './qwenProxy.js';
 
-// 优先加载项目根目录 .env.server，没有则回退系统环境变量
-for (const path of ['.env.server', '.env']) {
-  dotenv.config({ path, override: false });
-}
+// 加载项目根目录统一 .env；系统环境变量保持更高优先级。
+dotenv.config({ path: '.env', override: false });
 
 const config = loadQwenProxyConfig();
 const app = createQwenProxyApp(config);

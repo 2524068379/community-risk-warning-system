@@ -227,6 +227,17 @@ export function buildQwenRequestBody(body = {}, defaultModel) {
   return requestBody;
 }
 
+export function buildQwenFallbackRequestBody(body = {}, model) {
+  const requestBody = {
+    ...body,
+    model,
+    stream: false
+  };
+
+  delete requestBody.chat_template_kwargs;
+  return requestBody;
+}
+
 export function buildOllamaRequestBody(body = {}, model) {
   return {
     ...body,
@@ -237,6 +248,31 @@ export function buildOllamaRequestBody(body = {}, model) {
       enable_thinking: false
     }
   };
+}
+
+export function isQwenProxyConfigured(config = loadQwenProxyConfig()) {
+  return Boolean(config.qwenEndpointKey && config.qwenApiKey);
+}
+
+export function shouldFallbackToQwen(response) {
+  return response.status === 404 || response.status >= 500;
+}
+
+export function resolveVlmProxyStatus(localStatus, config = loadQwenProxyConfig()) {
+  if (localStatus.ready) {
+    return { ...localStatus, source: 'local' };
+  }
+
+  if (isQwenProxyConfigured(config)) {
+    return {
+      ready: true,
+      status: 'ready',
+      gpu: 'unknown',
+      source: 'cloud'
+    };
+  }
+
+  return { ...localStatus, source: 'local' };
 }
 
 export function parseProxyResponseText(text, onInvalidJson) {
@@ -424,46 +460,65 @@ function resolveChatRateLimiter(config) {
   return config.chatRequestsPerMinute ? createChatRateLimiter(config) : createDisabledRateLimiter();
 }
 
+async function requestQwenChatCompletionsText(config, requestBody) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), config.qwenTimeout);
+
+  try {
+    const response = await fetchKnownQwenChatCompletions(config.qwenEndpointKey, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${config.qwenApiKey}`
+      },
+      body: JSON.stringify(requestBody),
+      signal: controller.signal
+    });
+
+    return {
+      status: response.status,
+      text: await response.text()
+    };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function sendQwenChatResponse(res, config, requestBody, source = 'cloud') {
+  try {
+    const response = await requestQwenChatCompletionsText(config, requestBody);
+    const payload = parseProxyResponseText(response.text);
+
+    res.set('X-VLM-Source', source);
+    return res.status(response.status).json(payload);
+  } catch (error) {
+    const errorResponse = buildProxyErrorResponse(error, {
+      timeoutMessage: 'Qwen 接口请求超时',
+      timeoutType: 'timeout_error',
+      fallbackMessage: '代理请求失败',
+      fallbackType: 'proxy_error'
+    });
+    return res.status(errorResponse.statusCode).json(errorResponse.body);
+  }
+}
+
 function createQwenChatHandler(config) {
   return async (req, res) => {
-    if (!config.qwenEndpointKey || !config.qwenApiKey) {
+    if (!isQwenProxyConfigured(config)) {
       return res.status(500).json({
         error: {
-          message: 'QWEN_BASE_URL 或 QWEN_API_KEY 未配置，请检查 .env.server',
+          message: 'QWEN_BASE_URL 或 QWEN_API_KEY 未配置，请检查 .env',
           type: 'configuration_error'
         }
       });
     }
 
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), config.qwenTimeout);
-
-    try {
-      const response = await fetchKnownQwenChatCompletions(config.qwenEndpointKey, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${config.qwenApiKey}`
-        },
-        body: JSON.stringify(buildQwenRequestBody(req.body, config.qwenModel)),
-        signal: controller.signal
-      });
-
-      const text = await response.text();
-      const payload = parseProxyResponseText(text);
-
-      return res.status(response.status).json(payload);
-    } catch (error) {
-      const errorResponse = buildProxyErrorResponse(error, {
-        timeoutMessage: 'Qwen 接口请求超时',
-        timeoutType: 'timeout_error',
-        fallbackMessage: '代理请求失败',
-        fallbackType: 'proxy_error'
-      });
-      return res.status(errorResponse.statusCode).json(errorResponse.body);
-    } finally {
-      clearTimeout(timer);
-    }
+    return sendQwenChatResponse(
+      res,
+      config,
+      buildQwenRequestBody(req.body, config.qwenModel),
+      'cloud'
+    );
   };
 }
 
@@ -488,6 +543,16 @@ function createOllamaChatHandler(config) {
         console.error('[ollama-proxy] Non-JSON response from upstream');
       });
 
+      if (shouldFallbackToQwen(response) && isQwenProxyConfigured(config)) {
+        console.warn(`[ollama-proxy] Local VLM returned HTTP ${response.status}; falling back to Qwen VLM`);
+        return sendQwenChatResponse(
+          res,
+          config,
+          buildQwenFallbackRequestBody(req.body, config.qwenModel),
+          'cloud-fallback'
+        );
+      }
+
       if (config.logModelOutput) {
         console.log('[ollama-proxy] Model output metadata:', {
           statusCode: response.status,
@@ -495,8 +560,19 @@ function createOllamaChatHandler(config) {
         });
       }
 
+      res.set('X-VLM-Source', 'local');
       return res.status(response.status).json(payload);
     } catch (error) {
+      if (isQwenProxyConfigured(config)) {
+        console.warn('[ollama-proxy] Local VLM request failed; falling back to Qwen VLM');
+        return sendQwenChatResponse(
+          res,
+          config,
+          buildQwenFallbackRequestBody(req.body, config.qwenModel),
+          'cloud-fallback'
+        );
+      }
+
       const errorResponse = buildProxyErrorResponse(error, {
         timeoutMessage: 'Ollama 推理超时',
         timeoutType: 'timeout',
@@ -581,9 +657,9 @@ export function createOllamaProxyRoutes(app, config = loadQwenProxyConfig(), cha
         method: 'GET',
         signal: controller.signal
       });
-      res.json(resolveOllamaHealthStatus(response.status));
+      res.json(resolveVlmProxyStatus(resolveOllamaHealthStatus(response.status), config));
     } catch {
-      res.json({ ready: false, status: 'error', gpu: 'unknown' });
+      res.json(resolveVlmProxyStatus({ ready: false, status: 'error', gpu: 'unknown' }, config));
     } finally {
       clearTimeout(timer);
     }

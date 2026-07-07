@@ -17,16 +17,9 @@ import {
 
 const baseDir = app.isPackaged ? path.dirname(app.getPath('exe')) : app.getAppPath()
 
-const envServerPath = path.resolve(baseDir, '.env.server')
-if (fs.existsSync(envServerPath)) {
-  dotenv.config({ path: envServerPath, override: false })
-}
-
-if (!app.isPackaged) {
-  const envPath = path.resolve(baseDir, '.env')
-  if (fs.existsSync(envPath)) {
-    dotenv.config({ path: envPath, override: false })
-  }
+const envPath = path.resolve(baseDir, '.env')
+if (fs.existsSync(envPath)) {
+  dotenv.config({ path: envPath, override: false })
 }
 
 const localProxyToken = crypto.randomBytes(32).toString('hex')

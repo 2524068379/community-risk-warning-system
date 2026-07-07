@@ -11,7 +11,7 @@
 - **预警事件**：按 A/B/C 风险等级筛选事件，查看事件概要、处置建议、关键证据和 VLM 研判结果。
 - **本地 VLM 分析**：Electron 主进程启动 `llama-server.exe`，渲染进程定时截帧并通过 `/api/ollama/chat/completions` 获取结构化研判结果。
 - **轻量目标检测预筛**：使用 TensorFlow.js COCO-SSD Lite 检测人员、车辆等目标，检测标签和置信度阈值可通过环境变量配置，并结合帧差与自适应截帧降低 VLM 调用频率。
-- **双代理能力**：Express 代理同时提供 Qwen OpenAI-compatible 远程接口和本地 llama.cpp VLM 接口，统一处理 CORS、限流、超时和请求校验。
+- **双代理能力**：Express 代理同时提供 Qwen OpenAI-compatible 远程接口和本地 llama.cpp VLM 接口，统一处理 CORS、限流、超时和请求校验；本地 VLM 不可用时可自动回退到已配置的云端模型。
 - **构建与发布**：GitHub Actions 在 Windows 环境运行测试、类型检查、构建和打包；应用包与 VLM 模型包分开产出。
 
 ## 技术栈
@@ -83,8 +83,7 @@
 ├─ resources/vlm/                # 本地 VLM 资源目录，运行时生成，不提交模型
 ├─ build/                        # Electron 图标
 ├─ .github/                      # CI、发布和 Dependabot 配置
-├─ .env.example                  # 前端环境变量模板
-├─ .env.server.example           # 代理与 VLM 环境变量模板
+├─ .env.example                  # 前端、代理与 VLM 统一环境变量模板
 ├─ electron.vite.config.ts       # Electron 三进程构建配置
 ├─ vite.config.ts                # 浏览器模式 Vite 配置
 ├─ vitest.config.ts              # Vitest 配置
@@ -109,7 +108,7 @@
 npm ci
 ```
 
-### 配置前端环境
+### 配置环境
 
 ```bash
 cp .env.example .env
@@ -135,19 +134,7 @@ VITE_DEMO_STREAM_TYPE=flv
 
 VITE_DETECTION_LABELS=person,car,truck,bus,bicycle,motorcycle,dog,backpack,handbag,suitcase,chair,couch,bench,potted plant
 VITE_DETECTION_MIN_SCORE=0.35
-```
 
-`VITE_DETECTION_LABELS` 用英文逗号分隔 COCO-SSD 标签；`VITE_DETECTION_MIN_SCORE` 取值范围为 0 到 1，配置异常时回退到 0.35。
-
-### 配置代理与 VLM
-
-```bash
-cp .env.server.example .env.server
-```
-
-关键字段：
-
-```env
 SERVER_HOST=127.0.0.1
 SERVER_PORT=8787
 CORS_ORIGIN=http://localhost:5173
@@ -182,7 +169,9 @@ VLM_MTP_ENABLED=false
 VLM_MTP_DRAFT_TOKENS=4
 ```
 
-`VITE_*` 变量会进入浏览器代码，不要放入真实密钥。Qwen API Key 只应写入 `.env.server`、CI Secret 或 ESA Pages 环境变量。`LOCAL_PROXY_TOKEN` 为空时不会启用 token 校验；当独立代理绑定非本机地址时，应设置一个高熵随机值，并由调用方通过 `X-Local-Proxy-Token` 请求头传入。`QWEN_BASE_URL` 只接受代理源码中固定列出的 OpenAI-compatible 上游地址，例如本机 LM Studio/Ollama 兼容端点、DashScope 兼容模式端点或智谱 BigModel 兼容端点；如需接入其他专属域名，应先把完整 base URL 显式加入代理 endpoint 表后再部署。
+`VITE_DETECTION_LABELS` 用英文逗号分隔 COCO-SSD 标签；`VITE_DETECTION_MIN_SCORE` 取值范围为 0 到 1，配置异常时回退到 0.35。
+
+`VITE_*` 变量会进入浏览器代码，不要放入真实密钥。Qwen API Key 只应写入 `.env` 中不带 `VITE_` 前缀的服务端变量、CI Secret 或 ESA Pages 环境变量。`LOCAL_PROXY_TOKEN` 为空时不会启用 token 校验；当独立代理绑定非本机地址时，应设置一个高熵随机值，并由调用方通过 `X-Local-Proxy-Token` 请求头传入。`QWEN_BASE_URL` 只接受代理源码中固定列出的 OpenAI-compatible 上游地址，例如本机 LM Studio/Ollama 兼容端点、DashScope 兼容模式端点或智谱 BigModel 兼容端点；如需接入其他专属域名，应先把完整 base URL 显式加入代理 endpoint 表后再部署。
 
 ### 下载本地 VLM 资源
 
@@ -246,7 +235,14 @@ QWEN_API_KEY=你的百炼API Key
 QWEN_MODEL=qwen3-vl-plus
 ```
 
-`QWEN_BASE_URL` 可不填，默认使用 `https://dashscope.aliyuncs.com/compatible-mode/v1`；使用智谱 BigModel 时可设置为 `https://open.bigmodel.cn/api/paas/v4`。出于 SSRF 防护，ESA Pages 边缘函数只会请求源码中固定列出的 endpoint；如需接入其他专属域名，应先把完整 base URL 显式加入 ESA endpoint 表后再部署。`/api/ollama/chat/completions` 在 ESA Pages 上会被边缘函数转发到 Qwen VLM API，以保持前端调用路径不变。
+`QWEN_BASE_URL` 可不填，默认使用 `https://dashscope.aliyuncs.com/compatible-mode/v1`；使用智谱 BigModel 时设置：
+
+```env
+QWEN_BASE_URL=https://open.bigmodel.cn/api/paas/v4
+QWEN_MODEL=glm-4v-flash
+```
+
+出于 SSRF 防护，ESA Pages 边缘函数只会请求源码中固定列出的 endpoint；如需接入其他专属域名，应先把完整 base URL 显式加入 ESA endpoint 表后再部署。`/api/ollama/chat/completions` 在 ESA Pages 上会被边缘函数转发到 Qwen VLM API，以保持前端调用路径不变。
 
 ## API 路由
 
@@ -254,8 +250,8 @@ QWEN_MODEL=qwen3-vl-plus
 |------|------|------|
 | GET | `/api/health` | 代理健康检查，返回 Qwen 配置状态和默认模型 |
 | POST | `/api/qwen/chat/completions` | Qwen OpenAI-compatible 远程接口代理 |
-| POST | `/api/ollama/chat/completions` | 本地 llama.cpp VLM 代理；ESA Pages 中作为云端 Qwen VLM 兼容别名 |
-| GET | `/api/ollama/status` | 本地 VLM 健康状态查询；ESA Pages 中返回 Qwen VLM API 配置状态 |
+| POST | `/api/ollama/chat/completions` | 本地 llama.cpp VLM 代理；本地 404/5xx 或连接失败时回退到云端 Qwen/BigModel；ESA Pages 中作为云端 Qwen VLM 兼容别名 |
+| GET | `/api/ollama/status` | 本地 VLM 健康状态查询；本地不可用但云端已配置时返回可用；ESA Pages 中返回 Qwen VLM API 配置状态 |
 
 代理层会统一执行请求体大小限制、消息数量限制、`max_tokens` 上限校验、每 IP 每分钟限流、CORS 白名单和上游请求超时控制。
 
@@ -381,7 +377,7 @@ Dependabot 配置位于 `.github/dependabot.yml`，npm 和 GitHub Actions 依赖
 
 ## 安全与配置
 
-- 不要提交真实 `.env` 或 `.env.server`。
+- 不要提交真实 `.env`。
 - Qwen API Key 只放在服务端环境或 CI Secret 中。
 - 百度地图浏览器 AK 必须配置 Referer 白名单；本地开发通常需要加入 `http://localhost:5173`。
 - `ALLOW_LOCAL_FILE_ORIGINS` 仅在 Electron 内嵌代理场景由主进程覆盖为 `true`，普通浏览器代理默认关闭。
@@ -423,7 +419,7 @@ Dependabot 配置位于 `.github/dependabot.yml`，npm 和 GitHub Actions 依赖
 
 | 现象 | 排查 |
 |------|------|
-| 500 配置错误 | 检查 `.env.server` 中的 `QWEN_BASE_URL` 是否为源码内置 endpoint，以及 `QWEN_API_KEY` 是否存在 |
+| 500 配置错误 | 检查 `.env` 中的 `QWEN_BASE_URL` 是否为源码内置 endpoint，以及 `QWEN_API_KEY` 是否存在 |
 | 504 超时 | 增大 `QWEN_TIMEOUT`，并确认上游 OpenAI-compatible 服务可访问 |
 | 429 限流 | 调整 `CHAT_REQUESTS_PER_MINUTE`，或降低前端请求频率 |
 

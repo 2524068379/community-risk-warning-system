@@ -33,7 +33,7 @@ Recent commits use Conventional Commit-style prefixes, often with scopes: `feat:
 
 ## Security & Configuration Tips
 
-Copy `.env.example` to `.env` and `.env.server.example` to `.env.server`; never commit real `.env` files. Keep Qwen API keys only in the server environment. Restrict Baidu Map browser AK usage by Referer, and ensure local development origins such as `http://localhost:5173` are explicitly allowed.
+Copy `.env.example` to `.env`; never commit real `.env` files. Keep Qwen API keys only in non-`VITE_` server-side variables. Restrict Baidu Map browser AK usage by Referer, and ensure local development origins such as `http://localhost:5173` are explicitly allowed.
 
 <!-- ARIS-CODEX:BEGIN -->
 ## ARIS Codex Skill Scope
