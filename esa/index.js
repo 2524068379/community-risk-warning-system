@@ -44,9 +44,20 @@ function normalizeRuntimeEnv(runtimeEnv = {}) {
     : {};
 }
 
-function getEnv(runtimeEnv = {}) {
+let generatedEnvPromise;
+
+async function loadGeneratedEnv() {
+  generatedEnvPromise ??= import('./env.generated.js')
+    .then((module) => normalizeRuntimeEnv(module.default))
+    .catch(() => ({}));
+
+  return generatedEnvPromise;
+}
+
+function getEnv(runtimeEnv = {}, generatedEnv = {}) {
   const processEnv = typeof process !== 'undefined' && process.env ? process.env : {};
   return {
+    ...normalizeRuntimeEnv(generatedEnv),
     ...processEnv,
     ...normalizeRuntimeEnv(runtimeEnv)
   };
@@ -305,7 +316,7 @@ function handleVlmStatus(request, config, env) {
 }
 
 export async function handleRequest(request, runtimeEnv = {}) {
-  const env = getEnv(runtimeEnv);
+  const env = getEnv(runtimeEnv, await loadGeneratedEnv());
   const config = loadPagesApiConfig(env);
 
   if (request.method === 'OPTIONS') {

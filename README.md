@@ -235,7 +235,7 @@ QWEN_API_KEY=你的百炼API Key
 QWEN_MODEL=qwen3-vl-plus
 ```
 
-这些变量必须在 ESA 边缘函数运行时可用；修改环境变量后需要重新部署或重新发布当前版本，再通过 `/api/health` 确认 `qwenConfigured` 为 `true`。
+这些变量会在 ESA Pages 构建阶段写入边缘函数私有配置文件；修改环境变量后必须重新构建并重新发布当前版本，再通过 `/api/health` 确认 `qwenConfigured` 为 `true`。
 
 `QWEN_BASE_URL` 可不填，默认使用 `https://dashscope.aliyuncs.com/compatible-mode/v1`；使用智谱 BigModel 时设置：
 

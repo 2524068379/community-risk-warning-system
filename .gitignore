@@ -21,6 +21,7 @@ papers/
 idea-stage/
 .env
 .env.local
+esa/env.generated.js
 .DS_Store
 
 # Paper build/review caches
