@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { DetectorLoadError, filterDetections, parseDetectionLabels, parseDetectionMinScore } from './objectDetector'
+import {
+  DetectorLoadError,
+  filterDetections,
+  parseDetectionLabels,
+  parseDetectionMinScore,
+  parseDetectionModelUrl
+} from './objectDetector'
 
 const makeDet = (cls: string, score: number) => ({
   class: cls,
@@ -71,6 +77,18 @@ describe('parseDetectionMinScore', () => {
   it('falls back when score is invalid', () => {
     expect(parseDetectionMinScore('2')).toBe(0.35)
     expect(parseDetectionMinScore('invalid')).toBe(0.35)
+  })
+})
+
+describe('parseDetectionModelUrl', () => {
+  it('accepts HTTPS and application-relative model URLs', () => {
+    expect(parseDetectionModelUrl('https://models.example/coco/model.json')).toBe('https://models.example/coco/model.json')
+    expect(parseDetectionModelUrl('/models/coco/model.json')).toBe('/models/coco/model.json')
+  })
+
+  it('rejects unsupported schemes', () => {
+    expect(parseDetectionModelUrl('javascript:alert(1)')).toBeUndefined()
+    expect(parseDetectionModelUrl('file:///tmp/model.json')).toBeUndefined()
   })
 })
 

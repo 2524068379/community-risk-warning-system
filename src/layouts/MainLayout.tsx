@@ -54,8 +54,8 @@ export function MainLayout() {
             <div className="header-clock">{formatTime(now)}</div>
             <div className="header-date">{formatDate(now)}</div>
           </div>
-          <Tag color="success" style={{ margin: 0, fontSize: 11 }}>
-            系统在线
+          <Tag color="processing" style={{ margin: 0, fontSize: 11 }}>
+            本地演示模式
           </Tag>
         </div>
       </header>

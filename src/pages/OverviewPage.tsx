@@ -1,5 +1,5 @@
 import { useRef } from 'react';
-import { Tag } from 'antd';
+import { Button, Tag } from 'antd';
 import { CameraMapPanel } from '@/components/CameraMapPanel';
 import { VlmAnalysisPanel } from '@/components/VlmAnalysisPanel';
 import { useAppStore } from '@/store/useAppStore';
@@ -53,23 +53,29 @@ function renderPieLabel({ cx, cy, midAngle, outerRadius, name, percent }: any) {
 }
 
 export function OverviewPage() {
-  const { cameras, activeCameraId, analysis, analysisTimestamp, setActiveCamera, vlmStatus } = useAppStore();
+  const {
+    cameras,
+    activeCameraId,
+    analysis,
+    analysisContext,
+    analysisTimestamp,
+    analysisValidity,
+    setActiveCamera,
+    vlmStatus
+  } = useAppStore();
   const videoRef = useRef<HTMLVideoElement>(null);
-  const { stream, loading, error } = useLocalCamera(videoRef);
-
-
-  const activeCamera = cameras.find((c) => c.id === activeCameraId);
+  const { stream, loading, error, retry } = useLocalCamera(videoRef);
 
   useVlmAnalysis({
     videoRef,
-    cameraId: activeCamera?.id ?? 'LOCAL',
-    scene: activeCamera?.scene ?? '本地摄像头',
+    cameraId: 'LOCAL',
+    scene: '本地摄像头演示源',
     enabled: !!stream
   });
 
   const statusCfg = getVlmStatusView(vlmStatus, 'overview');
   const riskBreakdownData = analysis.breakdown.filter((item) => Number.isFinite(item.value) && item.value > 0);
-  const hasRiskBreakdownData = analysisTimestamp !== null && riskBreakdownData.length > 0;
+  const hasRiskBreakdownData = analysisValidity === 'valid' && analysisTimestamp !== null && riskBreakdownData.length > 0;
 
   return (
     <div className="overview-grid">
@@ -78,7 +84,7 @@ export function OverviewPage() {
         <div className="video-toolbar">
           <div>
             <div className="video-title">视频监控</div>
-            <div className="video-subtitle">本地摄像头实时画面</div>
+            <div className="video-subtitle">本地摄像头实时画面 · 演示源，不代表地图选中点位</div>
           </div>
           <Tag color={statusCfg.color} style={{ fontSize: 11 }}>{statusCfg.text}</Tag>
         </div>
@@ -87,7 +93,10 @@ export function OverviewPage() {
             <div className="monitor-video-loading">正在启动摄像头…</div>
           )}
           {error && (
-            <div className="monitor-video-error">{error}</div>
+            <div className="monitor-video-error">
+              <span>{error}</span>
+              <Button size="small" onClick={retry}>重试摄像头</Button>
+            </div>
           )}
           {stream && (
             <video
@@ -108,7 +117,12 @@ export function OverviewPage() {
           <Tag color={statusCfg.color} style={{ marginLeft: 'auto', fontSize: 10 }}>{statusCfg.text}</Tag>
         </div>
         <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
-          <VlmAnalysisPanel analysis={analysis} variant="compact" />
+          <VlmAnalysisPanel
+            analysis={analysis}
+            variant="compact"
+            validity={analysisValidity}
+            modelSource={analysisContext?.modelSource}
+          />
         </div>
       </div>
 
@@ -188,7 +202,7 @@ export function OverviewPage() {
               风险趋势折线图
             </div>
             <div style={{ flex: 1, minHeight: 0, paddingRight: 10 }}>
-              {analysis.trend.length === 0 ? (
+              {analysisValidity !== 'valid' || analysis.trend.length === 0 ? (
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'rgba(255,255,255,0.35)', fontSize: 12 }}>
                   等待数据…
                 </div>

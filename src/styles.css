@@ -710,6 +710,8 @@ a {
 .monitor-video-error {
   display: grid;
   place-items: center;
+  align-content: center;
+  gap: 10px;
   height: 100%;
   color: var(--accent-orange);
   font-size: 13px;
@@ -743,6 +745,38 @@ a {
   font-variant-numeric: tabular-nums;
 }
 
+.monitor-analysis-snapshot {
+  position: absolute;
+  right: 10px;
+  bottom: 42px;
+  width: min(36%, 320px);
+  padding: 6px;
+  border: 1px solid rgba(0, 195, 255, 0.35);
+  border-radius: 6px;
+  background: rgba(4, 12, 25, 0.94);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  z-index: 4;
+}
+
+.monitor-analysis-snapshot-title {
+  margin-bottom: 4px;
+  color: #a8dfff;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.monitor-analysis-snapshot-frame {
+  position: relative;
+  line-height: 0;
+}
+
+.monitor-analysis-snapshot-frame img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 3px;
+}
+
 .monitor-list-col {
   display: flex;
   flex-direction: column;
@@ -761,6 +795,10 @@ a {
 }
 
 .monitor-camera-item {
+  width: 100%;
+  color: inherit;
+  font: inherit;
+  text-align: left;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -876,6 +914,10 @@ a {
 }
 
 .alerts-event-card {
+  width: 100%;
+  color: inherit;
+  font: inherit;
+  text-align: left;
   padding: 12px;
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.03);
@@ -1525,6 +1567,74 @@ a {
 .baidu-map-stage > div,
 .baidu-map-stage > div > div {
   height: 100% !important;
+}
+
+.secure-local-map {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 220px;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 50% 45%, rgba(0, 195, 255, 0.12), transparent 38%),
+    linear-gradient(135deg, rgba(22, 52, 86, 0.5), rgba(6, 18, 34, 0.85));
+}
+
+.secure-local-map-grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(73, 164, 214, 0.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(73, 164, 214, 0.08) 1px, transparent 1px);
+  background-size: 44px 44px;
+}
+
+.secure-local-map-point {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 150px;
+  padding: 4px 7px;
+  transform: translate(-50%, -50%);
+  border: 1px solid;
+  border-radius: 999px;
+  color: #dff7ff;
+  background: rgba(5, 17, 32, 0.92);
+  cursor: pointer;
+  z-index: 2;
+}
+
+.secure-local-map-point > span {
+  width: 7px;
+  height: 7px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  box-shadow: 0 0 8px currentColor;
+}
+
+.secure-local-map-point > strong {
+  overflow: hidden;
+  font-size: 11px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.secure-local-map-point.active {
+  outline: 2px solid rgba(0, 195, 255, 0.55);
+  outline-offset: 2px;
+}
+
+.secure-local-map-note {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  padding: 3px 6px;
+  border-radius: 4px;
+  color: rgba(215, 242, 255, 0.72);
+  background: rgba(3, 12, 24, 0.78);
+  font-size: 10px;
 }
 
 /* ===== LiveVideoPlayer ===== */

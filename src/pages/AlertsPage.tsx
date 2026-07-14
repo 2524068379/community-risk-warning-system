@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Tag, Badge } from 'antd';
+import { Badge, Button, Space, Tag } from 'antd';
 import { useAppStore } from '@/store/useAppStore';
 
 const levelConfig: Record<string, { color: string; label: string }> = {
@@ -15,7 +15,7 @@ const statusConfig: Record<string, { color: string; label: string }> = {
 };
 
 export function AlertsPage() {
-  const { events, selectedEventId, selectEvent } = useAppStore();
+  const { events, selectedEventId, selectEvent, markEventStatus } = useAppStore();
   const [filter, setFilter] = useState<string>('全部');
 
   const filteredEvents = useMemo(() => {
@@ -52,10 +52,13 @@ export function AlertsPage() {
             const lv = levelConfig[event.level] ?? levelConfig.C;
             const st = statusConfig[event.status] ?? statusConfig.pending;
             return (
-              <div
+              <button
+                type="button"
                 key={event.id}
                 className={`alerts-event-card${event.id === selectedEventId ? ' active' : ''}`}
                 onClick={() => selectEvent(event.id)}
+                aria-pressed={event.id === selectedEventId}
+                aria-label={`查看预警：${event.title}`}
               >
                 <div className="alerts-card-header">
                   <span className="alerts-card-rank">#{idx + 1}</span>
@@ -89,7 +92,7 @@ export function AlertsPage() {
                   </span>
                   <span className="alerts-card-score-label">风险分</span>
                 </div>
-              </div>
+              </button>
             );
           })}
         </div>
@@ -127,6 +130,25 @@ export function AlertsPage() {
             </div>
 
             <div className="alerts-detail-divider" />
+
+            <Space size={8} wrap>
+              {selectedEvent.status === 'pending' ? (
+                <Button type="primary" onClick={() => markEventStatus(selectedEvent.id, 'processing')}>
+                  开始处置
+                </Button>
+              ) : null}
+              {selectedEvent.status === 'processing' ? (
+                <Button type="primary" onClick={() => markEventStatus(selectedEvent.id, 'done')}>
+                  标记已完成
+                </Button>
+              ) : null}
+              {selectedEvent.status === 'done' ? (
+                <Button onClick={() => markEventStatus(selectedEvent.id, 'processing')}>
+                  重新打开
+                </Button>
+              ) : null}
+              <span className="alerts-detail-meta-text">当前为本地演示状态，正式部署应接入工单服务。</span>
+            </Space>
 
             <div className="alerts-detail-body">
               <div className="alerts-detail-section">

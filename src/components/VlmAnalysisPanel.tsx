@@ -1,17 +1,43 @@
 import { useMemo } from 'react';
 import { Progress, Space, Tag } from 'antd';
-import type { VlmAnalysis } from '@/types';
+import type { AnalysisValidity, VlmAnalysis, VlmModelSource } from '@/types';
 import { riskGradeColorMap } from '@/utils/risk';
 
 interface VlmAnalysisPanelProps {
   analysis: VlmAnalysis;
   variant?: 'full' | 'compact' | 'summary';
+  validity?: AnalysisValidity;
+  modelSource?: VlmModelSource;
 }
 
-export function VlmAnalysisPanel({ analysis, variant = 'full' }: VlmAnalysisPanelProps) {
+const sourceLabels: Record<VlmModelSource, string> = {
+  local: '本地模型',
+  cloud: '云端模型',
+  'cloud-fallback': '云端回退',
+  unknown: '来源未知'
+};
+
+export function VlmAnalysisPanel({
+  analysis,
+  variant = 'full',
+  validity = 'unknown',
+  modelSource = 'unknown'
+}: VlmAnalysisPanelProps) {
+  const hasResult = validity === 'valid' || validity === 'stale';
+  const resultStatus = validity === 'valid'
+    ? {
+        color: analysis.hasRisk ? 'error' : 'success',
+        label: analysis.hasRisk ? '存在风险' : '未发现风险'
+      }
+    : validity === 'stale'
+      ? { color: 'warning', label: '结果已过期' }
+      : validity === 'error'
+        ? { color: 'error', label: '结果不可用' }
+        : { color: 'default', label: '等待分析' };
+
   const insightItems = useMemo(() => [
-    { label: '是否存在风险', value: analysis.hasRisk ? '是' : '否' },
-    { label: '置信度', value: `${Math.round(analysis.confidence * 100)}%` },
+    { label: '是否存在风险', value: hasResult ? (analysis.hasRisk ? '是' : '否') : '待分析' },
+    { label: '置信度', value: hasResult ? `${Math.round(analysis.confidence * 100)}%` : '待分析' },
     {
       label: '人员徘徊',
       value: typeof analysis.hasLoitering === 'boolean' ? (analysis.hasLoitering ? '是' : '否') : '待分析'
@@ -24,7 +50,7 @@ export function VlmAnalysisPanel({ analysis, variant = 'full' }: VlmAnalysisPane
       label: '人员跌倒',
       value: typeof analysis.hasFallen === 'boolean' ? (analysis.hasFallen ? '是' : '否') : '待分析'
     }
-  ], [analysis.hasRisk, analysis.confidence, analysis.hasLoitering, analysis.hasGathering, analysis.hasFallen]);
+  ], [hasResult, analysis.hasRisk, analysis.confidence, analysis.hasLoitering, analysis.hasGathering, analysis.hasFallen]);
 
   const visibleItems =
     variant === 'full' ? insightItems : variant === 'compact' ? insightItems.slice(0, 4) : insightItems.slice(0, 3);
@@ -37,15 +63,16 @@ export function VlmAnalysisPanel({ analysis, variant = 'full' }: VlmAnalysisPane
         <div className="vlm-compact-scorebar">
           <div className="vlm-compact-score-block">
             <span className="vlm-compact-score-num" style={{ color: riskGradeColorMap[analysis.level] }}>
-              {analysis.riskScore}
+              {hasResult ? analysis.riskScore : '--'}
             </span>
             <span className="vlm-score-label">综合风险分</span>
           </div>
           <div className="vlm-compact-tags">
-            <Tag color={riskGradeColorMap[analysis.level]}>等级 {analysis.level}</Tag>
-            <Tag color={analysis.hasRisk ? 'error' : 'success'}>
-              {analysis.hasRisk ? '存在风险' : '风险可控'}
+            <Tag color={hasResult ? riskGradeColorMap[analysis.level] : 'default'}>
+              等级 {hasResult ? analysis.level : '--'}
             </Tag>
+            <Tag color={resultStatus.color}>{resultStatus.label}</Tag>
+            {validity === 'valid' ? <Tag color={modelSource === 'local' ? 'processing' : 'warning'}>{sourceLabels[modelSource]}</Tag> : null}
           </div>
         </div>
 
@@ -73,24 +100,25 @@ export function VlmAnalysisPanel({ analysis, variant = 'full' }: VlmAnalysisPane
           <div className="vlm-title">{variant === 'summary' ? 'VLM 风险摘要' : 'VLM 实时数据板块'}</div>
         </div>
         <Space size={4}>
-          <Tag color={riskGradeColorMap[analysis.level]}>等级 {analysis.level}</Tag>
-          <Tag color={analysis.hasRisk ? 'error' : 'success'}>
-            {analysis.hasRisk ? '存在风险' : '风险可控'}
+          <Tag color={hasResult ? riskGradeColorMap[analysis.level] : 'default'}>
+            等级 {hasResult ? analysis.level : '--'}
           </Tag>
+          <Tag color={resultStatus.color}>{resultStatus.label}</Tag>
+          {validity === 'valid' ? <Tag color={modelSource === 'local' ? 'processing' : 'warning'}>{sourceLabels[modelSource]}</Tag> : null}
         </Space>
       </div>
 
       <div className="vlm-main-grid">
         <div className="vlm-score-box">
-          <div className="vlm-score">{analysis.riskScore}</div>
+          <div className="vlm-score">{hasResult ? analysis.riskScore : '--'}</div>
           <div className="vlm-score-label">综合风险分</div>
           <Progress
             type="dashboard"
-            percent={analysis.riskScore}
+            percent={hasResult ? analysis.riskScore : 0}
             size={variant === 'full' ? 110 : 84}
             strokeColor={riskGradeColorMap[analysis.level]}
             trailColor="rgba(255,255,255,0.06)"
-            format={() => `${analysis.level}级`}
+            format={() => hasResult ? `${analysis.level}级` : '--'}
           />
         </div>
 

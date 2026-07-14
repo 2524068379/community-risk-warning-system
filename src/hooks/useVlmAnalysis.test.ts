@@ -3,9 +3,14 @@ import {
   checkVlmConnectionStatus,
   consumeUnchangedVlmFrame,
   finalizeVlmFrame,
+  getDetectorRetryDelayMs,
+  isCurrentVlmAnalysisRun,
   isRequestCanceled,
-  planVlmDispatch
+  planVlmDispatch,
+  resetVlmAnalysisContext,
+  shouldHandleFrameSequence
 } from './useVlmAnalysis'
+import { createCapturedFrame } from './useFrameCapture'
 
 describe('finalizeVlmFrame', () => {
   it('releases the analysis lock and consumes the frame even after cancellation', () => {
@@ -17,6 +22,49 @@ describe('finalizeVlmFrame', () => {
       releaseAnalysisLock
     })
 
+    expect(markConsumed).toHaveBeenCalledTimes(1)
+    expect(releaseAnalysisLock).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('frame sequencing and context lifecycle', () => {
+  it('publishes a new sequence for byte-identical frames', () => {
+    const first = createCapturedFrame(0, 'data:image/jpeg;base64,same', false, 100)
+    const second = createCapturedFrame(first.frameSequence, first.frameDataUrl!, false, 200)
+
+    expect(first.frameDataUrl).toBe(second.frameDataUrl)
+    expect(first.frameSequence).toBe(1)
+    expect(second.frameSequence).toBe(2)
+    expect(shouldHandleFrameSequence(second.frameSequence, first.frameSequence)).toBe(true)
+    expect(shouldHandleFrameSequence(first.frameSequence, first.frameSequence)).toBe(false)
+  })
+
+  it('rejects work invalidated while asynchronous detection is still running', () => {
+    const startedRun = 7
+
+    expect(isCurrentVlmAnalysisRun(startedRun, startedRun, false)).toBe(true)
+    expect(isCurrentVlmAnalysisRun(startedRun, startedRun + 1, false)).toBe(false)
+    expect(isCurrentVlmAnalysisRun(startedRun, startedRun, true)).toBe(false)
+  })
+
+  it('aborts and invalidates the prior request when analysis context changes', () => {
+    const controller = new AbortController()
+    const invalidateAnalysisRun = vi.fn()
+    const resetDispatchClock = vi.fn()
+    const markConsumed = vi.fn()
+    const releaseAnalysisLock = vi.fn()
+
+    resetVlmAnalysisContext({
+      controller,
+      invalidateAnalysisRun,
+      resetDispatchClock,
+      markConsumed,
+      releaseAnalysisLock
+    })
+
+    expect(controller.signal.aborted).toBe(true)
+    expect(invalidateAnalysisRun).toHaveBeenCalledTimes(1)
+    expect(resetDispatchClock).toHaveBeenCalledTimes(1)
     expect(markConsumed).toHaveBeenCalledTimes(1)
     expect(releaseAnalysisLock).toHaveBeenCalledTimes(1)
   })
@@ -106,12 +154,11 @@ describe('planVlmDispatch', () => {
       fallbackIntervalMs: 6_000
     })).toEqual({
       shouldSendVlm: true,
-      isHighPriority: true,
       reason: 'detector-failed'
     })
   })
 
-  it('prioritizes person and two-wheel detections', () => {
+  it('dispatches detected objects without claiming in-flight preemption', () => {
     expect(planVlmDispatch({
       detectorFailed: false,
       detections: [{ label: 'bicycle', score: 0.42, bbox: [0, 0, 1, 1] }],
@@ -120,8 +167,7 @@ describe('planVlmDispatch', () => {
       fallbackIntervalMs: 6_000
     })).toEqual({
       shouldSendVlm: true,
-      isHighPriority: true,
-      reason: 'high-priority-object'
+      reason: 'object'
     })
   })
 
@@ -134,7 +180,6 @@ describe('planVlmDispatch', () => {
       fallbackIntervalMs: 6_000
     })).toEqual({
       shouldSendVlm: true,
-      isHighPriority: false,
       reason: 'object'
     })
   })
@@ -148,7 +193,6 @@ describe('planVlmDispatch', () => {
       fallbackIntervalMs: 6_000
     })).toEqual({
       shouldSendVlm: true,
-      isHighPriority: false,
       reason: 'fallback'
     })
   })
@@ -162,9 +206,17 @@ describe('planVlmDispatch', () => {
       fallbackIntervalMs: 6_000
     })).toEqual({
       shouldSendVlm: false,
-      isHighPriority: false,
       reason: 'skip'
     })
+  })
+})
+
+describe('detector retry backoff', () => {
+  it('backs off exponentially and caps retries at 30 seconds', () => {
+    expect(getDetectorRetryDelayMs(1)).toBe(2_000)
+    expect(getDetectorRetryDelayMs(2)).toBe(4_000)
+    expect(getDetectorRetryDelayMs(5)).toBe(30_000)
+    expect(getDetectorRetryDelayMs(20)).toBe(30_000)
   })
 })
 

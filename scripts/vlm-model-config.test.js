@@ -1,6 +1,8 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import {
+  LLAMA_CPP_CUDA_ZIP_SHA256,
+  LLAMA_CPP_CUDART_ZIP_SHA256,
   LLAMA_CPP_VERSION,
   VLM_HAS_MMPROJ,
   VLM_MODEL_FILE,
@@ -32,6 +34,8 @@ describe('VLM model packaging configuration', () => {
     expect(workflow).toContain(VLM_MODEL_SHA256);
     expect(workflow).toContain(VLM_MMPROJ_SHA256);
     expect(workflow).toContain(LLAMA_CPP_VERSION);
+    expect(workflow).toContain(LLAMA_CPP_CUDA_ZIP_SHA256);
+    expect(workflow).toContain(LLAMA_CPP_CUDART_ZIP_SHA256);
     expect(VLM_HAS_MMPROJ).toBe(true);
     expect(workflow.indexOf('Verify VLM model file hashes')).toBeGreaterThan(
       workflow.indexOf('Prepare VLM model files')
@@ -56,6 +60,12 @@ describe('VLM model packaging configuration', () => {
     expect(downloadScript).toContain('VLM_MMPROJ_URL');
     expect(downloadScript).toContain('VLM_MMPROJ_SHA256');
     expect(downloadScript).toContain('LLAMA_CPP_VERSION');
+    expect(downloadScript).toContain('LLAMA_CPP_CUDA_ZIP_SHA256');
+    expect(downloadScript).toContain('LLAMA_CPP_CUDART_ZIP_SHA256');
+    expect(downloadScript).toContain('--runtime-only');
+    expect(downloadScript).toContain('REQUIRED_RUNTIME_FILES.every');
+    expect(downloadScript).toContain("const needsCudaBackend = !runtimeOnly && !existsSync(join(vlmDir, 'ggml-cuda.dll'))");
+    expect(downloadScript).toContain('if (!hasCurrentRuntime || needsCudaBackend)');
     expect(downloadScript).toContain('.llama-cpp-runtime-version');
     expect(ollamaManager).toContain('../shared/vlmModelConfig.js');
     expect(ollamaManager).toContain('VLM_MODEL_FILE');

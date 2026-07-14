@@ -7,11 +7,11 @@
 ## 功能概览
 
 - **总览仪表板**：本地摄像头实时画面、VLM 状态、风险评分、风险构成、趋势折线图和百度地图点位联动。
-- **实时监控**：摄像头画面、点位列表、在线状态、风险分和 VLM 检测框叠加。
+- **实时监控**：本地摄像头画面、模拟点位列表、在线状态、风险分，以及与检测框严格对齐的 VLM 抓拍证据。
 - **预警事件**：按 A/B/C 风险等级筛选事件，查看事件概要、处置建议、关键证据和 VLM 研判结果。
 - **本地 VLM 分析**：Electron 主进程启动 `llama-server.exe`，渲染进程定时截帧并通过 `/api/ollama/chat/completions` 获取结构化研判结果。
 - **轻量目标检测预筛**：使用 TensorFlow.js COCO-SSD Lite 检测人员、车辆等目标，检测标签和置信度阈值可通过环境变量配置，并结合帧差与自适应截帧降低 VLM 调用频率。
-- **双代理能力**：Express 代理同时提供 Qwen OpenAI-compatible 远程接口和本地 llama.cpp VLM 接口，统一处理 CORS、限流、超时和请求校验；本地 VLM 不可用时可自动回退到已配置的云端模型。
+- **双代理能力**：Express 代理同时提供 Qwen OpenAI-compatible 远程接口和本地 llama.cpp VLM 接口，统一处理 CORS、鉴权、限流、超时和请求校验；只有显式设置 `ALLOW_CLOUD_FALLBACK=true` 时，本地 VLM 失败才允许把画面请求回退到云端模型。
 - **构建与发布**：GitHub Actions 在 Windows 环境运行测试、类型检查、构建和打包；应用包与 VLM 模型包分开产出。
 
 ## 技术栈
@@ -19,16 +19,16 @@
 | 层级 | 技术 | 当前版本 | 说明 |
 |------|------|----------|------|
 | 前端框架 | React + TypeScript | 19.2 / 5.9 | 渲染进程 UI 与类型约束 |
-| UI 组件 | Ant Design | 6.4 | 管理端组件体系 |
-| 数据可视化 | Recharts | 3.8 | 风险构成与趋势图表 |
+| UI 组件 | Ant Design | 6.5 | 管理端组件体系 |
+| 数据可视化 | Recharts | 3.9 | 风险构成与趋势图表 |
 | 状态管理 | Zustand | 5.0 | 全局摄像头、事件和分析状态 |
-| 路由 | react-router-dom | 7.17 | SPA 路由与懒加载 |
-| HTTP 客户端 | Axios | 1.17 | 请求封装与拦截 |
+| 路由 | react-router-dom | 7.18 | SPA 路由与懒加载 |
+| HTTP 客户端 | Axios | 1.18 | 请求封装与拦截 |
 | 视频播放 | mpegts.js | 1.8 | FLV、MPEG-TS、HLS、MP4 播放能力 |
 | 目标检测 | TensorFlow.js + COCO-SSD | 4.22 / 2.2 | 浏览器侧轻量目标预筛 |
-| 地图服务 | 百度地图 JSAPI GL | 3.x | WebGL 地图与摄像头标注 |
-| 桌面框架 | Electron | 41.7 | 主进程窗口、代理和 VLM 子进程管理 |
-| 构建工具 | electron-vite + Vite | 5.0 / 7.3 | Electron 三进程构建与浏览器调试 |
+| 地图服务 | 百度地图 JSAPI GL / 内置点位图 | 3.x / 本地 | 浏览器模式使用 JSAPI；Electron 使用不加载远程脚本的安全点位图 |
+| 桌面框架 | Electron | 43.1 | 主进程窗口、代理和 VLM 子进程管理 |
+| 构建工具 | electron-vite + Vite | 6.0 beta / 8.1 | Electron 三进程构建与浏览器调试 |
 | 后端代理 | Node.js + Express | 24 / 5.2 | Qwen 和本地 VLM 代理 |
 | VLM 推理 | llama.cpp `llama-server` | b9484 | Windows CUDA 12.4 构建 |
 
@@ -134,18 +134,23 @@ VITE_DEMO_STREAM_TYPE=flv
 
 VITE_DETECTION_LABELS=person,car,truck,bus,bicycle,motorcycle,dog,backpack,handbag,suitcase,chair,couch,bench,potted plant
 VITE_DETECTION_MIN_SCORE=0.35
+VITE_DETECTION_MODEL_URL=
 
 SERVER_HOST=127.0.0.1
 SERVER_PORT=8787
 CORS_ORIGIN=http://localhost:5173
 ALLOW_LOCAL_FILE_ORIGINS=false
-REQUEST_BODY_LIMIT=8mb
+REQUEST_BODY_LIMIT=2mb
 
 CHAT_REQUESTS_PER_MINUTE=30
+AUTH_ATTEMPTS_PER_MINUTE=20
+STATUS_REQUESTS_PER_MINUTE=60
 MAX_CHAT_MESSAGES=16
 MAX_CHAT_TOKENS=2048
+MAX_UPSTREAM_RESPONSE_BYTES=2097152
 LOG_MODEL_OUTPUT=false
 LOCAL_PROXY_TOKEN=
+ALLOW_CLOUD_FALLBACK=false
 
 QWEN_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
 QWEN_API_KEY=
@@ -154,6 +159,7 @@ QWEN_TIMEOUT=60000
 
 VLM_HOST=127.0.0.1
 VLM_PORT=11434
+VLM_API_KEY=
 VLM_MODEL=qwen3.5-4b-mtp:q4_k_m
 VLM_FORCE_CPU=false
 VLM_GPU_LAYERS=99
@@ -169,9 +175,9 @@ VLM_MTP_ENABLED=false
 VLM_MTP_DRAFT_TOKENS=4
 ```
 
-`VITE_DETECTION_LABELS` 用英文逗号分隔 COCO-SSD 标签；`VITE_DETECTION_MIN_SCORE` 取值范围为 0 到 1，配置异常时回退到 0.35。
+`VITE_DETECTION_LABELS` 用英文逗号分隔 COCO-SSD 标签；`VITE_DETECTION_MIN_SCORE` 取值范围为 0 到 1，配置异常时回退到 0.35。生产环境可通过 `VITE_DETECTION_MODEL_URL` 指向自托管且经过校验的 COCO-SSD 模型，避免运行时依赖 Google Storage。
 
-`VITE_*` 变量会进入浏览器代码，不要放入真实密钥。Qwen API Key 只应写入 `.env` 中不带 `VITE_` 前缀的服务端变量、CI Secret 或 ESA Pages 环境变量。`LOCAL_PROXY_TOKEN` 为空时不会启用 token 校验；当独立代理绑定非本机地址时，应设置一个高熵随机值，并由调用方通过 `X-Local-Proxy-Token` 请求头传入。`QWEN_BASE_URL` 只接受代理源码中固定列出的 OpenAI-compatible 上游地址，例如本机 LM Studio/Ollama 兼容端点、DashScope 兼容模式端点或智谱 BigModel 兼容端点；如需接入其他专属域名，应先把完整 base URL 显式加入代理 endpoint 表后再部署。
+`VITE_*` 变量会进入浏览器代码，不要放入真实密钥。Qwen API Key 只应写入 `.env` 中不带 `VITE_` 前缀的服务端变量、CI Secret 或 ESA Pages 环境变量。独立代理绑定非本机地址时必须配置至少 32 字节的高熵 `LOCAL_PROXY_TOKEN`，否则代理会拒绝启动。`ALLOW_CLOUD_FALLBACK` 默认关闭，因为启用后本地推理失败可能把监控帧发送到云端；开启前应完成授权与数据合规确认。`QWEN_BASE_URL` 只接受代理源码中固定列出的 OpenAI-compatible 上游地址。Electron 每次启动会为自管 `llama-server` 生成随机端口和 `VLM_API_KEY`；独立代理连接自行启动且启用 API key 的服务时才需手工配置这两项。
 
 ### 下载本地 VLM 资源
 
@@ -199,6 +205,8 @@ npm run dev
 ```
 
 该模式会启动 Electron 主进程、渲染进程热更新和内嵌代理服务。若 `resources/vlm/` 中存在所需文件，主进程会自动启动本地 `llama-server.exe`。
+
+当前总览和监控页的视频输入明确标识为 `LOCAL` 本地演示源；右侧社区点位列表仍是模拟数据，选择点位不会把本地画面伪装成该点位。接入正式摄像头时，应让每条分析结果携带真实 `cameraId`、采集时间和模型来源，并按点位持久化。
 
 ### 浏览器渲染模式
 
@@ -252,10 +260,10 @@ QWEN_MODEL=glm-4v-flash
 |------|------|------|
 | GET | `/api/health` | 代理健康检查，返回 Qwen 配置状态和默认模型 |
 | POST | `/api/qwen/chat/completions` | Qwen OpenAI-compatible 远程接口代理 |
-| POST | `/api/ollama/chat/completions` | 本地 llama.cpp VLM 代理；本地 404/5xx 或连接失败时回退到云端 Qwen/BigModel；ESA Pages 中作为云端 Qwen VLM 兼容别名 |
-| GET | `/api/ollama/status` | 本地 VLM 健康状态查询；本地不可用但云端已配置时返回可用；ESA Pages 中返回 Qwen VLM API 配置状态 |
+| POST | `/api/ollama/chat/completions` | 本地 llama.cpp VLM 代理；仅当 `ALLOW_CLOUD_FALLBACK=true` 且云端配置有效时，才会在本地 404/5xx 或连接失败后回退；ESA Pages 中作为云端 Qwen VLM 兼容别名 |
+| GET | `/api/ollama/status` | 本地 VLM 健康状态查询；仅在显式启用且已配置云回退时可用云端状态兜底；ESA Pages 中返回 Qwen VLM API 配置状态 |
 
-代理层会统一执行请求体大小限制、消息数量限制、`max_tokens` 上限校验、每 IP 每分钟限流、CORS 白名单和上游请求超时控制。
+代理层会统一执行鉴权失败限流、推理配额限流、状态查询限流、请求体大小限制、消息数量限制、`max_tokens` 上限校验、CORS 白名单和上游请求超时控制。鉴权在 JSON 请求体解析之前完成。
 
 ## 核心流程
 
@@ -344,7 +352,7 @@ npm run package
 npm run preview
 ```
 
-`npm run package` 会先执行 `npm run download-model`。打包配置位于 `package.json` 的 `build` 字段；portable 应用包会携带 `llama-server.exe` 与 CPU 通用运行时 DLL（`ggml-cpu-*.dll`、`llama.dll`、`mtmd.dll` 等），但不包含 CUDA-only DLL（`ggml-cuda.dll`、`cudart64_12.dll`、`cublas64_12.dll`、`cublasLt64_12.dll`）和 `Qwen3.5-4B-Q4_K_M.gguf`、`mmproj-BF16.gguf` 两个大模型文件。CI 会额外生成 `vlm-models.zip`，把模型文件与 CUDA 运行时一并分发；CPU 推理只需解压 `.gguf` 模型，GPU 加速则需把 CUDA DLL 一同解压到 `resources\vlm\` 目录下。
+`npm run package` 只会先执行 `npm run download-runtime`，不会再为最终会被排除的 portable 包下载数 GB 模型；需要完整模型与 CUDA 运行时供本地开发时，单独运行 `npm run download-model`。下载的 llama.cpp 压缩包和模型文件都会校验 SHA256，运行时清单缺少任一必需 DLL 时会自动修复。portable 应用包携带 CPU 通用运行时，但不包含 CUDA-only DLL 和两个大模型文件；发布流程另行生成 `vlm-models.zip`。
 
 提交行为变更前建议运行：
 
@@ -361,7 +369,7 @@ GitHub Actions 工作流位于 `.github/workflows/build.yml`：
 - 触发：push 到 `main`、PR 到 `main`、`v*` 标签和手动触发。
 - 环境：`windows-latest`，Node.js 24。
 - 步骤：`npm ci`、测试、类型检查、VLM 资源缓存/下载、SHA256 校验、构建、打包。
-- Dependabot PR：跳过 VLM 下载和 Windows 打包，只执行必要质量检查。
+- 所有 Pull Request：跳过 VLM 下载和 Windows 打包，只执行测试、类型检查和生产构建。
 - VLM 模型包：仅在 `v*` 标签发布或手动触发时生成，普通 `main` push 不再打包数 GB 模型产物。
 - Release：推送 `v*` 标签时上传 `windows-portable` 与 `vlm-models` 两类产物。
 
@@ -381,9 +389,10 @@ Dependabot 配置位于 `.github/dependabot.yml`，npm 和 GitHub Actions 依赖
 
 - 不要提交真实 `.env`。
 - Qwen API Key 只放在服务端环境或 CI Secret 中。
-- 百度地图浏览器 AK 必须配置 Referer 白名单；本地开发通常需要加入 `http://localhost:5173`。
+- 百度地图浏览器 AK 必须配置 Referer 白名单；本地开发通常需要加入 `http://localhost:5173`。Electron 特权渲染器不会加载百度远程 SDK，而使用内置安全点位图。
 - `ALLOW_LOCAL_FILE_ORIGINS` 仅在 Electron 内嵌代理场景由主进程覆盖为 `true`，普通浏览器代理默认关闭。
-- 独立代理若绑定到非本机地址，应配置 `LOCAL_PROXY_TOKEN` 并要求调用方携带 `X-Local-Proxy-Token`。
+- 独立代理若绑定到非本机地址，必须配置至少 32 字节的 `LOCAL_PROXY_TOKEN` 并要求调用方携带 `X-Local-Proxy-Token`，否则启动失败。
+- 云回退默认关闭；仅在已完成监控画面外发授权时设置 `ALLOW_CLOUD_FALLBACK=true`，界面会标明实际模型来源。
 - `CORS_ORIGIN` 必须配置为明确的来源白名单；出于安全考虑，`*` 会回退到默认本地开发来源。
 - 生产环境保持 `LOG_MODEL_OUTPUT=false`，避免记录模型输出内容。
 - VLM 模型文件下载后会校验 SHA256，哈希配置集中在 `shared/vlmModelConfig.js`。
@@ -397,6 +406,7 @@ Dependabot 配置位于 `.github/dependabot.yml`，npm 和 GitHub Actions 依赖
 | 白屏或一直加载 | 检查 `VITE_BAIDU_MAP_AK`、网络访问 `api.map.baidu.com` 的能力和浏览器控制台错误 |
 | Referer 错误 | 确认 `http://localhost:5173` 或当前域名已加入百度地图控制台白名单 |
 | 点位偏移 | 确认数据坐标为 BD09；如为 WGS84 或 GCJ02，需先转换 |
+| Electron 中显示点位示意图 | 这是安全设计：桌面特权渲染器不执行第三方远程地图脚本；如需调试百度地图，请使用 `npm run dev:web` |
 
 ### 摄像头或视频不可用
 
@@ -444,4 +454,4 @@ Dependabot 配置位于 `.github/dependabot.yml`，npm 和 GitHub Actions 依赖
 
 ---
 
-**最后更新**：2026-05-20
+**最后更新**：2026-07-15

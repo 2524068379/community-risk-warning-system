@@ -1,6 +1,7 @@
 import { app, BrowserWindow, ipcMain } from 'electron'
 import { is } from '@electron-toolkit/utils'
 import path from 'node:path'
+import { pathToFileURL } from 'node:url'
 import fs from 'node:fs'
 import crypto from 'node:crypto'
 import dotenv from 'dotenv'
@@ -14,6 +15,13 @@ import {
   isGpuAvailable,
   refreshOllamaStatus
 } from './ollamaManager.js'
+import {
+  assertTrustedIpcSender,
+  isAllowedVideoPermissionCheck,
+  isAllowedVideoPermissionRequest,
+  isTrustedMainFrameNavigation,
+  isTrustedRendererUrl
+} from './security.js'
 
 const baseDir = app.isPackaged ? path.dirname(app.getPath('exe')) : app.getAppPath()
 
@@ -22,12 +30,18 @@ if (fs.existsSync(envPath)) {
   dotenv.config({ path: envPath, override: false })
 }
 
+const managedVlmPort = crypto.randomInt(20_000, 60_000)
+const managedVlmApiKey = crypto.randomBytes(32).toString('hex')
+process.env.VLM_PORT = String(managedVlmPort)
+process.env.VLM_API_KEY = managedVlmApiKey
+
 const localProxyToken = crypto.randomBytes(32).toString('hex')
 const proxyConfig = {
   ...loadQwenProxyConfig(),
   host: '127.0.0.1',
   allowLocalFileOrigins: true,
-  localProxyToken
+  localProxyToken,
+  isLocalVlmTrusted: () => isOllamaReady()
 }
 const server = createQwenProxyApp(proxyConfig)
 
@@ -60,17 +74,27 @@ httpServer.on('error', (error) => {
 // 设置 5 分钟超时，防止慢客户端无限占用连接
 httpServer.timeout = 300_000
 
-ipcMain.handle('get-api-base', async () => {
+let mainWindow: BrowserWindow | null = null
+let trustedRendererUrl: string | null = null
+
+function assertTrustedRendererIpc(event: Electron.IpcMainInvokeEvent): void {
+  assertTrustedIpcSender(event, mainWindow?.webContents ?? null, trustedRendererUrl)
+}
+
+ipcMain.handle('get-api-base', async (event) => {
+  assertTrustedRendererIpc(event)
   return apiBaseReady
 })
 
-ipcMain.handle('get-api-auth-headers', () => {
+ipcMain.handle('get-api-auth-headers', (event) => {
+  assertTrustedRendererIpc(event)
   return {
     'X-Local-Proxy-Token': localProxyToken
   }
 })
 
-ipcMain.handle('get-ollama-status', async () => {
+ipcMain.handle('get-ollama-status', async (event) => {
+  assertTrustedRendererIpc(event)
   await refreshOllamaStatus()
 
   return {
@@ -81,9 +105,57 @@ ipcMain.handle('get-ollama-status', async () => {
   }
 })
 
-let mainWindow: BrowserWindow | null = null
+function configureWindowSecurity(window: BrowserWindow, rendererUrl: string): void {
+  const { webContents } = window
+
+  webContents.on('will-navigate', (event) => {
+    if (!isTrustedRendererUrl(event.url, rendererUrl)) {
+      event.preventDefault()
+    }
+  })
+
+  webContents.on('will-frame-navigate', (event) => {
+    if (!isTrustedMainFrameNavigation(event.url, event.isMainFrame, rendererUrl)) {
+      event.preventDefault()
+    }
+  })
+
+  webContents.on('will-redirect', (event, url) => {
+    if (!isTrustedRendererUrl(url, rendererUrl)) {
+      event.preventDefault()
+    }
+  })
+
+  webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
+
+  const rendererSession = webContents.session
+  rendererSession.setPermissionCheckHandler((requestingContents, permission, _origin, details) => {
+    if (
+      requestingContents !== webContents
+      || webContents.isDestroyed()
+      || !isTrustedRendererUrl(webContents.getURL(), rendererUrl)
+    ) {
+      return false
+    }
+
+    return isAllowedVideoPermissionCheck(permission, details, rendererUrl)
+  })
+
+  rendererSession.setPermissionRequestHandler((requestingContents, permission, callback, details) => {
+    const allowed = requestingContents === webContents
+      && !webContents.isDestroyed()
+      && isTrustedRendererUrl(webContents.getURL(), rendererUrl)
+      && isAllowedVideoPermissionRequest(permission, details, rendererUrl)
+
+    callback(allowed)
+  })
+}
 
 function createWindow(): void {
+  const rendererEntryPath = path.join(__dirname, '../renderer/index.html')
+  const developmentRendererUrl = is.dev ? process.env['ELECTRON_RENDERER_URL'] : undefined
+  const rendererUrl = developmentRendererUrl || pathToFileURL(rendererEntryPath).href
+
   mainWindow = new BrowserWindow({
     width: 1440,
     height: 900,
@@ -96,10 +168,13 @@ function createWindow(): void {
     }
   })
 
-  if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
-    mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL'])
+  trustedRendererUrl = rendererUrl
+  configureWindowSecurity(mainWindow, rendererUrl)
+
+  if (developmentRendererUrl) {
+    mainWindow.loadURL(developmentRendererUrl)
   } else {
-    mainWindow.loadFile(path.join(__dirname, '../renderer/index.html'))
+    mainWindow.loadFile(rendererEntryPath)
   }
 }
 

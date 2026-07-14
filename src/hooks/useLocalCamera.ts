@@ -1,38 +1,43 @@
-import { useEffect, useState } from 'react';
-
-let persistentStream: MediaStream | null = null;
-let persistentError: string | null = null;
-
-function isStreamActive(s: MediaStream | null): s is MediaStream {
-  return s !== null && s.active && s.getVideoTracks().some((t) => t.readyState === 'live');
-}
+import { useCallback, useEffect, useState } from 'react';
 
 export function useLocalCamera(videoRef?: React.RefObject<HTMLVideoElement | null>) {
-  const reused = isStreamActive(persistentStream);
-  const [stream, setStream] = useState<MediaStream | null>(reused ? persistentStream : null);
-  const [loading, setLoading] = useState(!reused);
-  const [error, setError] = useState<string | null>(reused ? null : persistentError);
+  const [stream, setStream] = useState<MediaStream | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [retryToken, setRetryToken] = useState(0);
 
   useEffect(() => {
-    if (isStreamActive(persistentStream)) {
-      setStream(persistentStream);
-      setLoading(false);
-      setError(null);
-      return;
-    }
-
     let disposed = false;
+    let ownedStream: MediaStream | null = null;
+
+    setLoading(true);
+    setError(null);
 
     async function startCamera() {
       try {
+        if (!navigator.mediaDevices?.getUserMedia) {
+          throw new Error('当前环境不支持摄像头访问');
+        }
+
         const mediaStream = await navigator.mediaDevices.getUserMedia({ video: true });
         if (disposed) {
           mediaStream.getTracks().forEach((track) => track.stop());
           return;
         }
-        persistentStream = mediaStream;
-        persistentError = null;
+
+        ownedStream = mediaStream;
+        const handleTrackEnded = () => {
+          if (disposed) return;
+          setStream(null);
+          setError('摄像头连接已中断，请检查设备后重试');
+          setLoading(false);
+        };
+        mediaStream.getVideoTracks().forEach((track) => {
+          track.addEventListener('ended', handleTrackEnded, { once: true });
+        });
+
         setStream(mediaStream);
+        setError(null);
         setLoading(false);
       } catch (err) {
         if (disposed) return;
@@ -48,8 +53,8 @@ export function useLocalCamera(videoRef?: React.RefObject<HTMLVideoElement | nul
           }
         }
 
-        persistentError = message;
         setError(message);
+        setStream(null);
         setLoading(false);
       }
     }
@@ -58,8 +63,12 @@ export function useLocalCamera(videoRef?: React.RefObject<HTMLVideoElement | nul
 
     return () => {
       disposed = true;
+      ownedStream?.getTracks().forEach((track) => track.stop());
+      if (videoRef?.current?.srcObject === ownedStream) {
+        videoRef.current.srcObject = null;
+      }
     };
-  }, []);
+  }, [retryToken, videoRef]);
 
   useEffect(() => {
     if (videoRef?.current && stream) {
@@ -67,5 +76,7 @@ export function useLocalCamera(videoRef?: React.RefObject<HTMLVideoElement | nul
     }
   }, [stream, videoRef]);
 
-  return { stream, loading, error };
+  const retry = useCallback(() => setRetryToken((value) => value + 1), []);
+
+  return { stream, loading, error, retry };
 }

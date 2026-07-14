@@ -4,6 +4,10 @@ const BAIDU_MAP_LOAD_TIMEOUT = 15000;
 
 let baiduMapLoadingPromise: Promise<any> | null = null;
 
+export function shouldLoadRemoteBaiduMapSdk(hasElectronBridge: boolean): boolean {
+  return !hasElectronBridge;
+}
+
 function isMapNamespaceReady(BMapGL?: BaiduMapNamespace) {
   return Boolean(
     BMapGL &&
@@ -60,6 +64,10 @@ function clearSdkCallback() {
 }
 
 export async function loadBaiduMapSdk(rawAk: string) {
+  if (!shouldLoadRemoteBaiduMapSdk(Boolean(window.electronAPI))) {
+    throw new Error('Electron 模式已禁用远程地图脚本，请使用内置安全点位图。');
+  }
+
   const akError = getAkConfigError(rawAk);
   if (akError) {
     throw akError;

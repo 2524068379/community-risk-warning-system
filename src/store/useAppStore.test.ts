@@ -9,9 +9,12 @@ describe('useAppStore', () => {
       activeCameraId: initialState.cameras[0].id,
       selectedEventId: initialState.events[0]?.id,
       analysis: initialState.analysis,
+      analysisContext: null,
+      analysisValidity: 'unknown',
       vlmStatus: 'idle',
       vlmError: null,
       detectionBoxes: [],
+      analysisFrameDataUrl: null,
       analysisTimestamp: null,
       detectorStatus: 'idle',
       detectedObjects: []
@@ -25,6 +28,8 @@ describe('useAppStore', () => {
     expect(state.analysis.level).toBe('C');
     expect(state.analysis.summary).toContain('等待');
     expect(state.analysis.breakdown).toEqual([]);
+    expect(state.analysisValidity).toBe('unknown');
+    expect(state.analysisContext).toBeNull();
   });
 
   it('keeps camera and event aligned without overwriting real-time analysis', () => {
@@ -54,7 +59,12 @@ describe('useAppStore', () => {
       { x: 0.1, y: 0.2, width: 0.3, height: 0.4, label: '障碍物', confidence: 0.92, risk: true }
     ];
 
-    useAppStore.getState().setAnalysis(mockAnalysis1, mockBoxes);
+    useAppStore.getState().setAnalysis(mockAnalysis1, mockBoxes, {
+      cameraId: 'LOCAL',
+      capturedAt: 123,
+      modelSource: 'local',
+      frameDataUrl: 'data:image/jpeg;base64,frame'
+    });
 
     const state1 = useAppStore.getState();
     expect(state1.analysis.riskScore).toBe(85);
@@ -63,7 +73,14 @@ describe('useAppStore', () => {
     expect(state1.analysis.trend).toHaveLength(1);
     expect(state1.analysis.trend[0].value).toBe(85);
     expect(state1.detectionBoxes).toEqual(mockBoxes);
+    expect(state1.analysisFrameDataUrl).toBe('data:image/jpeg;base64,frame');
     expect(state1.analysisTimestamp).toBeGreaterThan(0);
+    expect(state1.analysisValidity).toBe('valid');
+    expect(state1.analysisContext).toMatchObject({
+      cameraId: 'LOCAL',
+      capturedAt: 123,
+      modelSource: 'local'
+    });
 
     const mockAnalysis2 = {
       ...mockAnalysis1,
@@ -88,6 +105,34 @@ describe('useAppStore', () => {
     useAppStore.getState().setVlmStatus('error', 'Connection failed');
     expect(useAppStore.getState().vlmStatus).toBe('error');
     expect(useAppStore.getState().vlmError).toBe('Connection failed');
+    expect(useAppStore.getState().analysisValidity).toBe('error');
+  });
+
+  it('marks an existing analysis stale and clears boxes without rewriting its summary', () => {
+    const analysis = {
+      ...useAppStore.getState().analysis,
+      riskScore: 72,
+      level: 'B' as const,
+      hasRisk: true,
+      confidence: 0.8,
+      summary: '保留最近一次有效结论'
+    };
+
+    useAppStore.getState().setAnalysis(analysis, [
+      { x: 0.1, y: 0.1, width: 0.2, height: 0.2, label: '人员', confidence: 0.8, risk: true }
+    ]);
+    useAppStore.getState().invalidateAnalysis();
+
+    const state = useAppStore.getState();
+    expect(state.analysisValidity).toBe('stale');
+    expect(state.detectionBoxes).toEqual([]);
+    expect(state.analysisFrameDataUrl).toBeNull();
+    expect(state.analysis.summary).toBe('保留最近一次有效结论');
+  });
+
+  it('keeps an analysis unknown when invalidated before the first result', () => {
+    useAppStore.getState().invalidateAnalysis();
+    expect(useAppStore.getState().analysisValidity).toBe('unknown');
   });
 
   it('updates detector status', () => {

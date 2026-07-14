@@ -1,15 +1,21 @@
-import { describe, expect, it } from 'vitest';
+import http from 'node:http';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  assertQwenProxySecurityConfig,
   buildExpressErrorResponse,
   buildOllamaRequestBody,
   buildProxyErrorResponse,
   buildQwenFallbackRequestBody,
   buildQwenRequestBody,
+  createQwenProxyApp,
   isAllowedCorsOrigin,
+  isCloudFallbackAvailable,
   isLocalProxyTokenAuthorized,
   isLocalProxyTokenProtectedPath,
+  isLoopbackBindHost,
   isQwenProxyConfigured,
   loadQwenProxyConfig,
+  normalizeChatCompletionPayload,
   parseProxyResponseText,
   resolveVlmProxyStatus,
   shouldFallbackToQwen,
@@ -17,6 +23,114 @@ import {
 } from './qwenProxy.js';
 import { resolveOllamaHealthStatus } from './ollamaHealthStatus.js';
 import { DEFAULT_QWEN_VLM_API_MODEL } from '../shared/vlmModelConfig.js';
+
+const testServers = [];
+
+function listen(server) {
+  return new Promise((resolve, reject) => {
+    const onError = (error) => {
+      server.off('listening', onListening);
+      reject(error);
+    };
+    const onListening = () => {
+      server.off('error', onError);
+      testServers.push(server);
+      resolve(server.address().port);
+    };
+
+    server.once('error', onError);
+    server.once('listening', onListening);
+    server.listen(0, '127.0.0.1');
+  });
+}
+
+function closeServer(server) {
+  return new Promise((resolve) => {
+    server.closeAllConnections?.();
+    server.close(() => resolve());
+  });
+}
+
+function requestJson(port, path, body, headers = {}) {
+  return new Promise((resolve, reject) => {
+    const text = JSON.stringify(body);
+    const request = http.request({
+      hostname: '127.0.0.1',
+      port,
+      path,
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(text),
+        ...headers
+      }
+    }, (response) => {
+      response.setEncoding('utf8');
+      let responseText = '';
+      response.on('data', (chunk) => {
+        responseText += chunk;
+      });
+      response.on('end', () => {
+        resolve({
+          status: response.statusCode,
+          headers: response.headers,
+          body: responseText ? JSON.parse(responseText) : null
+        });
+      });
+    });
+
+    request.on('error', reject);
+    request.end(text);
+  });
+}
+
+function requestGetJson(port, path, headers = {}) {
+  return new Promise((resolve, reject) => {
+    const request = http.request({
+      hostname: '127.0.0.1',
+      port,
+      path,
+      method: 'GET',
+      headers
+    }, (response) => {
+      response.setEncoding('utf8');
+      let responseText = '';
+      response.on('data', (chunk) => {
+        responseText += chunk;
+      });
+      response.on('end', () => resolve({
+        status: response.statusCode,
+        headers: response.headers,
+        body: responseText ? JSON.parse(responseText) : null
+      }));
+    });
+
+    request.on('error', reject);
+    request.end();
+  });
+}
+
+function startDisconnectingRequest(port, path, body) {
+  const text = JSON.stringify(body);
+  const request = http.request({
+    hostname: '127.0.0.1',
+    port,
+    path,
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Content-Length': Buffer.byteLength(text)
+    }
+  });
+  request.on('error', () => {});
+  request.end(text);
+  return request;
+}
+
+afterEach(async () => {
+  vi.unstubAllGlobals();
+  await Promise.all(testServers.splice(0).map(closeServer));
+});
 
 describe('qwenProxy', () => {
   it('normalizes config from environment variables', () => {
@@ -26,16 +140,21 @@ describe('qwenProxy', () => {
       QWEN_API_KEY: 'test-key',
       QWEN_MODEL: 'qwen-vl',
       QWEN_TIMEOUT: '90000',
+      ALLOW_CLOUD_FALLBACK: 'true',
       SERVER_HOST: '127.0.0.1',
       ALLOW_LOCAL_FILE_ORIGINS: 'true',
       REQUEST_BODY_LIMIT: '6mb',
       CHAT_REQUESTS_PER_MINUTE: '20',
+      AUTH_ATTEMPTS_PER_MINUTE: '7',
+      STATUS_REQUESTS_PER_MINUTE: '11',
       MAX_CHAT_MESSAGES: '8',
       MAX_CHAT_TOKENS: '1600',
+      MAX_UPSTREAM_RESPONSE_BYTES: '4096',
       LOCAL_PROXY_TOKEN: 'local-token',
       LOG_MODEL_OUTPUT: 'true',
       VLM_MODEL: 'local-vlm',
-      VLM_PORT: '12345'
+      VLM_PORT: '12345',
+      VLM_API_KEY: 'vlm-session-key'
     });
 
     expect(config.host).toBe('127.0.0.1');
@@ -47,15 +166,20 @@ describe('qwenProxy', () => {
     expect(config.qwenApiKey).toBe('test-key');
     expect(config.qwenModel).toBe('qwen-vl');
     expect(config.qwenTimeout).toBe(90000);
+    expect(config.allowCloudFallback).toBe(true);
     expect(config.requestBodyLimit).toBe('6mb');
     expect(config.chatRequestsPerMinute).toBe(20);
+    expect(config.authAttemptsPerMinute).toBe(7);
+    expect(config.statusRequestsPerMinute).toBe(11);
     expect(config.maxChatMessages).toBe(8);
     expect(config.maxChatTokens).toBe(1600);
+    expect(config.maxUpstreamResponseBytes).toBe(4096);
     expect(config.localProxyToken).toBe('local-token');
     expect(config.logModelOutput).toBe(true);
     expect(config.ollamaModel).toBe('local-vlm');
     expect(config.ollamaHost).toBe('127.0.0.1');
     expect(config.ollamaPort).toBe(12345);
+    expect(config.ollamaApiKey).toBe('vlm-session-key');
     expect(config.ollamaBaseUrl).toBe('http://127.0.0.1:12345');
   });
 
@@ -63,6 +187,8 @@ describe('qwenProxy', () => {
     const config = loadQwenProxyConfig({});
 
     expect(config.qwenModel).toBe(DEFAULT_QWEN_VLM_API_MODEL);
+    expect(config.allowCloudFallback).toBe(false);
+    expect(config.maxUpstreamResponseBytes).toBe(2 * 1024 * 1024);
   });
 
   it('uses explicit allow-lists for CORS and Qwen upstream URLs', () => {
@@ -74,6 +200,15 @@ describe('qwenProxy', () => {
     expect(wildcardCorsConfig.corsOrigin).toEqual(['http://localhost:5173']);
     expect(unsupportedQwenConfig.qwenBaseUrl).toBe('');
     expect(unsupportedQwenConfig.qwenChatCompletionsUrl).toBe('');
+  });
+
+  it('exposes the VLM source response header to allowed browser origins', async () => {
+    const port = await listen(http.createServer(createQwenProxyApp(loadQwenProxyConfig({}))));
+    const response = await fetch(`http://127.0.0.1:${port}/api/health`, {
+      headers: { Origin: 'http://localhost:5173' }
+    });
+
+    expect(response.headers.get('access-control-expose-headers')).toContain('X-VLM-Source');
   });
 
   it('rejects workspace-specific MaaS URLs unless they are added to the fixed endpoint table', () => {
@@ -96,14 +231,14 @@ describe('qwenProxy', () => {
     expect(config.qwenChatCompletionsUrl).toBe('https://open.bigmodel.cn/api/paas/v4/chat/completions');
   });
 
-  it('uses the default model only when the request body omits model', () => {
+  it('always enforces the configured cloud model', () => {
     expect(buildQwenRequestBody({ messages: [] }, 'qwen-default')).toEqual({
       model: 'qwen-default',
       messages: []
     });
 
     expect(buildQwenRequestBody({ model: 'custom', messages: [] }, 'qwen-default')).toEqual({
-      model: 'custom',
+      model: 'qwen-default',
       messages: []
     });
   });
@@ -182,6 +317,36 @@ describe('qwenProxy', () => {
       ok: false,
       message: 'max_tokens exceeds the configured limit'
     });
+    expect(validateChatCompletionPayload({ messages: [{}], max_completion_tokens: 10 }, config)).toEqual({
+      ok: false,
+      message: 'max_completion_tokens is not supported; use max_tokens'
+    });
+    expect(validateChatCompletionPayload({ messages: [{}], stream: true }, config)).toEqual({
+      ok: false,
+      message: 'streaming responses are not supported'
+    });
+    expect(validateChatCompletionPayload({ messages: [{}], n: 2 }, config)).toEqual({
+      ok: false,
+      message: 'n must be 1'
+    });
+  });
+
+  it('injects a bounded non-streaming completion limit when max_tokens is omitted', () => {
+    const config = loadQwenProxyConfig({ MAX_CHAT_TOKENS: '321' });
+
+    expect(normalizeChatCompletionPayload({
+      messages: [{ role: 'user', content: 'ok' }]
+    }, config)).toEqual({
+      messages: [{ role: 'user', content: 'ok' }],
+      max_tokens: 321,
+      stream: false
+    });
+
+    expect(normalizeChatCompletionPayload({
+      messages: [{}],
+      max_tokens: '99',
+      n: 1
+    }, config)).toMatchObject({ max_tokens: 99, n: 1, stream: false });
   });
 
   it('protects chat completion endpoints with an optional local proxy token', () => {
@@ -203,22 +368,27 @@ describe('qwenProxy', () => {
     expect(resolveOllamaHealthStatus(500)).toEqual({ ready: false, status: 'error', gpu: 'unknown' });
   });
 
-  it('marks the VLM proxy ready through cloud fallback when local VLM is unavailable', () => {
+  it('marks the VLM proxy ready only when cloud fallback is explicitly enabled', () => {
     const cloudConfig = loadQwenProxyConfig({
+      QWEN_BASE_URL: 'https://open.bigmodel.cn/api/paas/v4',
+      QWEN_API_KEY: 'test-key',
+      ALLOW_CLOUD_FALLBACK: 'true'
+    });
+    const fallbackDisabledConfig = loadQwenProxyConfig({
       QWEN_BASE_URL: 'https://open.bigmodel.cn/api/paas/v4',
       QWEN_API_KEY: 'test-key'
     });
-    const localOnlyConfig = loadQwenProxyConfig({});
 
     expect(isQwenProxyConfigured(cloudConfig)).toBe(true);
-    expect(isQwenProxyConfigured(localOnlyConfig)).toBe(false);
+    expect(isCloudFallbackAvailable(cloudConfig)).toBe(true);
+    expect(isCloudFallbackAvailable(fallbackDisabledConfig)).toBe(false);
     expect(resolveVlmProxyStatus({ ready: false, status: 'error', gpu: 'unknown' }, cloudConfig)).toEqual({
       ready: true,
       status: 'ready',
       gpu: 'unknown',
-      source: 'cloud'
+      source: 'cloud-fallback'
     });
-    expect(resolveVlmProxyStatus({ ready: false, status: 'error', gpu: 'unknown' }, localOnlyConfig)).toEqual({
+    expect(resolveVlmProxyStatus({ ready: false, status: 'error', gpu: 'unknown' }, fallbackDisabledConfig)).toEqual({
       ready: false,
       status: 'error',
       gpu: 'unknown',
@@ -232,6 +402,304 @@ describe('qwenProxy', () => {
     expect(shouldFallbackToQwen({ status: 404 })).toBe(true);
     expect(shouldFallbackToQwen({ status: 500 })).toBe(true);
     expect(shouldFallbackToQwen({ status: 503 })).toBe(true);
+  });
+
+  it('fails closed when binding beyond loopback without a proxy token', () => {
+    expect(isLoopbackBindHost('127.0.0.1')).toBe(true);
+    expect(isLoopbackBindHost('::1')).toBe(true);
+    expect(isLoopbackBindHost('0.0.0.0')).toBe(false);
+
+    const insecureConfig = loadQwenProxyConfig({ SERVER_HOST: '0.0.0.0' });
+    expect(() => assertQwenProxySecurityConfig(insecureConfig)).toThrow(/LOCAL_PROXY_TOKEN/);
+    expect(() => createQwenProxyApp(insecureConfig)).toThrow(/LOCAL_PROXY_TOKEN/);
+    expect(() => assertQwenProxySecurityConfig(loadQwenProxyConfig({
+      SERVER_HOST: '0.0.0.0',
+      LOCAL_PROXY_TOKEN: 'too-short'
+    }))).toThrow(/32 bytes/);
+    expect(assertQwenProxySecurityConfig(loadQwenProxyConfig({
+      SERVER_HOST: '0.0.0.0',
+      LOCAL_PROXY_TOKEN: '0123456789abcdef0123456789abcdef'
+    }))).toBeTruthy();
+  });
+
+  it('authenticates before consuming the route rate-limit bucket', async () => {
+    const app = createQwenProxyApp(loadQwenProxyConfig({
+      LOCAL_PROXY_TOKEN: 'secret',
+      CHAT_REQUESTS_PER_MINUTE: '1'
+    }));
+    const port = await listen(http.createServer(app));
+
+    const unauthorized = await requestJson(port, '/api/qwen/chat/completions', {
+      messages: [{ role: 'user', content: 'ok' }]
+    }, { 'x-local-proxy-token': 'wrong' });
+    const firstAuthorized = await requestJson(port, '/api/qwen/chat/completions', {}, {
+      'x-local-proxy-token': 'secret'
+    });
+    const secondAuthorized = await requestJson(port, '/api/qwen/chat/completions', {}, {
+      'x-local-proxy-token': 'secret'
+    });
+
+    expect(unauthorized.status).toBe(403);
+    expect(firstAuthorized.status).toBe(400);
+    expect(secondAuthorized.status).toBe(429);
+  });
+
+  it('rate-limits repeated authentication failures without penalizing valid tokens', async () => {
+    const app = createQwenProxyApp(loadQwenProxyConfig({
+      LOCAL_PROXY_TOKEN: 'secret',
+      AUTH_ATTEMPTS_PER_MINUTE: '1',
+      CHAT_REQUESTS_PER_MINUTE: '0'
+    }));
+    const port = await listen(http.createServer(app));
+
+    const firstFailure = await requestJson(port, '/api/qwen/chat/completions', {}, {
+      'x-local-proxy-token': 'wrong'
+    });
+    const secondFailure = await requestJson(port, '/api/qwen/chat/completions', {}, {
+      'x-local-proxy-token': 'wrong-again'
+    });
+    const authorized = await requestJson(port, '/api/qwen/chat/completions', {}, {
+      'x-local-proxy-token': 'secret'
+    });
+
+    expect(firstFailure.status).toBe(403);
+    expect(secondFailure.status).toBe(429);
+    expect(secondFailure.body.error.type).toBe('auth_rate_limit');
+    expect(authorized.status).toBe(400);
+  });
+
+  it('rejects an unauthorized request before parsing an oversized JSON body', async () => {
+    const app = createQwenProxyApp(loadQwenProxyConfig({
+      LOCAL_PROXY_TOKEN: 'secret',
+      REQUEST_BODY_LIMIT: '1b',
+      AUTH_ATTEMPTS_PER_MINUTE: '0',
+      CHAT_REQUESTS_PER_MINUTE: '0'
+    }));
+    const port = await listen(http.createServer(app));
+
+    const response = await requestJson(port, '/api/qwen/chat/completions', {
+      messages: [{ role: 'user', content: 'body larger than one byte' }]
+    }, { 'x-local-proxy-token': 'wrong' });
+
+    expect(response.status).toBe(403);
+  });
+
+  it('injects the configured max_tokens limit before proxying to local VLM', async () => {
+    let receivedBody;
+    let receivedAuthorization;
+    const upstreamPort = await listen(http.createServer((request, response) => {
+      receivedAuthorization = request.headers.authorization;
+      request.setEncoding('utf8');
+      let text = '';
+      request.on('data', (chunk) => {
+        text += chunk;
+      });
+      request.on('end', () => {
+        receivedBody = JSON.parse(text);
+        response.writeHead(200, { 'Content-Type': 'application/json' });
+        response.end('{"choices":[]}');
+      });
+    }));
+    const appPort = await listen(http.createServer(createQwenProxyApp(loadQwenProxyConfig({
+      VLM_PORT: String(upstreamPort),
+      VLM_API_KEY: 'session-vlm-key',
+      MAX_CHAT_TOKENS: '77',
+      CHAT_REQUESTS_PER_MINUTE: '0'
+    }))));
+
+    const result = await requestJson(appPort, '/api/ollama/chat/completions', {
+      messages: [{ role: 'user', content: 'ok' }]
+    });
+
+    expect(result.status).toBe(200);
+    expect(receivedBody).toMatchObject({ max_tokens: 77, stream: false });
+    expect(receivedAuthorization).toBe('Bearer session-vlm-key');
+  });
+
+  it('fails closed when Electron has not marked its managed VLM process trusted', async () => {
+    const config = loadQwenProxyConfig({ CHAT_REQUESTS_PER_MINUTE: '0' });
+    config.isLocalVlmTrusted = () => false;
+    const port = await listen(http.createServer(createQwenProxyApp(config)));
+
+    const chat = await requestJson(port, '/api/ollama/chat/completions', {
+      messages: [{ role: 'user', content: 'do not forward' }]
+    });
+    const status = await requestGetJson(port, '/api/ollama/status');
+
+    expect(chat.status).toBe(503);
+    expect(chat.body.error.type).toBe('local_vlm_untrusted');
+    expect(status.body.ready).toBe(false);
+    expect(status.body.source).toBe('local');
+  });
+
+  it('uses cloud fallback for an untrusted local process only after explicit opt-in', async () => {
+    const cloudFetch = vi.fn(async () => new Response('{"choices":[{"message":{"content":"cloud"}}]}', {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' }
+    }));
+    vi.stubGlobal('fetch', cloudFetch);
+
+    const config = loadQwenProxyConfig({
+      QWEN_BASE_URL: 'https://open.bigmodel.cn/api/paas/v4',
+      QWEN_API_KEY: 'test-key',
+      QWEN_MODEL: 'glm-4v-flash',
+      ALLOW_CLOUD_FALLBACK: 'true',
+      CHAT_REQUESTS_PER_MINUTE: '0'
+    });
+    config.isLocalVlmTrusted = () => false;
+    const port = await listen(http.createServer(createQwenProxyApp(config)));
+
+    const chat = await requestJson(port, '/api/ollama/chat/completions', {
+      messages: [{ role: 'user', content: 'explicit fallback' }]
+    });
+    const status = await requestGetJson(port, '/api/ollama/status');
+
+    expect(chat.status).toBe(200);
+    expect(chat.headers['x-vlm-source']).toBe('cloud-fallback');
+    expect(status.body).toMatchObject({ ready: true, source: 'cloud-fallback' });
+    expect(cloudFetch).toHaveBeenCalled();
+  });
+
+  it('does not use configured cloud credentials unless fallback is explicitly enabled', async () => {
+    const upstreamPort = await listen(http.createServer((_request, response) => {
+      response.writeHead(500, { 'Content-Type': 'application/json' });
+      response.end('{"error":{"message":"local failed"}}');
+    }));
+    const cloudFetch = vi.fn(async () => new Response('{"choices":[{"message":{"content":"cloud"}}]}', {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' }
+    }));
+    vi.stubGlobal('fetch', cloudFetch);
+
+    const baseEnv = {
+      VLM_PORT: String(upstreamPort),
+      QWEN_BASE_URL: 'https://open.bigmodel.cn/api/paas/v4',
+      QWEN_API_KEY: 'test-key',
+      CHAT_REQUESTS_PER_MINUTE: '0'
+    };
+    const disabledPort = await listen(http.createServer(createQwenProxyApp(loadQwenProxyConfig(baseEnv))));
+    const disabledResult = await requestJson(disabledPort, '/api/ollama/chat/completions', {
+      messages: [{ role: 'user', content: 'ok' }]
+    });
+
+    expect(disabledResult.status).toBe(500);
+    expect(disabledResult.headers['x-vlm-source']).toBe('local');
+    expect(cloudFetch).not.toHaveBeenCalled();
+
+    const enabledPort = await listen(http.createServer(createQwenProxyApp(loadQwenProxyConfig({
+      ...baseEnv,
+      ALLOW_CLOUD_FALLBACK: 'true'
+    }))));
+    const enabledResult = await requestJson(enabledPort, '/api/ollama/chat/completions', {
+      messages: [{ role: 'user', content: 'ok' }]
+    });
+
+    expect(enabledResult.status).toBe(200);
+    expect(enabledResult.headers['x-vlm-source']).toBe('cloud-fallback');
+    expect(cloudFetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('aborts a cloud upstream request when the client disconnects', async () => {
+    let upstreamSignal;
+    let markFetchStarted;
+    const fetchStarted = new Promise((resolve) => {
+      markFetchStarted = resolve;
+    });
+    vi.stubGlobal('fetch', vi.fn((_url, init) => {
+      upstreamSignal = init.signal;
+      markFetchStarted();
+      return new Promise((_resolve, reject) => {
+        const rejectAbort = () => reject(new DOMException('aborted', 'AbortError'));
+        if (init.signal.aborted) {
+          rejectAbort();
+        } else {
+          init.signal.addEventListener('abort', rejectAbort, { once: true });
+        }
+      });
+    }));
+
+    const appPort = await listen(http.createServer(createQwenProxyApp(loadQwenProxyConfig({
+      QWEN_BASE_URL: 'https://open.bigmodel.cn/api/paas/v4',
+      QWEN_API_KEY: 'test-key',
+      CHAT_REQUESTS_PER_MINUTE: '0'
+    }))));
+    const request = startDisconnectingRequest(appPort, '/api/qwen/chat/completions', {
+      messages: [{ role: 'user', content: 'ok' }]
+    });
+
+    await fetchStarted;
+    request.destroy();
+    await vi.waitFor(() => expect(upstreamSignal.aborted).toBe(true));
+  });
+
+  it('aborts local inference without triggering cloud fallback after client disconnect', async () => {
+    let markLocalStarted;
+    let markLocalClosed;
+    const localStarted = new Promise((resolve) => {
+      markLocalStarted = resolve;
+    });
+    const localClosed = new Promise((resolve) => {
+      markLocalClosed = resolve;
+    });
+    const upstreamPort = await listen(http.createServer((_request, response) => {
+      markLocalStarted();
+      response.once('close', markLocalClosed);
+    }));
+    const cloudFetch = vi.fn();
+    vi.stubGlobal('fetch', cloudFetch);
+    const appPort = await listen(http.createServer(createQwenProxyApp(loadQwenProxyConfig({
+      VLM_PORT: String(upstreamPort),
+      QWEN_BASE_URL: 'https://open.bigmodel.cn/api/paas/v4',
+      QWEN_API_KEY: 'test-key',
+      ALLOW_CLOUD_FALLBACK: 'true',
+      CHAT_REQUESTS_PER_MINUTE: '0'
+    }))));
+    const request = startDisconnectingRequest(appPort, '/api/ollama/chat/completions', {
+      messages: [{ role: 'user', content: 'ok' }]
+    });
+
+    await localStarted;
+    request.destroy();
+    await localClosed;
+    await new Promise((resolve) => setImmediate(resolve));
+    expect(cloudFetch).not.toHaveBeenCalled();
+  });
+
+  it('rejects oversized local upstream responses', async () => {
+    const upstreamPort = await listen(http.createServer((_request, response) => {
+      response.writeHead(200, { 'Content-Type': 'text/plain' });
+      response.end('x'.repeat(2048));
+    }));
+    const appPort = await listen(http.createServer(createQwenProxyApp(loadQwenProxyConfig({
+      VLM_PORT: String(upstreamPort),
+      MAX_UPSTREAM_RESPONSE_BYTES: '1024',
+      CHAT_REQUESTS_PER_MINUTE: '0'
+    }))));
+
+    const result = await requestJson(appPort, '/api/ollama/chat/completions', {
+      messages: [{ role: 'user', content: 'ok' }]
+    });
+
+    expect(result.status).toBe(502);
+    expect(result.body.error.type).toBe('upstream_response_too_large');
+  });
+
+  it('rejects oversized cloud upstream responses', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('x'.repeat(2048), { status: 200 })));
+    const appPort = await listen(http.createServer(createQwenProxyApp(loadQwenProxyConfig({
+      QWEN_BASE_URL: 'https://open.bigmodel.cn/api/paas/v4',
+      QWEN_API_KEY: 'test-key',
+      MAX_UPSTREAM_RESPONSE_BYTES: '1024',
+      CHAT_REQUESTS_PER_MINUTE: '0'
+    }))));
+
+    const result = await requestJson(appPort, '/api/qwen/chat/completions', {
+      messages: [{ role: 'user', content: 'ok' }]
+    });
+
+    expect(result.status).toBe(502);
+    expect(result.headers['x-vlm-source']).toBe('cloud');
+    expect(result.body.error.type).toBe('upstream_response_too_large');
   });
 
   it('parses upstream JSON responses', () => {

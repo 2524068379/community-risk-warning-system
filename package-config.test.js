@@ -56,8 +56,9 @@ describe('package configuration', () => {
 
   it('keeps the local VLM resource download script available', () => {
     expect(packageJson.scripts['download-model']).toBe('node scripts/download-model.js');
+    expect(packageJson.scripts['download-runtime']).toBe('node scripts/download-model.js --runtime-only');
     expect(packageJson.scripts['package:ci']).toBe('electron-builder --win');
-    expect(packageJson.scripts.prepackage).toBe('npm run download-model');
+    expect(packageJson.scripts.prepackage).toBe('npm run download-runtime');
     expect(existsSync('scripts/download-model.js')).toBe(true);
 
     const script = readFileSync('scripts/download-model.js', 'utf8');
@@ -69,6 +70,8 @@ describe('package configuration', () => {
     expect(script).toContain('VLM_MMPROJ_FILE');
     expect(script).toContain('VLM_MMPROJ_URL');
     expect(script).toContain('VLM_MMPROJ_SHA256');
+    expect(script).toContain('LLAMA_CPP_CUDA_ZIP_SHA256');
+    expect(script).toContain('REQUIRED_RUNTIME_FILES.every');
   });
 
   it('keeps generated TypeScript and Vite artifacts out of source control', () => {
@@ -83,6 +86,7 @@ describe('package configuration', () => {
     expect(gitignore).toContain('*.tsbuildinfo');
     expect(gitignore).toContain('vite.config.js');
     expect(gitignore).toContain('vite.config.d.ts');
+    expect(gitignore).toContain('resources/vlm/.llama-cpp-runtime-version');
 
     for (const artifact of ignoredArtifacts) {
       expect(existsSync(artifact)).toBe(false);

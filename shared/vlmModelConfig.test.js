@@ -3,6 +3,8 @@ import {
   DEFAULT_VLM_MODEL_ALIAS,
   DEFAULT_QWEN_VLM_API_MODEL,
   LLAMA_CPP_CUDA_VERSION,
+  LLAMA_CPP_CUDA_ZIP_SHA256,
+  LLAMA_CPP_CUDART_ZIP_SHA256,
   LLAMA_CPP_VERSION,
   VLM_HAS_MMPROJ,
   VLM_MODEL_FILE,
@@ -28,6 +30,8 @@ describe('vlmModelConfig', () => {
     expect(VLM_HAS_MMPROJ).toBe(true);
     expect(LLAMA_CPP_VERSION).toBe('b9484');
     expect(LLAMA_CPP_CUDA_VERSION).toBe('12.4');
+    expect(LLAMA_CPP_CUDA_ZIP_SHA256).toMatch(/^[a-f0-9]{64}$/);
+    expect(LLAMA_CPP_CUDART_ZIP_SHA256).toMatch(/^[a-f0-9]{64}$/);
   });
 
   it('derives Hugging Face download URLs from the shared repos and filenames', () => {

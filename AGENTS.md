@@ -17,7 +17,7 @@ This is an Electron desktop app with a Vite/React renderer and Node/Express prox
 - `npm run package` creates the Windows portable zip in `dist-electron/`.
 - `npm run preview` previews the built Electron app.
 
-CI uses Node.js 22 and runs `npm ci`, `npm run build`, and `npm run package`.
+CI uses Node.js 24 and runs tests, type checks, and builds on every push and pull request. Windows packaging runs on `main`, release tags, and manual dispatches; pull requests skip heavyweight VLM runtime packaging.
 
 ## Coding Style & Naming Conventions
 

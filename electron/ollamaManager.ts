@@ -18,10 +18,99 @@ let status: OllamaRuntimeStatus = 'starting'
 let runtimeConfig: VlmRuntimeConfig | null = null
 let restartAttempts = 0
 let resourcePollTimer: NodeJS.Timeout | null = null
+let restartTimer: NodeJS.Timeout | null = null
 let stopped = false
+let lifecycleGeneration = 0
 const MAX_RESTART_ATTEMPTS = 3
 const RESTART_DELAY_MS = 3000
 const RESOURCE_POLL_INTERVAL_MS = 5000
+
+export interface ProcessTerminationDetails {
+  kind: 'error' | 'close'
+  error?: Error
+  code?: number | null
+  signal?: NodeJS.Signals | null
+}
+
+export function createProcessTerminationHandlers(
+  onTermination: (details: ProcessTerminationDetails) => void
+): {
+  onError: (error: Error) => void
+  onClose: (code: number | null, signal: NodeJS.Signals | null) => void
+} {
+  let handled = false
+
+  const finish = (details: ProcessTerminationDetails): void => {
+    if (handled) return
+    handled = true
+    onTermination(details)
+  }
+
+  return {
+    onError: (error) => finish({ kind: 'error', error }),
+    onClose: (code, signal) => finish({ kind: 'close', code, signal })
+  }
+}
+
+export function calculateRestartDelayMs(attempt: number): number {
+  const normalizedAttempt = Math.max(1, Math.trunc(attempt))
+  return RESTART_DELAY_MS * (2 ** (normalizedAttempt - 1))
+}
+
+export function buildLlamaServerEnv(
+  sourceEnv: NodeJS.ProcessEnv,
+  platform: NodeJS.Platform = process.platform,
+  apiKey?: string
+): NodeJS.ProcessEnv {
+  const commonNames = new Set([
+    'PATH',
+    'TEMP',
+    'TMP',
+    'CUDA_PATH',
+    'CUDA_VISIBLE_DEVICES',
+    'OMP_NUM_THREADS'
+  ])
+  const platformNames = platform === 'win32'
+    ? new Set(['SYSTEMROOT', 'WINDIR', 'COMSPEC', 'PATHEXT'])
+    : new Set(['HOME', 'TMPDIR', 'LD_LIBRARY_PATH', 'DYLD_LIBRARY_PATH', 'LANG', 'LC_ALL'])
+  const childEnv: NodeJS.ProcessEnv = {}
+
+  for (const [name, value] of Object.entries(sourceEnv)) {
+    if (value === undefined) continue
+
+    const normalizedName = name.toUpperCase()
+    const isRuntimeSetting = normalizedName.startsWith('GGML_')
+      || normalizedName.startsWith('CUDA_PATH_V')
+
+    if (commonNames.has(normalizedName) || platformNames.has(normalizedName) || isRuntimeSetting) {
+      childEnv[name] = value
+    }
+  }
+
+  if (apiKey) {
+    childEnv.LLAMA_API_KEY = apiKey
+  }
+
+  return childEnv
+}
+
+export function isVlmLifecycleCurrent(
+  generation: number,
+  currentGeneration: number,
+  isStopped: boolean
+): boolean {
+  return !isStopped && generation === currentGeneration
+}
+
+export function getMissingRequiredVlmFiles(
+  modelPath: string,
+  mmprojPath: string | null,
+  existsSync: (filePath: string) => boolean = fs.existsSync
+): string[] {
+  return [modelPath, ...(mmprojPath ? [mmprojPath] : [])].filter(
+    (filePath) => !existsSync(filePath)
+  )
+}
 
 interface BuildLlamaServerArgsOptions {
   modelPath: string
@@ -86,7 +175,7 @@ export function getOllamaBaseUrl(): string {
 }
 
 export function isOllamaReady(): boolean {
-  return ready
+  return Boolean(serverProcess && ready && !stopped)
 }
 
 export function isGpuAvailable(): GpuAvailability {
@@ -98,6 +187,12 @@ export function getOllamaRuntimeStatus(): OllamaRuntimeStatus {
 }
 
 export async function refreshOllamaStatus(): Promise<void> {
+  if (!serverProcess || stopped) {
+    ready = false
+    status = stopped ? 'starting' : 'error'
+    return
+  }
+
   ready = await checkReady()
 }
 
@@ -115,9 +210,12 @@ async function checkReady(): Promise<boolean> {
   }
 }
 
-async function waitForReady(timeoutMs: number): Promise<void> {
+async function waitForReady(timeoutMs: number, expectedProcess: ChildProcess): Promise<void> {
   const start = Date.now()
   while (Date.now() - start < timeoutMs) {
+    if (serverProcess !== expectedProcess) {
+      throw new Error('VLM server process ended before becoming ready')
+    }
     if (await checkReady()) return
     await new Promise((r) => setTimeout(r, 1000))
   }
@@ -142,9 +240,10 @@ function findVlmResources(): { serverExe: string; modelDir: string; cudaAvailabl
 }
 
 function schedulePollForResources(reason: string): void {
-  if (stopped || resourcePollTimer || serverProcess) return
+  if (stopped || resourcePollTimer || restartTimer || serverProcess) return
   console.warn(`[vlm] ${reason} — will retry every ${RESOURCE_POLL_INTERVAL_MS}ms`)
-  status = 'starting'
+  ready = false
+  status = 'error'
   resourcePollTimer = setTimeout(() => {
     resourcePollTimer = null
     if (stopped) return
@@ -156,15 +255,41 @@ function schedulePollForResources(reason: string): void {
   resourcePollTimer.unref?.()
 }
 
-export async function startOllama(): Promise<void> {
-  stopped = false
-  const vlmConfig = getVlmRuntimeConfig()
+function scheduleProcessRestart(reason: string): void {
+  if (stopped || restartTimer || resourcePollTimer || serverProcess) return
 
-  if (await checkReady()) {
-    ready = true
-    console.log('[vlm] Already running')
+  ready = false
+  status = 'error'
+
+  if (restartAttempts >= MAX_RESTART_ATTEMPTS) {
+    restartAttempts = 0
+    schedulePollForResources(`${reason}; restart limit reached`)
     return
   }
+
+  restartAttempts++
+  const delayMs = calculateRestartDelayMs(restartAttempts)
+  console.warn(
+    `[vlm] ${reason}; retrying in ${delayMs}ms ` +
+      `(attempt ${restartAttempts}/${MAX_RESTART_ATTEMPTS})`
+  )
+  restartTimer = setTimeout(() => {
+    restartTimer = null
+    if (stopped || serverProcess) return
+
+    status = 'starting'
+    startOllama().catch((err) => {
+      console.error('[vlm] Restart failed:', err)
+      scheduleProcessRestart('startOllama threw during restart')
+    })
+  }, delayMs)
+  restartTimer.unref?.()
+}
+
+export async function startOllama(): Promise<void> {
+  stopped = false
+  const startGeneration = lifecycleGeneration
+  const vlmConfig = getVlmRuntimeConfig()
 
   if (serverProcess) {
     console.log('[vlm] Already starting')
@@ -183,9 +308,18 @@ export async function startOllama(): Promise<void> {
   const modelPath = path.join(modelDir, VLM_MODEL_FILE)
   const configuredMmprojPath = VLM_HAS_MMPROJ ? path.join(modelDir, VLM_MMPROJ_FILE) : null
 
-  if (!fs.existsSync(modelPath)) {
+  const missingFiles = getMissingRequiredVlmFiles(modelPath, configuredMmprojPath)
+  if (missingFiles.includes(modelPath)) {
     schedulePollForResources(
       `Model file not found: ${modelPath}. Extract vlm-models.zip into the same folder.`
+    )
+    return
+  }
+
+  if (configuredMmprojPath && missingFiles.includes(configuredMmprojPath)) {
+    schedulePollForResources(
+      `Required vision projector not found: ${configuredMmprojPath}. ` +
+        'The visual VLM service will remain stopped until mmproj is installed.'
     )
     return
   }
@@ -198,96 +332,110 @@ export async function startOllama(): Promise<void> {
     )
   }
 
-  const mmprojPath = configuredMmprojPath && fs.existsSync(configuredMmprojPath)
-    ? configuredMmprojPath
-    : null
-  if (configuredMmprojPath && !mmprojPath) {
-    console.warn('[vlm] mmproj file not found, running without vision encoder')
-  }
+  const mmprojPath = configuredMmprojPath
   const args = buildLlamaServerArgs({ modelPath, mmprojPath, vlmConfig, effectiveGpuLayers })
+
+  if (!isVlmLifecycleCurrent(startGeneration, lifecycleGeneration, stopped)) {
+    return
+  }
 
   console.log('[vlm] Starting:', serverExe, args.join(' '))
   status = 'starting'
 
+  let child: ChildProcess | null = null
+
   try {
-    serverProcess = spawn(serverExe, args, {
+    child = spawn(serverExe, args, {
       cwd: modelDir,
-      env: { ...process.env },
+      env: buildLlamaServerEnv(process.env, process.platform, process.env.VLM_API_KEY),
       stdio: ['ignore', 'pipe', 'pipe'],
       windowsHide: true,
       detached: false
     })
+    serverProcess = child
 
-    serverProcess.on('error', (err) => {
-      console.error('[vlm] Process error:', err.message)
-      status = 'error'
-    })
-
-    serverProcess.stdout?.on('data', (data: Buffer) => {
-      const msg = data.toString().trim()
-      if (msg) console.log('[vlm]', msg)
-    })
-
-    serverProcess.stderr?.on('data', (data: Buffer) => {
-      const msg = data.toString().trim()
-      if (msg) console.error('[vlm]', msg)
-    })
-
-    serverProcess.on('exit', (code) => {
-      console.log('[vlm] Process exited with code', code)
-      serverProcess = null
-      ready = false
-
-      if (stopped) {
-        status = 'starting'
-        return
+    const terminationHandlers = createProcessTerminationHandlers((details) => {
+      if (details.kind === 'error') {
+        console.error('[vlm] Process error:', details.error?.message)
+      } else {
+        console.warn(
+          '[vlm] Process closed with code',
+          details.code,
+          details.signal ? `signal ${details.signal}` : ''
+        )
       }
 
-      if (code !== 0 && restartAttempts < MAX_RESTART_ATTEMPTS) {
-        restartAttempts++
-        console.log(`[vlm] Restarting in ${RESTART_DELAY_MS}ms (attempt ${restartAttempts}/${MAX_RESTART_ATTEMPTS})...`)
-        status = 'starting'
-        setTimeout(() => {
-          if (!serverProcess && !stopped) {
-            startOllama().catch((err) => {
-              console.error('[vlm] Restart failed:', err)
-              schedulePollForResources('startOllama threw during restart')
-            })
-          }
-        }, RESTART_DELAY_MS).unref()
-      } else {
-        restartAttempts = 0
-        schedulePollForResources(
-          'VLM server exited; will keep polling so reinstalled model files are picked up automatically.'
+      if (serverProcess !== child) return
+
+      serverProcess = null
+      ready = false
+      status = 'error'
+
+      if (!stopped) {
+        scheduleProcessRestart(
+          details.kind === 'error' ? 'VLM process failed to spawn' : 'VLM process closed unexpectedly'
         )
       }
     })
 
-    await waitForReady(vlmConfig.startupTimeoutMs)
+    child.once('error', terminationHandlers.onError)
+    child.once('close', terminationHandlers.onClose)
+
+    child.stdout?.on('data', (data: Buffer) => {
+      const msg = data.toString().trim()
+      if (msg) console.log('[vlm]', msg)
+    })
+
+    child.stderr?.on('data', (data: Buffer) => {
+      const msg = data.toString().trim()
+      if (msg) console.error('[vlm]', msg)
+    })
+
+    await waitForReady(vlmConfig.startupTimeoutMs, child)
+    if (
+      serverProcess !== child
+      || !isVlmLifecycleCurrent(startGeneration, lifecycleGeneration, stopped)
+    ) {
+      child.kill()
+      throw new Error('VLM server process ended during startup')
+    }
     ready = true
     restartAttempts = 0
     status = 'ready'
     console.log('[vlm] Ready')
   } catch (err) {
+    if (!isVlmLifecycleCurrent(startGeneration, lifecycleGeneration, stopped)) {
+      child?.kill()
+      return
+    }
+
     console.error('[vlm] Failed to start:', err)
     ready = false
 
-    if (serverProcess) {
-      status = 'loading'
-      console.warn('[vlm] Process is still running; readiness will continue via health polling.')
+    if (child && serverProcess === child) {
+      status = 'error'
+      console.warn('[vlm] Process stayed unhealthy past startup timeout; terminating for a clean retry.')
+      child.kill()
       return
     }
 
     status = 'error'
-    schedulePollForResources('Spawn failed; will retry once files are present.')
+    if (!child) {
+      scheduleProcessRestart('VLM process could not be created')
+    }
   }
 }
 
 export async function stopOllama(): Promise<void> {
   stopped = true
+  lifecycleGeneration++
   if (resourcePollTimer) {
     clearTimeout(resourcePollTimer)
     resourcePollTimer = null
+  }
+  if (restartTimer) {
+    clearTimeout(restartTimer)
+    restartTimer = null
   }
   if (serverProcess) {
     serverProcess.kill()

@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { Tag } from 'antd';
+import { Button, Tag } from 'antd';
 import { useLocalCamera } from '@/hooks/useLocalCamera';
-import { useVideoContentRect } from '@/hooks/useVideoContentRect';
 import { useAppStore } from '@/store/useAppStore';
 import { useVlmAnalysis } from '@/hooks/useVlmAnalysis';
 import { riskColorMap, riskLevelTextMap } from '@/utils/risk';
@@ -14,18 +13,25 @@ import {
 
 export function MonitorPage() {
   const videoRef = useRef<HTMLVideoElement>(null);
-  const videoStageRef = useRef<HTMLDivElement>(null);
-  const { stream, loading, error } = useLocalCamera(videoRef);
-  const videoContentRect = useVideoContentRect(videoRef, videoStageRef, stream);
+  const { stream, loading, error, retry } = useLocalCamera(videoRef);
   const [timestamp, setTimestamp] = useState(() => new Date().toLocaleString());
 
-  const { cameras, activeCameraId, setActiveCamera, vlmStatus, vlmError, detectionBoxes } = useAppStore();
-  const activeCamera = cameras.find((c) => c.id === activeCameraId);
+  const {
+    cameras,
+    activeCameraId,
+    analysisContext,
+    analysisFrameDataUrl,
+    analysisValidity,
+    setActiveCamera,
+    vlmStatus,
+    vlmError,
+    detectionBoxes
+  } = useAppStore();
 
   useVlmAnalysis({
     videoRef,
-    cameraId: activeCamera?.id ?? 'LOCAL',
-    scene: activeCamera?.scene ?? '本地摄像头',
+    cameraId: 'LOCAL',
+    scene: '本地摄像头演示源',
     enabled: !!stream
   });
 
@@ -46,23 +52,29 @@ export function MonitorPage() {
           <div>
             <div className="monitor-video-toolbar-title">实时监控</div>
             <div className="monitor-video-toolbar-sub">
-              {activeCamera?.name ?? '本地摄像头'} · {activeCamera?.area ?? ''}
+              本地摄像头 · 演示源（点位选择不会改变视频来源）
             </div>
           </div>
           <div style={{ display: 'flex', gap: 4 }}>
-            <Tag color={activeCamera?.status === 'online' ? 'success' : 'default'}>
-              {activeCamera?.status === 'online' ? '在线' : '离线'}
-            </Tag>
+            <Tag color={stream ? 'success' : 'default'}>{stream ? '摄像头在线' : '摄像头离线'}</Tag>
             <Tag color={statusView.color} style={{ fontSize: 11 }}>{statusView.text}</Tag>
+            {analysisContext?.modelSource && analysisContext.modelSource !== 'unknown' ? (
+              <Tag color={analysisContext.modelSource === 'local' ? 'processing' : 'warning'}>
+                {analysisContext.modelSource === 'local' ? '本地模型' : '云端模型'}
+              </Tag>
+            ) : null}
           </div>
         </div>
 
-        <div ref={videoStageRef} className="monitor-video-stage">
+        <div className="monitor-video-stage">
           {loading && (
             <div className="monitor-video-loading">正在启动摄像头…</div>
           )}
           {error && (
-            <div className="monitor-video-error">{error}</div>
+            <div className="monitor-video-error">
+              <span>{error}</span>
+              <Button size="small" onClick={retry}>重试摄像头</Button>
+            </div>
           )}
           {stream && (
             <video
@@ -76,7 +88,7 @@ export function MonitorPage() {
           {stream && (
             <div className="monitor-video-overlay">
               <span className="monitor-video-overlay-name">
-                {activeCamera?.name ?? '本地摄像头'}
+                本地摄像头 · LOCAL
               </span>
               <span className="monitor-video-overlay-time">{timestamp}</span>
             </div>
@@ -86,27 +98,42 @@ export function MonitorPage() {
               {vlmError}
             </div>
           )}
-          {detectionBoxes.map((box, i) => (
-            <div
-              key={i}
-              className={getDetectionBoxClassName(box)}
-              style={getDetectionBoxStyle(box, videoContentRect)}
-            >
-              <span>{box.label} {formatDetectionBoxConfidence(box)}</span>
+          {analysisValidity === 'valid' && analysisFrameDataUrl ? (
+            <div className="monitor-analysis-snapshot" aria-label="VLM 抓拍证据">
+              <div className="monitor-analysis-snapshot-title">
+                VLM 抓拍 · {analysisContext
+                  ? new Date(analysisContext.capturedAt).toLocaleTimeString()
+                  : '时间未知'}
+              </div>
+              <div className="monitor-analysis-snapshot-frame">
+                <img src={analysisFrameDataUrl} alt="用于本次 VLM 分析的摄像头抓拍帧" />
+                {detectionBoxes.map((box, i) => (
+                  <div
+                    key={`${box.label}-${i}`}
+                    className={getDetectionBoxClassName(box)}
+                    style={getDetectionBoxStyle(box)}
+                  >
+                    <span>{box.label} {formatDetectionBoxConfidence(box)}</span>
+                  </div>
+                ))}
+              </div>
             </div>
-          ))}
+          ) : null}
         </div>
       </div>
 
       {/* 右栏：点位列表 */}
       <div className="panel monitor-list-col">
-        <div className="panel-title">监控点位列表</div>
+        <div className="panel-title">模拟点位列表</div>
         <div className="monitor-camera-list">
           {cameras.map((camera) => (
-            <div
+            <button
+              type="button"
               key={camera.id}
               className={`monitor-camera-item ${camera.id === activeCameraId ? 'active' : ''}`}
               onClick={() => setActiveCamera(camera.id)}
+              aria-pressed={camera.id === activeCameraId}
+              aria-label={`选择模拟点位 ${camera.name}`}
             >
               <div className="monitor-camera-info">
                 <div className="monitor-camera-name">{camera.name}</div>
@@ -123,7 +150,7 @@ export function MonitorPage() {
                 </span>
                 <span className="monitor-camera-score-label">{riskLevelTextMap[camera.level]}</span>
               </div>
-            </div>
+            </button>
           ))}
         </div>
       </div>

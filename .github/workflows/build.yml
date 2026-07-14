@@ -10,7 +10,7 @@ on:
   workflow_dispatch:
 
 env:
-  IS_DEPENDABOT_PR: ${{ github.event_name == 'pull_request' && github.event.pull_request.user.login == 'dependabot[bot]' }}
+  SHOULD_PACKAGE: ${{ github.event_name != 'pull_request' }}
 
 permissions:
   contents: read
@@ -25,6 +25,16 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+
+      - name: Verify release tag matches package version
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        run: |
+          $packageVersion = (Get-Content package.json -Raw | ConvertFrom-Json).version
+          $expectedTag = "v$packageVersion"
+          if ($env:GITHUB_REF_NAME -ne $expectedTag) {
+            throw "Release tag $env:GITHUB_REF_NAME does not match package.json version $packageVersion"
+          }
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
@@ -42,10 +52,12 @@ jobs:
         run: npm run typecheck
 
       - name: Create .env from secrets
-        if: env.IS_DEPENDABOT_PR != 'true'
+        if: env.SHOULD_PACKAGE == 'true'
         shell: pwsh
+        env:
+          ENV_FILE_CONTENT: ${{ secrets.ENV_FILE }}
         run: |
-          $envContent = '${{ secrets.ENV_FILE }}'
+          $envContent = $env:ENV_FILE_CONTENT
           if ($envContent) {
             Set-Content -Path '.env' -Value $envContent -NoNewline
           }
@@ -53,19 +65,19 @@ jobs:
       - name: Build
         run: npm run build
 
-      - name: Skip packaging for Dependabot PRs
-        if: env.IS_DEPENDABOT_PR == 'true'
-        run: echo "Skipping Windows packaging for Dependabot pull requests."
+      - name: Skip packaging for pull requests
+        if: env.SHOULD_PACKAGE != 'true'
+        run: echo "Skipping Windows packaging for pull requests."
 
       - name: Cache CPU VLM runtime files
-        if: env.IS_DEPENDABOT_PR != 'true'
+        if: env.SHOULD_PACKAGE == 'true'
         uses: actions/cache@v6
         with:
           path: resources/vlm
-          key: vlm-runtime-b9484-cuda-12.4-v1
+          key: vlm-runtime-b9484-cuda-12.4-sha256-v2
 
       - name: Prepare CPU VLM runtime files
-        if: env.IS_DEPENDABOT_PR != 'true'
+        if: env.SHOULD_PACKAGE == 'true'
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path resources/vlm
@@ -96,6 +108,14 @@ jobs:
             throw "Failed to download $fileName after $retryCount attempts"
           }
 
+          function Assert-FileSha256($Path, $Expected) {
+            $actual = (Get-FileHash -Algorithm SHA256 -Path $Path).Hash.ToLowerInvariant()
+            if ($actual -ne $Expected) {
+              Remove-Item $Path -Force -ErrorAction SilentlyContinue
+              throw "SHA256 mismatch for $Path. Expected $Expected, got $actual"
+            }
+          }
+
           $runtimeFiles = @(
             "llama-server.exe",
             "llama-server-impl.dll",
@@ -120,6 +140,7 @@ jobs:
             $llamaZip = "resources/vlm/llama-b9484-bin-win-cuda-12.4-x64.zip"
 
             Save-WithRetry $llamaUrl $llamaZip 300
+            Assert-FileSha256 $llamaZip "0bcaf3a067c42fe5b49a2c867282ef9332efba42cec78fa04d53497057b93ca7"
 
             Write-Host "Extracting llama-server runtime..."
             Expand-Archive -Path $llamaZip -DestinationPath resources/vlm -Force
@@ -133,7 +154,7 @@ jobs:
           Get-ChildItem resources/vlm | Where-Object { $_.Extension -in '.exe', '.dll' } | Format-Table Name, Length
 
       - name: Package
-        if: env.IS_DEPENDABOT_PR != 'true'
+        if: env.SHOULD_PACKAGE == 'true'
         shell: pwsh
         run: |
           $env:ELECTRON_MIRROR = "https://npmmirror.com/mirrors/electron/"
@@ -155,7 +176,7 @@ jobs:
           }
 
       - name: Verify portable package VLM resources
-        if: env.IS_DEPENDABOT_PR != 'true'
+        if: env.SHOULD_PACKAGE == 'true'
         shell: pwsh
         run: |
           $portableZip = Get-ChildItem -Path dist-electron -Filter *.zip | Select-Object -First 1
@@ -196,7 +217,7 @@ jobs:
           Write-Host "Portable package includes CPU-only VLM runtime, excludes CUDA-only DLLs and model files: $($portableZip.Name)"
 
       - name: Upload portable zip
-        if: env.IS_DEPENDABOT_PR != 'true'
+        if: env.SHOULD_PACKAGE == 'true'
         uses: actions/upload-artifact@v7
         with:
           name: windows-portable

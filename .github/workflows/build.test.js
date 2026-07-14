@@ -2,6 +2,8 @@ import fs from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import {
   LLAMA_CPP_CUDA_VERSION,
+  LLAMA_CPP_CUDA_ZIP_SHA256,
+  LLAMA_CPP_CUDART_ZIP_SHA256,
   LLAMA_CPP_VERSION,
   VLM_MODEL_SHA256,
   VLM_MMPROJ_SHA256
@@ -33,13 +35,21 @@ describe('build workflow', () => {
     expect(typecheckIndex).toBeLessThan(buildIndex);
   });
 
-  it('skips heavyweight packaging steps for Dependabot pull requests', () => {
+  it('skips heavyweight packaging steps for every pull request', () => {
     const workflow = readWorkflow('build.yml');
 
-    expect(workflow).toContain('IS_DEPENDABOT_PR');
-    expect(workflow).toContain("if: env.IS_DEPENDABOT_PR != 'true'");
-    expect(workflow).toContain("if: env.IS_DEPENDABOT_PR == 'true'");
-    expect(workflow).toContain('Skipping Windows packaging for Dependabot pull requests.');
+    expect(workflow).toContain('SHOULD_PACKAGE');
+    expect(workflow).toContain("if: env.SHOULD_PACKAGE == 'true'");
+    expect(workflow).toContain("if: env.SHOULD_PACKAGE != 'true'");
+    expect(workflow).toContain('Skipping Windows packaging for pull requests.');
+  });
+
+  it('rejects release tags that do not match package.json version', () => {
+    const workflow = readWorkflow('build.yml');
+
+    expect(workflow).toContain('- name: Verify release tag matches package version');
+    expect(workflow).toContain('$expectedTag = "v$packageVersion"');
+    expect(workflow).toContain('does not match package.json version');
   });
 
   it('keeps Build & Release app packaging job focused without downloading model assets', () => {
@@ -72,11 +82,13 @@ describe('build workflow', () => {
     expect(prepareBlock).toContain('Set-Content -Path $runtimeVersionPath -Value $runtimeVersion -NoNewline');
     expect(prepareBlock).toContain('Save-WithRetry $llamaUrl $llamaZip 300');
     expect(prepareBlock).toContain('llama-b9484-bin-win-cuda-12.4-x64.zip');
+    expect(prepareBlock).toContain(LLAMA_CPP_CUDA_ZIP_SHA256);
     expect(prepareBlock).toContain('ggml-cpu-x64.dll');
     expect(prepareBlock).not.toContain('cudart64_12.dll');
     expect(prepareBlock).not.toContain('cublas64_12.dll');
     expect(prepareBlock).not.toContain('ggml-cuda.dll');
     expect(prepareBlock).not.toContain('Qwen3.5-4B-Q4_K_M.gguf');
+    expect(workflow).toContain('vlm-runtime-b9484-cuda-12.4-sha256-v2');
   });
 
   it('streams runtime downloads to disk instead of buffering response bytes in memory', () => {
@@ -203,6 +215,10 @@ describe('VLM models workflow', () => {
     expect(workflow).toContain('llama-server.exe、llama-server-impl.dll 与 CPU 通用 runtime DLL 已随 Windows portable 应用包发布。');
     expect(workflow).toContain('$modelFiles = @("Qwen3.5-4B-Q4_K_M.gguf", "mmproj-BF16.gguf")');
     expect(workflow).toContain('$cudaFiles = @("cudart64_12.dll", "cublas64_12.dll", "cublasLt64_12.dll", "ggml-cuda.dll")');
+    expect(workflow).toContain('Push-Location "dist-models"');
+    expect(workflow).toContain('Archive unexpectedly contains a dist-models directory prefix');
+    expect(workflow).not.toContain('"dist-models/$_"');
+    expect(workflow).toContain('vlm-qwen35-mtp-q4km-unsloth-mmproj-b9484-sha256-v2');
   });
 
   it('keeps hardcoded VLM hashes and llama.cpp versions in sync with shared/vlmModelConfig.js', () => {
@@ -216,5 +232,7 @@ describe('VLM models workflow', () => {
     // llama.cpp release tag and CUDA version must also match the shared config.
     expect(workflow).toContain(`releases/download/${LLAMA_CPP_VERSION}/`);
     expect(workflow).toContain(`cuda-${LLAMA_CPP_CUDA_VERSION}`);
+    expect(workflow).toContain(LLAMA_CPP_CUDA_ZIP_SHA256);
+    expect(workflow).toContain(LLAMA_CPP_CUDART_ZIP_SHA256);
   });
 });

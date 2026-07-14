@@ -1,6 +1,16 @@
 import { create } from 'zustand';
 import { cameras, events } from '@/data/mock';
-import type { CameraPoint, RiskEvent, VlmAnalysis, DetectionBox, TrendPoint, DetectionResult } from '@/types';
+import type {
+  AnalysisValidity,
+  CameraPoint,
+  DetectionBox,
+  DetectionResult,
+  RiskEvent,
+  TrendPoint,
+  VlmAnalysis,
+  VlmAnalysisContext,
+  VlmModelSource
+} from '@/types';
 
 export type VlmStatus = 'idle' | 'loading' | 'analyzing' | 'ready' | 'error';
 
@@ -12,17 +22,29 @@ interface AppState {
   activeCameraId: string;
   selectedEventId?: string;
   analysis: VlmAnalysis;
+  analysisContext: VlmAnalysisContext | null;
+  analysisValidity: AnalysisValidity;
   vlmStatus: VlmStatus;
   vlmError: string | null;
   detectionBoxes: DetectionBox[];
+  analysisFrameDataUrl: string | null;
   analysisTimestamp: number | null;
   detectorStatus: 'idle' | 'loading' | 'ready' | 'error';
   detectedObjects: DetectionResult[];
   setActiveCamera: (cameraId: string) => void;
   selectEvent: (eventId?: string) => void;
   markEventStatus: (eventId: string, status: RiskEvent['status']) => void;
-  setAnalysis: (analysis: VlmAnalysis, boxes: DetectionBox[]) => void;
-  setAnalysisSummary: (summary: string) => void;
+  setAnalysis: (
+    analysis: VlmAnalysis,
+    boxes: DetectionBox[],
+    context?: {
+      cameraId?: string;
+      capturedAt?: number;
+      modelSource?: VlmModelSource;
+      frameDataUrl?: string;
+    }
+  ) => void;
+  invalidateAnalysis: () => void;
   setVlmStatus: (status: VlmStatus, error?: string) => void;
   setDetectorStatus: (status: 'idle' | 'loading' | 'ready' | 'error') => void;
   setDetectedObjects: (objects: DetectionResult[]) => void;
@@ -48,9 +70,12 @@ export const useAppStore = create<AppState>((set, get) => ({
   activeCameraId: firstCamera.id,
   selectedEventId: firstEvent?.id,
   analysis: waitingAnalysis,
+  analysisContext: null,
+  analysisValidity: 'unknown',
   vlmStatus: 'idle' as VlmStatus,
   vlmError: null,
   detectionBoxes: [],
+  analysisFrameDataUrl: null,
   analysisTimestamp: null,
   detectorStatus: 'idle' as const,
   detectedObjects: [],
@@ -58,7 +83,6 @@ export const useAppStore = create<AppState>((set, get) => ({
   setActiveCamera: (cameraId) => {
     set({
       activeCameraId: cameraId,
-      detectionBoxes: [],
       selectedEventId: undefined
     });
   },
@@ -76,7 +100,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       events: state.events.map((item) => (item.id === eventId ? { ...item, status } : item))
     })),
 
-  setAnalysis: (analysis, boxes) => {
+  setAnalysis: (analysis, boxes, context) => {
     const prevTrend = get().analysis.trend;
     const now = new Date();
     const timeLabel = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
@@ -86,20 +110,33 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({
       analysis: { ...analysis, trend },
       detectionBoxes: boxes,
-      analysisTimestamp: Date.now()
+      analysisFrameDataUrl: context?.frameDataUrl ?? null,
+      analysisTimestamp: now.getTime(),
+      analysisValidity: 'valid',
+      analysisContext: {
+        cameraId: context?.cameraId ?? 'LOCAL',
+        capturedAt: context?.capturedAt ?? now.getTime(),
+        completedAt: now.getTime(),
+        modelSource: context?.modelSource ?? 'unknown'
+      }
     });
   },
 
-  setAnalysisSummary: (summary) =>
+  invalidateAnalysis: () =>
     set((state) => ({
-      analysis: { ...state.analysis, summary }
+      analysisValidity: state.analysisTimestamp === null ? 'unknown' : 'stale',
+      detectionBoxes: [],
+      analysisFrameDataUrl: null
     })),
 
   setVlmStatus: (status, error) =>
-    set({
+    set((state) => ({
       vlmStatus: status,
-      vlmError: error ?? null
-    }),
+      vlmError: error ?? null,
+      analysisValidity: status === 'error'
+        ? state.analysisTimestamp === null ? 'error' : 'stale'
+        : state.analysisValidity
+    })),
 
   setDetectorStatus: (detectorStatus) => set({ detectorStatus }),
   setDetectedObjects: (detectedObjects) => set({ detectedObjects })

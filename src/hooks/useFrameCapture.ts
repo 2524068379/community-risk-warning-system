@@ -17,11 +17,38 @@ interface FrameCaptureOptions {
 
 interface FrameCaptureResult {
   frameDataUrl: string | null
+  frameSequence: number
+  capturedAt: number | null
   isProcessing: boolean
   captureCount: number
   error: string | null
   hasChanged: boolean
   markConsumed: () => void
+}
+
+interface CapturedFrame {
+  frameDataUrl: string | null
+  frameSequence: number
+  capturedAt: number | null
+  hasChanged: boolean
+}
+
+export function createCapturedFrame(
+  previousSequence: number,
+  frameDataUrl: string,
+  hasChanged: boolean,
+  capturedAt = Date.now()
+): CapturedFrame {
+  if (!Number.isSafeInteger(previousSequence) || previousSequence < 0 || previousSequence >= Number.MAX_SAFE_INTEGER) {
+    throw new Error('Frame sequence is out of range')
+  }
+
+  return {
+    frameDataUrl,
+    frameSequence: previousSequence + 1,
+    capturedAt,
+    hasChanged
+  }
 }
 
 const DIFF_WIDTH = 160
@@ -42,11 +69,15 @@ export function useFrameCapture(
     idleAfterFrames = 6
   } = options
 
-  const [frameDataUrl, setFrameDataUrl] = useState<string | null>(null)
+  const [capturedFrame, setCapturedFrame] = useState<CapturedFrame>({
+    frameDataUrl: null,
+    frameSequence: 0,
+    capturedAt: null,
+    hasChanged: false
+  })
   const [isProcessing, setIsProcessing] = useState(false)
   const [captureCount, setCaptureCount] = useState(0)
   const [error, setError] = useState<string | null>(null)
-  const [hasChanged, setHasChanged] = useState(false)
 
   const isProcessingRef = useRef(false)
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
@@ -105,7 +136,6 @@ export function useFrameCapture(
           ? computeFrameDiff(gray, prevGrayRef.current) >= frameDiffThreshold
           : true
         prevGrayRef.current = gray
-        setHasChanged(changed)
 
         // Adaptive interval: fast when motion, slow when idle
         if (changed) {
@@ -137,10 +167,16 @@ export function useFrameCapture(
 
         ctx.drawImage(video, 0, 0, w, h)
         const dataUrl = canvas.toDataURL('image/jpeg', quality)
+        const capturedAt = Date.now()
 
         isProcessingRef.current = true
         setIsProcessing(true)
-        setFrameDataUrl(dataUrl)
+        setCapturedFrame((previous) => createCapturedFrame(
+          previous.frameSequence,
+          dataUrl,
+          changed,
+          capturedAt
+        ))
         setCaptureCount((c) => c + 1)
         setError(null)
       } catch (err) {
@@ -160,5 +196,11 @@ export function useFrameCapture(
     }
   }, [enabled, quality, maxWidth, maxHeight, frameDiffThreshold, activeIntervalMs, idleIntervalMs, idleAfterFrames, videoRef])
 
-  return { frameDataUrl, isProcessing, captureCount, error, hasChanged, markConsumed }
+  return {
+    ...capturedFrame,
+    isProcessing,
+    captureCount,
+    error,
+    markConsumed
+  }
 }

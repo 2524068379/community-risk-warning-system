@@ -21,6 +21,8 @@ const DEFAULT_ALLOWED_LABELS = [
 const ALLOWED_LABELS = parseDetectionLabels(import.meta.env.VITE_DETECTION_LABELS)
 const DEFAULT_MIN_SCORE = 0.35
 const MIN_SCORE = parseDetectionMinScore(import.meta.env.VITE_DETECTION_MIN_SCORE)
+const MODEL_URL = parseDetectionModelUrl(import.meta.env.VITE_DETECTION_MODEL_URL)
+const MAX_DETECTION_BOXES = 20
 
 interface RawDetection {
   class: string
@@ -59,6 +61,17 @@ export function parseDetectionMinScore(raw?: string): number {
   return value
 }
 
+export function parseDetectionModelUrl(raw?: string): string | undefined {
+  const value = raw?.trim()
+  if (!value) return undefined
+
+  if (/^(https?:\/\/|\/|\.\/)/i.test(value)) {
+    return value
+  }
+
+  return undefined
+}
+
 export function filterDetections(
   detections: RawDetection[],
   allowedLabels: Set<string> = ALLOWED_LABELS,
@@ -93,7 +106,10 @@ export async function detect(
         import('@tensorflow-models/coco-ssd')
       ])
       await tf.ready()
-      model = await cocoSsd.load({ base: 'lite_mobilenet_v2' })
+      model = await cocoSsd.load({
+        base: 'lite_mobilenet_v2',
+        ...(MODEL_URL ? { modelUrl: MODEL_URL } : {})
+      })
       status = 'ready'
 
       if (!unloadListenerAttached && typeof window !== 'undefined') {
@@ -105,7 +121,7 @@ export async function detect(
       throw new DetectorLoadError(err)
     }
   }
-  const predictions = await model.detect(source)
+  const predictions = await model.detect(source, MAX_DETECTION_BOXES, MIN_SCORE)
   return filterDetections(predictions as RawDetection[])
 }
 

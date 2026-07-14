@@ -9,6 +9,8 @@ export const VLM_MMPROJ_SHA256 = '169ee40fb1e234ff38b2d814eb8633611a54b6f941f11b
 export const VLM_HAS_MMPROJ = Boolean(VLM_MMPROJ_FILE);
 export const LLAMA_CPP_VERSION = 'b9484';
 export const LLAMA_CPP_CUDA_VERSION = '12.4';
+export const LLAMA_CPP_CUDA_ZIP_SHA256 = '0bcaf3a067c42fe5b49a2c867282ef9332efba42cec78fa04d53497057b93ca7';
+export const LLAMA_CPP_CUDART_ZIP_SHA256 = '8c79a9b226de4b3cacfd1f83d24f962d0773be79f1e7b75c6af4ded7e32ae1d6';
 
 export const VLM_MODEL_URL = `https://huggingface.co/${VLM_MODEL_REPO}/resolve/main/${VLM_MODEL_FILE}`;
 export const VLM_MMPROJ_URL = VLM_HAS_MMPROJ

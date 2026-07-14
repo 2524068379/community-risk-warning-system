@@ -1,5 +1,12 @@
 import { describe, expect, it, vi } from 'vitest'
-import { buildLlamaServerArgs } from './ollamaManager'
+import {
+  buildLlamaServerArgs,
+  buildLlamaServerEnv,
+  calculateRestartDelayMs,
+  createProcessTerminationHandlers,
+  getMissingRequiredVlmFiles,
+  isVlmLifecycleCurrent
+} from './ollamaManager'
 import { resolveOllamaHealthStatus } from '../server/ollamaHealthStatus.js'
 
 vi.mock('electron', () => ({
@@ -98,5 +105,85 @@ describe('buildLlamaServerArgs', () => {
     expect(args).not.toContain('--spec-type')
     expect(args).toContain('-ngl')
     expect(args).toContain('0')
+  })
+})
+
+describe('VLM process lifecycle helpers', () => {
+  it('handles spawn error and subsequent close exactly once', () => {
+    const onTermination = vi.fn()
+    const handlers = createProcessTerminationHandlers(onTermination)
+    const spawnError = new Error('ENOENT')
+
+    handlers.onError(spawnError)
+    handlers.onClose(null, null)
+
+    expect(onTermination).toHaveBeenCalledTimes(1)
+    expect(onTermination).toHaveBeenCalledWith({ kind: 'error', error: spawnError })
+  })
+
+  it('handles a normal close when no process error was emitted', () => {
+    const onTermination = vi.fn()
+    const handlers = createProcessTerminationHandlers(onTermination)
+
+    handlers.onClose(1, 'SIGTERM')
+
+    expect(onTermination).toHaveBeenCalledWith({
+      kind: 'close',
+      code: 1,
+      signal: 'SIGTERM'
+    })
+  })
+
+  it('uses exponential restart backoff', () => {
+    expect(calculateRestartDelayMs(1)).toBe(3000)
+    expect(calculateRestartDelayMs(2)).toBe(6000)
+    expect(calculateRestartDelayMs(3)).toBe(12000)
+  })
+
+  it('invalidates an in-flight start when stop advances the lifecycle generation', () => {
+    expect(isVlmLifecycleCurrent(3, 3, false)).toBe(true)
+    expect(isVlmLifecycleCurrent(3, 4, false)).toBe(false)
+    expect(isVlmLifecycleCurrent(3, 3, true)).toBe(false)
+  })
+
+  it('passes only runtime-required environment variables to llama-server', () => {
+    const childEnv = buildLlamaServerEnv({
+      Path: 'C:\\Windows\\System32',
+      SystemRoot: 'C:\\Windows',
+      TEMP: 'C:\\Temp',
+      CUDA_VISIBLE_DEVICES: '0',
+      GGML_CUDA_ENABLE_UNIFIED_MEMORY: '1',
+      QWEN_API_KEY: 'must-not-leak',
+      ELECTRON_RENDERER_URL: 'http://localhost:5173'
+    }, 'win32')
+
+    expect(childEnv).toEqual({
+      Path: 'C:\\Windows\\System32',
+      SystemRoot: 'C:\\Windows',
+      TEMP: 'C:\\Temp',
+      CUDA_VISIBLE_DEVICES: '0',
+      GGML_CUDA_ENABLE_UNIFIED_MEMORY: '1'
+    })
+    expect(childEnv).not.toHaveProperty('QWEN_API_KEY')
+    expect(childEnv).not.toHaveProperty('ELECTRON_RENDERER_URL')
+  })
+
+  it('injects only the generated llama-server API key into the child environment', () => {
+    const childEnv = buildLlamaServerEnv({
+      QWEN_API_KEY: 'must-not-leak'
+    }, 'win32', 'session-vlm-key')
+
+    expect(childEnv).toEqual({ LLAMA_API_KEY: 'session-vlm-key' })
+  })
+
+  it('treats a configured mmproj as a required VLM resource', () => {
+    const presentFiles = new Set(['C:\\vlm\\model.gguf'])
+    const missing = getMissingRequiredVlmFiles(
+      'C:\\vlm\\model.gguf',
+      'C:\\vlm\\mmproj.gguf',
+      (filePath) => presentFiles.has(filePath)
+    )
+
+    expect(missing).toEqual(['C:\\vlm\\mmproj.gguf'])
   })
 })

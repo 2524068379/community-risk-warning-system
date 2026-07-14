@@ -1,6 +1,8 @@
 export type RiskLevel = 'low' | 'medium' | 'high' | 'offline';
 export type EventStatus = 'pending' | 'processing' | 'done';
 export type StreamType = 'flv' | 'mpegts' | 'hls' | 'mp4';
+export type AnalysisValidity = 'unknown' | 'valid' | 'stale' | 'error';
+export type VlmModelSource = 'local' | 'cloud' | 'cloud-fallback' | 'unknown';
 
 export interface CameraPoint {
   id: string;
@@ -44,6 +46,13 @@ export interface VlmAnalysis {
   evidenceTimeline: string[];
   breakdown: RiskBreakdown[];
   trend: TrendPoint[];
+}
+
+export interface VlmAnalysisContext {
+  cameraId: string;
+  capturedAt: number;
+  completedAt: number;
+  modelSource: VlmModelSource;
 }
 
 export interface RiskEvent {

@@ -44,3 +44,4 @@ resources/vlm/*.gguf
 resources/vlm/*.exe
 resources/vlm/*.dll
 resources/vlm/*.zip
+resources/vlm/.llama-cpp-runtime-version
