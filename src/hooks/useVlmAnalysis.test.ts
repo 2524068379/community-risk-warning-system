@@ -4,6 +4,7 @@ import {
   consumeUnchangedVlmFrame,
   finalizeVlmFrame,
   getDetectorRetryDelayMs,
+  getVlmAnalysisFailure,
   isCurrentVlmAnalysisRun,
   isRequestCanceled,
   planVlmDispatch,
@@ -11,6 +12,7 @@ import {
   shouldHandleFrameSequence
 } from './useVlmAnalysis'
 import { createCapturedFrame } from './useFrameCapture'
+import { VlmResponseError } from '@/services/llm/ollamaClient'
 
 describe('finalizeVlmFrame', () => {
   it('releases the analysis lock and consumes the frame even after cancellation', () => {
@@ -80,6 +82,22 @@ describe('isRequestCanceled', () => {
   it('does not hide real VLM failures', () => {
     expect(isRequestCanceled(new Error('model failed'))).toBe(false)
     expect(isRequestCanceled(null)).toBe(false)
+  })
+})
+
+describe('getVlmAnalysisFailure', () => {
+  it('keeps malformed model output separate from connection failures', () => {
+    expect(getVlmAnalysisFailure(new VlmResponseError('缺少必填字段'))).toEqual({
+      status: 'response-error',
+      message: 'VLM 在线，但响应格式异常：缺少必填字段'
+    })
+  })
+
+  it('keeps transport failures as connection errors', () => {
+    expect(getVlmAnalysisFailure(new Error('connect ECONNREFUSED'))).toEqual({
+      status: 'error',
+      message: 'connect ECONNREFUSED'
+    })
   })
 })
 

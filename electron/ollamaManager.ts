@@ -73,7 +73,7 @@ export function buildLlamaServerEnv(
   const platformNames = platform === 'win32'
     ? new Set(['SYSTEMROOT', 'WINDIR', 'COMSPEC', 'PATHEXT'])
     : new Set(['HOME', 'TMPDIR', 'LD_LIBRARY_PATH', 'DYLD_LIBRARY_PATH', 'LANG', 'LC_ALL'])
-  const childEnv: NodeJS.ProcessEnv = {}
+  const childEnv = new Map<string, string>()
 
   for (const [name, value] of Object.entries(sourceEnv)) {
     if (value === undefined) continue
@@ -83,15 +83,15 @@ export function buildLlamaServerEnv(
       || normalizedName.startsWith('CUDA_PATH_V')
 
     if (commonNames.has(normalizedName) || platformNames.has(normalizedName) || isRuntimeSetting) {
-      childEnv[name] = value
+      childEnv.set(name, value)
     }
   }
 
   if (apiKey) {
-    childEnv.LLAMA_API_KEY = apiKey
+    childEnv.set('LLAMA_API_KEY', apiKey)
   }
 
-  return childEnv
+  return Object.fromEntries(childEnv)
 }
 
 export function isVlmLifecycleCurrent(
@@ -135,7 +135,8 @@ export function buildLlamaServerArgs(options: BuildLlamaServerArgsOptions): stri
     '--cache-type-v', vlmConfig.cacheTypeV,
     '--no-warmup',
     '--cont-batching',
-    '--jinja'
+    '--jinja',
+    '--reasoning', 'off'
   ]
 
   // MTP（draft-mtp 推测解码）与 mmproj 视觉编码器在 llama.cpp 的 MTP 分支中互斥：

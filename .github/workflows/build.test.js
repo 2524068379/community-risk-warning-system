@@ -117,10 +117,26 @@ describe('build workflow', () => {
     expect(vlmJob).not.toContain('needs: build');
     expect(vlmJob).toContain("if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'");
     expect(vlmJob).toContain('uses: ./.github/workflows/vlm-models.yml');
-    expect(workflow).toContain('needs: [build, vlm-models]');
+    expect(workflow).toContain('needs: [build, pages, vlm-models]');
     expect(workflow).toContain('- name: Download model artifact');
     expect(workflow).toContain('name: vlm-models');
     expect(workflow).toContain('./artifacts/models/*.zip');
+  });
+
+  it('builds ESA Pages in an isolated job without release secrets', () => {
+    const workflow = readWorkflow('build.yml');
+    const pagesJobIndex = workflow.indexOf('  pages:');
+    const vlmJobIndex = workflow.indexOf('  vlm-models:');
+    const pagesJob = workflow.slice(pagesJobIndex, vlmJobIndex);
+
+    expect(pagesJobIndex).toBeGreaterThan(workflow.indexOf('  build:'));
+    expect(pagesJobIndex).toBeLessThan(vlmJobIndex);
+    expect(pagesJob).toContain('runs-on: ubuntu-latest');
+    expect(pagesJob).toContain('node --check esa/index.js');
+    expect(pagesJob).toContain('npx vitest run esa/index.test.js scripts/generate-esa-env.test.js');
+    expect(pagesJob).toContain('npm run build:pages');
+    expect(pagesJob).not.toContain('ENV_FILE_CONTENT');
+    expect(pagesJob).not.toContain('secrets.');
   });
 
   it('verifies the portable app keeps runtime files but excludes VLM model files before uploading artifacts', () => {

@@ -26,7 +26,7 @@
 | HTTP 客户端 | Axios | 1.18 | 请求封装与拦截 |
 | 视频播放 | mpegts.js | 1.8 | FLV、MPEG-TS、HLS、MP4 播放能力 |
 | 目标检测 | TensorFlow.js + COCO-SSD | 4.22 / 2.2 | 浏览器侧轻量目标预筛 |
-| 地图服务 | 百度地图 JSAPI GL / 内置点位图 | 3.x / 本地 | 浏览器模式使用 JSAPI；Electron 使用不加载远程脚本的安全点位图 |
+| 地图服务 | 百度地图 JSAPI GL | 3.x | 浏览器与 Electron 均加载百度地图 SDK，同时保留 Electron 渲染器隔离 |
 | 桌面框架 | Electron | 43.1 | 主进程窗口、代理和 VLM 子进程管理 |
 | 构建工具 | electron-vite + Vite | 6.0 beta / 8.1 | Electron 三进程构建与浏览器调试 |
 | 后端代理 | Node.js + Express | 24 / 5.2 | Qwen 和本地 VLM 代理 |
@@ -177,7 +177,7 @@ VLM_MTP_DRAFT_TOKENS=4
 
 `VITE_DETECTION_LABELS` 用英文逗号分隔 COCO-SSD 标签；`VITE_DETECTION_MIN_SCORE` 取值范围为 0 到 1，配置异常时回退到 0.35。生产环境可通过 `VITE_DETECTION_MODEL_URL` 指向自托管且经过校验的 COCO-SSD 模型，避免运行时依赖 Google Storage。
 
-`VITE_*` 变量会进入浏览器代码，不要放入真实密钥。Qwen API Key 只应写入 `.env` 中不带 `VITE_` 前缀的服务端变量、CI Secret 或 ESA Pages 环境变量。独立代理绑定非本机地址时必须配置至少 32 字节的高熵 `LOCAL_PROXY_TOKEN`，否则代理会拒绝启动。`ALLOW_CLOUD_FALLBACK` 默认关闭，因为启用后本地推理失败可能把监控帧发送到云端；开启前应完成授权与数据合规确认。`QWEN_BASE_URL` 只接受代理源码中固定列出的 OpenAI-compatible 上游地址。Electron 每次启动会为自管 `llama-server` 生成随机端口和 `VLM_API_KEY`；独立代理连接自行启动且启用 API key 的服务时才需手工配置这两项。
+`VITE_*` 变量会进入浏览器代码，不要放入真实密钥。云端 VLM API Key 只应写入 `.env` 中不带 `VITE_` 前缀的服务端变量、CI Secret 或 ESA Pages 环境变量。独立代理绑定非本机地址时必须配置至少 32 字节的高熵 `LOCAL_PROXY_TOKEN`，否则代理会拒绝启动。`ALLOW_CLOUD_FALLBACK` 默认关闭，因为启用后本地推理失败可能把监控帧发送到云端；开启前应完成授权与数据合规确认。本地 Express 的 `QWEN_BASE_URL` 只接受代理源码中固定列出的上游；ESA Pages 则从受信任的 `ESA_VLM_*` 部署变量读取并校验 HTTPS 域名形态。Electron 每次启动会为自管 `llama-server` 生成随机端口和 `VLM_API_KEY`；独立代理连接自行启动且启用 API key 的服务时才需手工配置这两项。
 
 ### 下载本地 VLM 资源
 
@@ -234,36 +234,52 @@ npm run dev:all
 
 ## ESA Pages 部署
 
-仓库根目录已提供 `esa.jsonc`，ESA Pages 会执行 `npm ci` 与 `npm run build:pages`，将 Vite 构建产物 `dist/` 作为 SPA 静态资源发布，并使用 `esa/index.js` 作为边缘函数入口处理 `/api/*` 请求。
+仓库根目录已提供 `esa.jsonc`，ESA Pages 会执行 `npm ci` 与 `npm run build:pages`，将 Vite 构建产物 `dist-pages/` 作为静态资源发布，并使用 `esa/index.js` 作为边缘函数入口处理 `/api/*` 请求。Pages 与 Electron 使用独立输出目录，避免构建时互相清空产物。前端使用 Hash Router，因此不启用会抢占 `/api/*` 导航请求的 SPA 回退规则。
 
 在 ESA Pages 控制台的环境变量中至少配置：
 
 ```env
-QWEN_API_KEY=你的百炼API Key
-QWEN_MODEL=qwen3-vl-plus
+ESA_VLM_API_KEY=你的百炼API Key
 ```
 
-这些变量会在 ESA Pages 构建阶段写入边缘函数私有配置文件；修改环境变量后必须重新构建并重新发布当前版本，再通过 `/api/health` 确认 `qwenConfigured` 为 `true`。
-
-`QWEN_BASE_URL` 可不填，默认使用 `https://dashscope.aliyuncs.com/compatible-mode/v1`；使用智谱 BigModel 时设置：
+模型与资源边界均有安全默认值；需要调优时再配置：
 
 ```env
-QWEN_BASE_URL=https://open.bigmodel.cn/api/paas/v4
-QWEN_MODEL=glm-4v-flash
+ESA_VLM_MODEL=qwen3-vl-plus
+ESA_VLM_TIMEOUT=60000
+REQUEST_BODY_LIMIT=2mb
+MAX_CHAT_MESSAGES=16
+MAX_CHAT_TOKENS=2048
+MAX_UPSTREAM_RESPONSE_BYTES=2097152
 ```
 
-出于 SSRF 防护，ESA Pages 边缘函数只会请求源码中固定列出的 endpoint；如需接入其他专属域名，应先把完整 base URL 显式加入 ESA endpoint 表后再部署。`/api/ollama/chat/completions` 在 ESA Pages 上会被边缘函数转发到 Qwen VLM API，以保持前端调用路径不变。
+这些变量会在 ESA Pages 构建阶段写入被 Git 忽略的边缘函数私有配置文件；修改环境变量后必须重新构建并重新发布当前版本，再通过 `curl https://你的域名/api/health` 确认 `vlmConfigured` 为 `true`。原有 `QWEN_*` 与 `DASHSCOPE_*` 变量继续兼容；配置自定义上游时，地址、密钥、模型、超时与 profile 必须使用同一变量前缀，不能跨命名空间混用。
+
+默认使用百炼 `https://dashscope.aliyuncs.com/compatible-mode/v1`。ESA 不再把厂商地址写死在源码中；其他提供 OpenAI Chat Completions 流式协议的厂商可直接配置：
+
+```env
+ESA_VLM_API_BASE_URL=https://api.vendor.example/openai/v1
+ESA_VLM_API_KEY=你的厂商API Key
+ESA_VLM_MODEL=vendor-vlm
+ESA_VLM_API_PROFILE=generic
+```
+
+`ESA_VLM_API_PROFILE` 支持 `dashscope`（转换为 `json_object` 并关闭思考）、`json-object`（仅使用标准 JSON mode）和 `generic`（删除厂商可能不支持的结构化输出参数，依靠提示词与前端严格校验）。若厂商的完整路径不是 `<base>/chat/completions`，可改用 `ESA_VLM_CHAT_COMPLETIONS_URL`。地址只来自受信任的部署环境变量，不接受浏览器请求体传入；运行时校验公网 HTTPS 域名形态，拒绝 localhost、IP 字面量、内部域名后缀、URL 凭据、查询参数、片段与 HTTP 重定向。ESA Runtime 不提供部署前 DNS 解析校验，因此域名解析安全仍由部署者负责。
+
+`/api/ollama/chat/completions` 在 ESA Pages 上会被边缘函数转发到所配置的云端 VLM，以保持前端调用路径不变。智谱 `glm-4v-flash` 等不支持视觉结构化输出的接口应使用 `generic` profile。
+
+ESA 边缘函数会限制请求体、消息数、输出 token 和上游响应大小，但 CORS 不是服务端鉴权，也不能阻止脚本直接调用公开接口。上线前必须在 ESA 控制台为 `/api/*/chat/completions` 配置频控/WAF 和用量告警；不要把固定访问令牌放进 SPA。边缘代理会请求上游流式输出，并在 ESA 要求的 10 秒内发送 JSON 合法前置空白，最终仍向前端返回单一 OpenAI-compatible JSON 对象。
 
 ## API 路由
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
-| GET | `/api/health` | 代理健康检查，返回 Qwen 配置状态和默认模型 |
-| POST | `/api/qwen/chat/completions` | Qwen OpenAI-compatible 远程接口代理 |
+| GET | `/api/health` | 代理健康检查，返回云端 VLM 配置状态和模型 |
+| POST | `/api/qwen/chat/completions` | OpenAI-compatible 云端 VLM 接口代理（保留兼容路径名） |
 | POST | `/api/ollama/chat/completions` | 本地 llama.cpp VLM 代理；仅当 `ALLOW_CLOUD_FALLBACK=true` 且云端配置有效时，才会在本地 404/5xx 或连接失败后回退；ESA Pages 中作为云端 Qwen VLM 兼容别名 |
-| GET | `/api/ollama/status` | 本地 VLM 健康状态查询；仅在显式启用且已配置云回退时可用云端状态兜底；ESA Pages 中返回 Qwen VLM API 配置状态 |
+| GET | `/api/ollama/status` | 本地 VLM 健康状态查询；仅在显式启用且已配置云回退时可用云端状态兜底；ESA Pages 中返回云端 VLM API 配置状态 |
 
-代理层会统一执行鉴权失败限流、推理配额限流、状态查询限流、请求体大小限制、消息数量限制、`max_tokens` 上限校验、CORS 白名单和上游请求超时控制。鉴权在 JSON 请求体解析之前完成。
+本地 Express 代理会执行鉴权失败限流、推理配额限流、状态查询限流、请求体大小限制、消息数量限制、`max_tokens` 上限校验、CORS 白名单和上游请求超时控制；鉴权在 JSON 请求体解析之前完成。ESA 边缘代理执行输入/输出边界与 CORS 校验，调用频控由 ESA 控制台策略负责。
 
 ## 核心流程
 
@@ -389,7 +405,7 @@ Dependabot 配置位于 `.github/dependabot.yml`，npm 和 GitHub Actions 依赖
 
 - 不要提交真实 `.env`。
 - Qwen API Key 只放在服务端环境或 CI Secret 中。
-- 百度地图浏览器 AK 必须配置 Referer 白名单；本地开发通常需要加入 `http://localhost:5173`。Electron 特权渲染器不会加载百度远程 SDK，而使用内置安全点位图。
+- 百度地图浏览器 AK 必须配置 Referer 白名单；本地开发通常需要加入 `http://localhost:5173`，打包应用还需允许其实际 `file://`/空 Referer 使用场景。
 - `ALLOW_LOCAL_FILE_ORIGINS` 仅在 Electron 内嵌代理场景由主进程覆盖为 `true`，普通浏览器代理默认关闭。
 - 独立代理若绑定到非本机地址，必须配置至少 32 字节的 `LOCAL_PROXY_TOKEN` 并要求调用方携带 `X-Local-Proxy-Token`，否则启动失败。
 - 云回退默认关闭；仅在已完成监控画面外发授权时设置 `ALLOW_CLOUD_FALLBACK=true`，界面会标明实际模型来源。
@@ -406,7 +422,7 @@ Dependabot 配置位于 `.github/dependabot.yml`，npm 和 GitHub Actions 依赖
 | 白屏或一直加载 | 检查 `VITE_BAIDU_MAP_AK`、网络访问 `api.map.baidu.com` 的能力和浏览器控制台错误 |
 | Referer 错误 | 确认 `http://localhost:5173` 或当前域名已加入百度地图控制台白名单 |
 | 点位偏移 | 确认数据坐标为 BD09；如为 WGS84 或 GCJ02，需先转换 |
-| Electron 中显示点位示意图 | 这是安全设计：桌面特权渲染器不执行第三方远程地图脚本；如需调试百度地图，请使用 `npm run dev:web` |
+| Electron 中地图加载失败 | 检查百度地图 AK 的 Referer 限制、系统网络和开发者工具中的 SDK/瓦片请求；Electron 与网页模式使用同一套百度地图 SDK |
 
 ### 摄像头或视频不可用
 
@@ -431,8 +447,8 @@ Dependabot 配置位于 `.github/dependabot.yml`，npm 和 GitHub Actions 依赖
 
 | 现象 | 排查 |
 |------|------|
-| 500 配置错误 | 检查 `.env` 中的 `QWEN_BASE_URL` 是否为源码内置 endpoint，以及 `QWEN_API_KEY` 是否存在 |
-| 504 超时 | 增大 `QWEN_TIMEOUT`，并确认上游 OpenAI-compatible 服务可访问 |
+| 500 配置错误 | ESA 检查 `ESA_VLM_API_BASE_URL`/`ESA_VLM_API_KEY`；本地 Express 检查兼容的 `QWEN_*` 配置 |
+| 504 超时 | 确认上游能在 8 秒内返回流式响应头；`ESA_VLM_TIMEOUT` 可在 15-110 秒之间调整，且不能突破 ESA 120 秒执行上限 |
 | 429 限流 | 调整 `CHAT_REQUESTS_PER_MINUTE`，或降低前端请求频率 |
 
 ## 相关资源

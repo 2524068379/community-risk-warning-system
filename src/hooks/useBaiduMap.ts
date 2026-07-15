@@ -53,7 +53,6 @@ function waitForMapContainerReady(element: HTMLDivElement) {
 }
 
 export interface UseBaiduMapOptions {
-  enabled?: boolean;
   ak: string;
   centerLng: number;
   centerLat: number;
@@ -74,12 +73,6 @@ export function useBaiduMap(options: UseBaiduMapOptions) {
 
     async function initMap() {
       if (!containerRef.current) return;
-
-      if (options.enabled === false) {
-        setReady(false);
-        setError(undefined);
-        return;
-      }
 
       try {
         setError(undefined);
@@ -135,7 +128,7 @@ export function useBaiduMap(options: UseBaiduMapOptions) {
       instanceRef.current = null;
       setReady(false);
     };
-  }, [options.enabled, options.ak, options.centerLng, options.centerLat, options.zoom, options.styleId, options.interactive]);
+  }, [options.ak, options.centerLng, options.centerLat, options.zoom, options.styleId, options.interactive]);
 
   useEffect(() => {
     const map = instanceRef.current;

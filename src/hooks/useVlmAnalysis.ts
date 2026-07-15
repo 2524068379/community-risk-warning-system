@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useAppStore } from '@/store/useAppStore'
-import { analyzeFrameWithOllama } from '@/services/llm/ollamaClient'
+import { VlmResponseError, analyzeFrameWithOllama } from '@/services/llm/ollamaClient'
 import { useFrameCapture } from './useFrameCapture'
 import { detect, getDetectorStatus } from '@/services/detection/objectDetector'
 import { http } from '@/services/http'
@@ -116,6 +116,23 @@ export function isRequestCanceled(error: unknown): boolean {
   return candidate.name === 'AbortError' ||
     candidate.name === 'CanceledError' ||
     candidate.code === 'ERR_CANCELED'
+}
+
+export function getVlmAnalysisFailure(error: unknown): {
+  status: 'response-error' | 'error'
+  message: string
+} {
+  if (error instanceof VlmResponseError) {
+    return {
+      status: 'response-error',
+      message: `VLM 在线，但响应格式异常：${error.message}`
+    }
+  }
+
+  return {
+    status: 'error',
+    message: error instanceof Error ? error.message : 'VLM analysis failed'
+  }
 }
 
 export function consumeUnchangedVlmFrame(options: ConsumeUnchangedFrameOptions): boolean {
@@ -324,7 +341,7 @@ export function useVlmAnalysis(options: VlmAnalysisOptions) {
         setServerReady(true)
         failCountRef.current = 0
         const store = useAppStore.getState()
-        if (store.vlmStatus === 'loading') {
+        if (store.vlmStatus === 'loading' || store.vlmStatus === 'error') {
           store.setVlmStatus('idle')
         }
       } else if (connection.status === 'starting' || connection.status === 'loading') {
@@ -462,10 +479,11 @@ export function useVlmAnalysis(options: VlmAnalysisOptions) {
         }
       } catch (err) {
         if (isCurrentRun()) {
+          const failure = getVlmAnalysisFailure(err)
           useAppStore.getState().invalidateAnalysis()
           useAppStore.getState().setVlmStatus(
-            'error',
-            err instanceof Error ? err.message : 'VLM analysis failed'
+            failure.status,
+            failure.message
           )
         }
       } finally {

@@ -12,7 +12,7 @@ import type {
   VlmModelSource
 } from '@/types';
 
-export type VlmStatus = 'idle' | 'loading' | 'analyzing' | 'ready' | 'error';
+export type VlmStatus = 'idle' | 'loading' | 'analyzing' | 'ready' | 'response-error' | 'error';
 
 const MAX_TREND_POINTS = 30;
 
@@ -133,7 +133,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     set((state) => ({
       vlmStatus: status,
       vlmError: error ?? null,
-      analysisValidity: status === 'error'
+      analysisValidity: status === 'error' || status === 'response-error'
         ? state.analysisTimestamp === null ? 'error' : 'stale'
         : state.analysisValidity
     })),

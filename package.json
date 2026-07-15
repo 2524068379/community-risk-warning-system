@@ -19,7 +19,7 @@
     "package": "electron-builder --win",
     "package:ci": "electron-builder --win",
     "dev:web": "vite",
-    "build:pages": "node scripts/generate-esa-env.js && vite build",
+    "build:pages": "node scripts/generate-esa-env.js && vite build --outDir dist-pages",
     "dev:server": "node server/index.js",
     "dev:all": "concurrently \"npm run dev:web\" \"npm run dev:server\"",
     "typecheck": "tsc -p tsconfig.app.json --noEmit --pretty false --tsBuildInfoFile node_modules/.cache/tsconfig.app.typecheck.tsbuildinfo && tsc -p tsconfig.node.json --noEmit --pretty false --tsBuildInfoFile node_modules/.cache/tsconfig.node.typecheck.tsbuildinfo && tsc -p electron/tsconfig.json --noEmit --pretty false --tsBuildInfoFile node_modules/.cache/electron.typecheck.tsbuildinfo",

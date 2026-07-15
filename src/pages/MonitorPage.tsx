@@ -93,8 +93,8 @@ export function MonitorPage() {
               <span className="monitor-video-overlay-time">{timestamp}</span>
             </div>
           )}
-          {vlmStatus === 'error' && vlmError && (
-            <div style={{ position: 'absolute', bottom: 40, left: 8, right: 8, background: 'rgba(244,63,94,0.15)', border: '1px solid rgba(244,63,94,0.3)', borderRadius: 4, padding: '4px 8px', fontSize: 11, color: '#f43f5e' }}>
+          {(vlmStatus === 'error' || vlmStatus === 'response-error') && vlmError && (
+            <div style={{ position: 'absolute', bottom: 40, left: 8, right: 8, background: vlmStatus === 'response-error' ? 'rgba(245,158,11,0.15)' : 'rgba(244,63,94,0.15)', border: `1px solid ${vlmStatus === 'response-error' ? 'rgba(245,158,11,0.3)' : 'rgba(244,63,94,0.3)'}`, borderRadius: 4, padding: '4px 8px', fontSize: 11, color: vlmStatus === 'response-error' ? '#f59e0b' : '#f43f5e' }}>
               {vlmError}
             </div>
           )}

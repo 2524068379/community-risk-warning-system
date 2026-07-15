@@ -12,6 +12,7 @@ const statusView: Record<VlmStatus, VlmStatusView> = {
   loading: { color: 'processing', text: '连接中...' },
   analyzing: { color: 'processing', text: '分析中...' },
   ready: { color: 'success', text: 'VLM 在线' },
+  'response-error': { color: 'warning', text: 'VLM 在线 · 响应异常' },
   error: { color: 'error', text: 'VLM 未连接' }
 };
 

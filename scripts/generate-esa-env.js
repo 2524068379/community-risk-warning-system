@@ -4,15 +4,27 @@ import { pathToFileURL } from 'node:url';
 
 const OUTPUT_PATH = path.resolve('esa/env.generated.js');
 const ESA_ENV_KEYS = [
+  'ESA_VLM_API_BASE_URL',
+  'ESA_VLM_CHAT_COMPLETIONS_URL',
+  'ESA_VLM_API_KEY',
+  'ESA_VLM_MODEL',
+  'ESA_VLM_TIMEOUT',
+  'ESA_VLM_API_PROFILE',
   'QWEN_BASE_URL',
+  'QWEN_CHAT_COMPLETIONS_URL',
   'QWEN_API_KEY',
   'QWEN_MODEL',
   'QWEN_TIMEOUT',
+  'QWEN_API_PROFILE',
   'DASHSCOPE_BASE_URL',
   'DASHSCOPE_API_KEY',
   'DASHSCOPE_MODEL',
   'DASHSCOPE_TIMEOUT',
-  'CORS_ORIGIN'
+  'CORS_ORIGIN',
+  'REQUEST_BODY_LIMIT',
+  'MAX_CHAT_MESSAGES',
+  'MAX_CHAT_TOKENS',
+  'MAX_UPSTREAM_RESPONSE_BYTES'
 ];
 
 export function collectEsaEnv(env = process.env) {

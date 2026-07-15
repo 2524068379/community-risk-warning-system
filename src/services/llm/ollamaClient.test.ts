@@ -8,6 +8,7 @@ import {
   parseVlmResponse
 } from './ollamaClient'
 import { DEFAULT_VLM_MODEL_ALIAS } from '../../../shared/vlmModelConfig.js'
+import { VLM_RESPONSE_FIELDS, VLM_RESPONSE_FORMAT } from '../../../shared/vlmResponseSchema.js'
 
 function completePayload(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
@@ -44,15 +45,17 @@ describe('ollamaClient model configuration', () => {
 })
 
 describe('ollamaClient request payload', () => {
-  it('requests JSON output with Qwen no-thinking mode enabled', () => {
+  it('requests schema-constrained JSON with Qwen thinking disabled', () => {
     const body = buildOllamaChatRequestBody('data:image/jpeg;base64,abc', 'cam-1', '入口')
 
     expect(body).toMatchObject({
-      response_format: { type: 'json_object' },
+      response_format: VLM_RESPONSE_FORMAT,
       chat_template_kwargs: { enable_thinking: false },
       stream: false
     })
-    expect(JSON.stringify(body)).toContain('/no_think')
+    expect(VLM_RESPONSE_FORMAT.schema.required).toEqual(VLM_RESPONSE_FIELDS)
+    expect(VLM_RESPONSE_FORMAT.schema.additionalProperties).toBe(false)
+    expect(JSON.stringify(body)).not.toContain('/no_think')
   })
 })
 
@@ -540,5 +543,33 @@ describe('parseOllamaChatResponse', () => {
 
     expect(result.modelSource).toBe('cloud-fallback')
     expect(normalizeVlmModelSource('unexpected')).toBe('unknown')
+  })
+
+  it('accepts BigModel request metadata without weakening the chat payload checks', () => {
+    const result = parseOllamaChatResponse({
+      request_id: 'req-bigmodel-1',
+      choices: [completeChatChoice(JSON.stringify(completePayload()))]
+    }, { 'x-vlm-source': 'cloud' })
+
+    expect(result.modelSource).toBe('cloud')
+    expect(result.analysis.hasRisk).toBe(false)
+  })
+
+  it('surfaces a streamed proxy error envelope as an operational error', () => {
+    expect(() => parseOllamaChatResponse({
+      error: {
+        message: 'Qwen VLM 接口请求超时',
+        type: 'timeout_error'
+      }
+    })).toThrow('Qwen VLM 接口请求超时')
+
+    let caughtError: unknown
+    try {
+      parseOllamaChatResponse({ error: { message: 'upstream failed' } })
+    } catch (error) {
+      caughtError = error
+    }
+    expect(caughtError).toBeInstanceOf(Error)
+    expect(caughtError).not.toBeInstanceOf(VlmResponseError)
   })
 })

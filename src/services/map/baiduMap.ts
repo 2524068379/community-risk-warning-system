@@ -4,10 +4,6 @@ const BAIDU_MAP_LOAD_TIMEOUT = 15000;
 
 let baiduMapLoadingPromise: Promise<any> | null = null;
 
-export function shouldLoadRemoteBaiduMapSdk(hasElectronBridge: boolean): boolean {
-  return !hasElectronBridge;
-}
-
 function isMapNamespaceReady(BMapGL?: BaiduMapNamespace) {
   return Boolean(
     BMapGL &&
@@ -63,11 +59,11 @@ function clearSdkCallback() {
   delete window.__baiduMapSdkInit__;
 }
 
-export async function loadBaiduMapSdk(rawAk: string) {
-  if (!shouldLoadRemoteBaiduMapSdk(Boolean(window.electronAPI))) {
-    throw new Error('Electron 模式已禁用远程地图脚本，请使用内置安全点位图。');
-  }
+export function buildBaiduMapSdkUrl(ak: string): string {
+  return `https://api.map.baidu.com/api?v=1.0&type=webgl&ak=${encodeURIComponent(ak)}&callback=${BAIDU_MAP_CALLBACK_NAME}`;
+}
 
+export async function loadBaiduMapSdk(rawAk: string) {
   const akError = getAkConfigError(rawAk);
   if (akError) {
     throw akError;
@@ -162,7 +158,7 @@ export async function loadBaiduMapSdk(rawAk: string) {
     }, BAIDU_MAP_LOAD_TIMEOUT);
 
     if (!existedScript) {
-      script.src = `https://api.map.baidu.com/api?v=1.0&type=webgl&ak=${encodeURIComponent(ak)}&callback=${BAIDU_MAP_CALLBACK_NAME}`;
+      script.src = buildBaiduMapSdkUrl(ak);
       script.async = true;
       script.defer = true;
       script.dataset.baiduMapSdk = 'true';

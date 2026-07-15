@@ -58,6 +58,8 @@ describe('buildLlamaServerArgs', () => {
     expect(args).toContain('--mmproj')
     expect(args).toContain('C:\\vlm\\mmproj.gguf')
     expect(args).toContain('--jinja')
+    expect(args).toContain('--reasoning')
+    expect(args[args.indexOf('--reasoning') + 1]).toBe('off')
     expect(args).toContain('--cache-type-k')
     expect(args).toContain('--cache-type-v')
     expect(args).not.toContain('--spec-type')
@@ -174,6 +176,32 @@ describe('VLM process lifecycle helpers', () => {
     }, 'win32', 'session-vlm-key')
 
     expect(childEnv).toEqual({ LLAMA_API_KEY: 'session-vlm-key' })
+  })
+
+  it('does not turn untrusted environment names into object property writes', () => {
+    const sourceEnv: NodeJS.ProcessEnv = {
+      PATH: 'C:\\Windows\\System32',
+      GGML_CUDA_ENABLE_UNIFIED_MEMORY: '1',
+      CUDA_PATH_V12_4: 'C:\\CUDA'
+    }
+    for (const name of ['__proto__', 'constructor', 'toString']) {
+      Object.defineProperty(sourceEnv, name, {
+        configurable: true,
+        enumerable: true,
+        value: 'must-not-copy'
+      })
+    }
+
+    const childEnv = buildLlamaServerEnv(sourceEnv, 'win32')
+
+    expect(childEnv).toMatchObject({
+      PATH: 'C:\\Windows\\System32',
+      GGML_CUDA_ENABLE_UNIFIED_MEMORY: '1',
+      CUDA_PATH_V12_4: 'C:\\CUDA'
+    })
+    expect(Object.hasOwn(childEnv, '__proto__')).toBe(false)
+    expect(Object.hasOwn(childEnv, 'constructor')).toBe(false)
+    expect(Object.hasOwn(childEnv, 'toString')).toBe(false)
   })
 
   it('treats a configured mmproj as a required VLM resource', () => {

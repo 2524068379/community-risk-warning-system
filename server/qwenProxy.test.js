@@ -23,6 +23,7 @@ import {
 } from './qwenProxy.js';
 import { resolveOllamaHealthStatus } from './ollamaHealthStatus.js';
 import { DEFAULT_QWEN_VLM_API_MODEL } from '../shared/vlmModelConfig.js';
+import { VLM_RESPONSE_FORMAT } from '../shared/vlmResponseSchema.js';
 
 const testServers = [];
 
@@ -258,6 +259,18 @@ describe('qwenProxy', () => {
     });
   });
 
+  it('downgrades llama.cpp-specific JSON schema formatting for cloud fallback', () => {
+    expect(buildQwenFallbackRequestBody({
+      response_format: VLM_RESPONSE_FORMAT,
+      messages: [{ role: 'user', content: 'ok' }]
+    }, 'qwen-vl')).toEqual({
+      model: 'qwen-vl',
+      stream: false,
+      response_format: { type: 'json_object' },
+      messages: [{ role: 'user', content: 'ok' }]
+    });
+  });
+
   it('rewrites local VLM requests to the managed llama-server alias', () => {
     expect(buildOllamaRequestBody({
       model: 'stale-browser-model',
@@ -265,12 +278,12 @@ describe('qwenProxy', () => {
     }, 'local-vlm')).toEqual({
       model: 'local-vlm',
       messages: [{ role: 'user', content: 'ok' }],
-      response_format: { type: 'json_object' },
+      response_format: VLM_RESPONSE_FORMAT,
       chat_template_kwargs: { enable_thinking: false }
     });
   });
 
-  it('preserves explicit response format and still disables thinking for local VLM', () => {
+  it('overrides explicit text format and still disables thinking for local VLM', () => {
     expect(buildOllamaRequestBody({
       model: 'stale-browser-model',
       response_format: { type: 'text' },
@@ -278,7 +291,7 @@ describe('qwenProxy', () => {
       messages: [{ role: 'user', content: 'ok' }]
     }, 'local-vlm')).toEqual({
       model: 'local-vlm',
-      response_format: { type: 'text' },
+      response_format: VLM_RESPONSE_FORMAT,
       chat_template_kwargs: { other: true, enable_thinking: false },
       messages: [{ role: 'user', content: 'ok' }]
     });
@@ -512,7 +525,12 @@ describe('qwenProxy', () => {
     });
 
     expect(result.status).toBe(200);
-    expect(receivedBody).toMatchObject({ max_tokens: 77, stream: false });
+    expect(receivedBody).toMatchObject({
+      max_tokens: 77,
+      stream: false,
+      response_format: VLM_RESPONSE_FORMAT,
+      chat_template_kwargs: { enable_thinking: false }
+    });
     expect(receivedAuthorization).toBe('Bearer session-vlm-key');
   });
 

@@ -108,6 +108,14 @@ describe('useAppStore', () => {
     expect(useAppStore.getState().analysisValidity).toBe('error');
   });
 
+  it('marks malformed responses unavailable without treating the VLM as disconnected', () => {
+    useAppStore.getState().setVlmStatus('response-error', 'VLM 在线，但响应格式异常');
+
+    expect(useAppStore.getState().vlmStatus).toBe('response-error');
+    expect(useAppStore.getState().vlmError).toBe('VLM 在线，但响应格式异常');
+    expect(useAppStore.getState().analysisValidity).toBe('error');
+  });
+
   it('marks an existing analysis stale and clears boxes without rewriting its summary', () => {
     const analysis = {
       ...useAppStore.getState().analysis,

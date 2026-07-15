@@ -4,7 +4,6 @@
   "installCommand": "npm ci",
   "buildCommand": "npm run build:pages",
   "assets": {
-    "directory": "./dist",
-    "notFoundStrategy": "singlePageApplication"
+    "directory": "./dist-pages"
   }
 }

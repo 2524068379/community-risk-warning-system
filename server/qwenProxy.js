@@ -13,6 +13,7 @@ import {
   QWEN_CHAT_COMPLETIONS_ROUTE
 } from '../shared/apiRoutes.js';
 import { DEFAULT_QWEN_VLM_API_MODEL, DEFAULT_VLM_MODEL_ALIAS } from '../shared/vlmModelConfig.js';
+import { VLM_RESPONSE_FORMAT } from '../shared/vlmResponseSchema.js';
 import { loadVlmRuntimeConfig } from '../shared/vlmRuntimeConfig.js';
 import { parseBoolean, parseInteger } from '../shared/envParsers.js';
 
@@ -253,7 +254,8 @@ export function buildQwenFallbackRequestBody(body = {}, model) {
   const requestBody = {
     ...body,
     model,
-    stream: false
+    stream: false,
+    response_format: { type: 'json_object' }
   };
 
   delete requestBody.chat_template_kwargs;
@@ -264,7 +266,7 @@ export function buildOllamaRequestBody(body = {}, model) {
   return {
     ...body,
     model,
-    response_format: body.response_format ?? { type: 'json_object' },
+    response_format: VLM_RESPONSE_FORMAT,
     chat_template_kwargs: {
       ...(body.chat_template_kwargs || {}),
       enable_thinking: false
