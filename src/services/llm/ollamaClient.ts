@@ -7,10 +7,13 @@ import { VLM_RESPONSE_FIELDS, VLM_RESPONSE_FORMAT } from '../../../shared/vlmRes
 const OLLAMA_PROXY_PATH = OLLAMA_CHAT_COMPLETIONS_ROUTE
 export const OLLAMA_MODEL = DEFAULT_VLM_MODEL_ALIAS
 const MIN_SAFE_NO_RISK_CONFIDENCE = 0.5
+const MIN_DETAILED_SUMMARY_LENGTH = 20
 const UNCERTAIN_CONCLUSION_PATTERN = /(?:无法(?:判断|识别|确认|分析)|画面(?:模糊|不清)|看不清|信息不足|cannot determine|unable to (?:determine|identify)|unclear|insufficient)/i
-const SAFE_CHINESE_CONCLUSION_PATTERN = /(?:(?:风险判断|风险结论)[：:\s]*)?(?:(?:当前)?(?:画面|场景)(?:中|内|整体)?(?:正常|安全)[，,；;：:\s]*)?(?:未发现|没有发现|暂无|无)(?:明显|相关)?(?:社区)?(?:安全)?风险[。.!！\s]*$/i
+const IMAGE_QUALITY_FAILURE_PATTERN = /(?:(?:画面|图像|镜头|视频|当前帧)(?:(?:整体|内容|几乎|严重|大面积|基本|完全|被|呈现为|显示为|出现|存在|是|为|中|内)\s*){0,4}(?:全白|纯白|白屏|全黑|黑屏|过曝|欠曝|大面积遮挡|严重遮挡|失焦|模糊|不清|无有效(?:视觉)?内容|没有(?:可辨识|可识别)(?:的)?(?:内容|物体|目标)|不可辨识|无法(?:辨认|识别))|(?:全白|白屏|全黑|黑屏|过曝|欠曝|失焦)(?:画面|图像|镜头|视频|当前帧))/i
+const SAFE_CHINESE_CONCLUSION_PATTERN = /(?:(?:风险判断|风险结论)[：:\s]*)?(?:(?:当前)?(?:画面|场景)(?:中|内|整体)?(?:正常|安全)[，,；;：:\s]*)?(?:未发现|没有发现|没有|暂无|无|未见|未显示(?:出)?)(?:任何|明显)?(?:的)?(?:与社区安全相关的|社区)?(?:安全)?风险(?:因素|迹象)?[。.!！\s]*$/i
 const SAFE_ENGLISH_CONCLUSION_PATTERN = /(?:(?:risk (?:assessment|conclusion))[:\s]*)?(?:(?:the )?(?:scene|image|frame)(?: is)? (?:normal|safe)[,; ]*)?no (?:obvious )?risk(?: detected)?[.!\s]*$/i
-const POSITIVE_RISK_CONCLUSION_PATTERN = /(?:^|[。.!！；;，,：:\s])(?:发现|检测到|观察到|出现|存在|疑似|可见|看到).{0,24}(?:跌倒|倒地|明火|火灾|烟雾|浓烟|堵塞|占用|飞线|违规充电|闯入|徘徊|异常聚集|打斗|冲突|求助|积水|破损|损坏|遮挡|设备异常)|(?:^|[。.!！；;，,：:\s])需要(?:立即|尽快).{0,12}(?:救助|处置|疏散|报警)|(?:^|[.!;,\s])(?:detected|observed|shows?|contains?|suspected).{0,40}(?:fall|fire|smoke|blocked|charging|intrusion|loitering|gathering|fight|flood|damage|obstruction)/i
+const NEGATED_RISK_EVIDENCE_PATTERN = /(?:未见|未发现|没有(?:发现)?|未观察到|未检测到|未出现|不存在|未有|无|未)(?:(?:任何|明显|疑似)(?:的)?\s*){0,3}(?:发生|进行|存在|出现|被)?(?:(?:(?:人员)?(?:跌倒|倒地)|明火|火灾|烟雾|浓烟|(?:通道)?(?:堵塞|占用)|飞线|违规充电|闯入|徘徊|异常聚集|打斗|冲突|求助|积水|破损|损坏|遮挡|设备异常)(?:\s*(?:[、/]|或|和|及)\s*)?){1,8}/gi
+const POSITIVE_RISK_CONCLUSION_PATTERN = /(?:跌倒|倒地|明火|火灾|烟雾|浓烟|堵塞|占用|飞线|违规充电|闯入|徘徊|异常聚集|打斗|冲突|求助|积水|破损|损坏|遮挡|设备异常)|(?:^|[。.!！；;，,：:\s])需要(?:立即|尽快).{0,12}(?:救助|处置|疏散|报警)|(?:^|[.!;,\s])(?:detected|observed|shows?|contains?|suspected).{0,40}(?:fall|fire|smoke|blocked|charging|intrusion|loitering|gathering|fight|flood|damage|obstruction)/i
 const SAFE_BREAKDOWN_LABEL_PATTERN = /^(?:正常|安全|无风险|未发现风险|normal|safe|no risk)$/i
 const ALLOWED_VLM_PAYLOAD_FIELDS = new Set(VLM_RESPONSE_FIELDS)
 const VLM_ENVELOPE_FIELDS = [
@@ -49,12 +52,12 @@ const SYSTEM_PROMPT = `你是社区安全监控系统的结构化视觉分析模
    - hasLoitering: boolean（同一人员是否在同一区域反复徘徊或异常滞留）
    - hasGathering: boolean（是否存在非正常的人员聚集或围观）
    - hasFallen: boolean（是否有人员跌倒并持续未起身）
-   - summary: 字符串，使用 2-4 句中文作具体说明，并依次包含“画面描述：”“判断依据：”“风险结论：”三部分。画面描述应说明场景环境、可见人员/车辆/物体及其数量、动作或位置关系；判断依据应指出支持结论的可见事实；风险结论应说明具体风险类型和程度，或明确未发现明显社区安全风险。不得只写“画面正常”“有风险”“无风险”等模板化短句
-   - evidenceTimeline: 字符串数组。当前请求只有单帧，只能写“当前帧：……”形式的可见证据，不得虚构时间点、持续时间或事件过程
+   - summary: 单一字符串（必须是一个 JSON 字符串，绝不能是对象或数组），使用 2-4 句中文作具体说明。第 1 句描述场景环境、可见人员/车辆/物体及其数量、动作或位置关系；中间句说明支持判断的可见事实；最后一句说明具体风险类型和程度，或明确未发现明显社区安全风险。所有句子必须写在同一个 summary 字符串中，不要把“画面描述”“判断依据”“风险结论”作为对象键或嵌套字段。不得只写“画面正常”“有风险”“无风险”等模板化短句
+   - evidenceTimeline: 字符串数组。hasRisk=false 时必须输出空数组 []；hasRisk=true 时只能写“当前帧：……”形式的可见风险证据。当前请求只有单帧，不得虚构时间点、持续时间或事件过程
    - breakdown: 对象数组，每个对象含 label(字符串) 与 value(整数 0-100)，所有 value 之和必须等于 100
    - detectionBoxes: 对象数组，每个对象含 x,y,width,height(均为 0-1 归一化浮点数)、label(字符串)、confidence(0-1)、risk(boolean)
 4. 分数、等级和风险必须严格一致：0-29 对应 level="C" 且 hasRisk=false；30-69 对应 level="B" 且 hasRisk=true；70-100 对应 level="A" 且 hasRisk=true。
-5. hasRisk=false 只适用于画面内容清晰且信息足以判断的情况，并且必须同时满足：confidence>=0.5；summary 仍须具体描述画面和判断依据，并以“风险结论：未发现明显社区安全风险。”收尾；evidenceTimeline 与 detectionBoxes 必须为空；breakdown 必须为 [{"label":"正常","value":100}]。
+5. hasRisk=false 只适用于画面内容清晰且信息足以判断的情况，并且必须同时满足：confidence>=0.5；summary 仍须具体描述画面和判断依据，最后一句必须是“未发现明显社区安全风险。”；evidenceTimeline 与 detectionBoxes 必须为空；breakdown 必须为 [{"label":"正常","value":100}]。
 6. 风险分类：消防(通道堵塞/电动车违规)、治安(徘徊/聚集/闯入)、救助(摔倒/求助)、环境(积水/损坏)、设备(遮挡/异常)。
 7. 当前输入是单帧。仅凭单帧不能确认“反复徘徊”“持续未起身”等时序事实；若只能看到疑似姿态，应在 summary 中如实说明并给出人工复核结论，不得伪造持续时间。
 8. 画面全白、全黑、严重过曝、严重欠曝、大面积遮挡、失焦或没有有效视觉内容时，属于设备/图像质量异常，严禁输出无风险。此时必须输出 hasRisk=true、riskScore=30、level="B"、confidence<0.5，breakdown 使用设备风险 100；summary 应描述具体画质问题、无法确认的内容和复核重点，风险结论明确为“图像质量异常，需要技术或人工复核”。
@@ -62,7 +65,7 @@ const SYSTEM_PROMPT = `你是社区安全监控系统的结构化视觉分析模
 
 function buildUserPrompt(cameraId: string, scene: string): string {
   const now = new Date().toLocaleTimeString('zh-CN', { hour12: false })
-  return `这是来自摄像头 ${cameraId}（场景：${scene}）的实时画面。请先逐项观察画面中的环境、人员、车辆、物体、动作和位置关系，再判断社区安全风险。summary 必须给出具体画面描述、可见判断依据和风险结论，不得复用固定的“画面正常”式短句。请返回结构化 JSON 结果。当前时间：${now}`
+  return `这是来自摄像头 ${cameraId}（场景：${scene}）的实时画面。请先逐项观察画面中的环境、人员、车辆、物体、动作和位置关系，再判断社区安全风险。summary 只能是单一字符串，必须在同一个字符串中写至少 2 句、最多 4 句，依次说明具体画面情况、可见判断依据和风险结论，不得输出 summary 子对象，也不得复用固定的“画面正常”式短句。若判断无风险，也必须先描述画面，最后再用独立一句“未发现明显社区安全风险。”收尾，并令 evidenceTimeline=[]、detectionBoxes=[]。请返回结构化 JSON 结果。当前时间：${now}`
 }
 
 type JsonObject = Record<string, unknown>
@@ -214,11 +217,23 @@ function extractJsonCandidates(raw: string): string[] {
   const fenced = withoutThink.match(/^```(?:json)?[ \t]*\r?\n([\s\S]*?)\r?\n```$/i)
   const candidateText = (fenced?.[1] ?? withoutThink).trim()
   const candidates = extractBalancedJsonValues(candidateText)
-  if (candidates.length !== 1 || candidates[0].trim() !== candidateText) {
+  if (candidates.length !== 1) {
     return []
   }
 
-  return candidates
+  const candidate = candidates[0].trim()
+  if (candidate === candidateText) return [candidate]
+
+  // A few JSON-mode VLM streams append an incomplete Markdown fence. Tolerate
+  // only fence fragments around the one balanced JSON value, never prose.
+  const candidateStart = candidateText.indexOf(candidates[0])
+  const prefix = candidateText.slice(0, candidateStart).trim()
+  const suffix = candidateText.slice(candidateStart + candidates[0].length).trim()
+  const hasValidPrefix = !prefix || /^```(?:json)?$/i.test(prefix)
+  const hasValidSuffix = !suffix || /^`{1,3}$/.test(suffix)
+  if (!hasValidPrefix || !hasValidSuffix) return []
+
+  return [candidate]
 }
 
 function sanitizeJson(jsonStr: string): string {
@@ -578,7 +593,49 @@ function pickSummary(record: JsonObject): string | null {
     return value.trim()
   }
 
+  // Some OpenAI-compatible VLMs ignore the declared string type and split the
+  // requested explanation into a small object. Accept only the exact, known
+  // section shape and flatten it back into the renderer's string contract.
+  if (isRecord(value)) {
+    const sectionKeys = ['画面描述', '判断依据', '风险结论']
+    if (
+      Object.keys(value).length === sectionKeys.length &&
+      sectionKeys.every((key) => typeof value[key] === 'string' && value[key].trim())
+    ) {
+      return sectionKeys
+        .map((key) => `${key}：${String(value[key]).trim()}`)
+        .join('')
+    }
+  }
+
   return null
+}
+
+function hasPositiveRiskText(summary: string): boolean {
+  return POSITIVE_RISK_CONCLUSION_PATTERN.test(
+    summary.replace(NEGATED_RISK_EVIDENCE_PATTERN, '')
+  )
+}
+
+function isDetailedSummary(summary: string): boolean {
+  const compact = summary.replace(/\s/g, '')
+  const clauses = summary.split(/[。.!！；;，,：:]/).filter((part) => part.trim()).length
+  return compact.length >= MIN_DETAILED_SUMMARY_LENGTH && clauses >= 2
+}
+
+function isDetailedSafeSummary(summary: string): boolean {
+  if (!isDetailedSummary(summary)) return false
+  const visibleDescription = summary
+    .replace(SAFE_CHINESE_CONCLUSION_PATTERN, '')
+    .replace(SAFE_ENGLISH_CONCLUSION_PATTERN, '')
+    .replace(/\s/g, '')
+  return visibleDescription.length >= 12
+}
+
+function appendSafeConclusion(summary: string): string {
+  const trimmed = summary.trim()
+  const separator = /[。.!！]$/.test(trimmed) ? '' : '。'
+  return `${trimmed}${separator}未发现明显社区安全风险。`
 }
 
 function normalizeVlmPayload(parsed: unknown): { analysis: VlmAnalysis; boxes: DetectionBox[] } | null {
@@ -598,7 +655,7 @@ function normalizeVlmPayload(parsed: unknown): { analysis: VlmAnalysis; boxes: D
   const hasLoitering = normalizeBoolean(payload.hasLoitering)
   const hasGathering = normalizeBoolean(payload.hasGathering)
   const hasFallen = normalizeBoolean(payload.hasFallen)
-  const summary = pickSummary(payload)
+  let summary = pickSummary(payload)
   const evidenceTimelineValue = payload.evidenceTimeline
   const breakdown = normalizeBreakdown(payload.breakdown)
   const detectionBoxes = payload.detectionBoxes
@@ -635,22 +692,37 @@ function normalizeVlmPayload(parsed: unknown): { analysis: VlmAnalysis; boxes: D
     return null
   }
 
-  const hasPositiveRiskEvidence = hasLoitering || hasGathering || hasFallen || hasRawRiskBox || boxes.some((box) => box.risk)
+  if (!isDetailedSummary(summary)) {
+    return null
+  }
+
+  const hasPositiveRiskEvidence = hasLoitering ||
+    hasGathering ||
+    hasFallen ||
+    hasRawRiskBox ||
+    boxes.some((box) => box.risk) ||
+    hasPositiveRiskText(summary)
   const evidenceTimeline = normalizeStringArray(evidenceTimelineValue)
   const safeBreakdown = breakdown.every((item) => SAFE_BREAKDOWN_LABEL_PATTERN.test(item.label))
-  if (
-    !hasRisk && (
+  if (!hasRisk) {
+    if (
       hasPositiveRiskEvidence ||
       confidence < MIN_SAFE_NO_RISK_CONFIDENCE ||
       UNCERTAIN_CONCLUSION_PATTERN.test(summary) ||
-      !(SAFE_CHINESE_CONCLUSION_PATTERN.test(summary) || SAFE_ENGLISH_CONCLUSION_PATTERN.test(summary)) ||
-      POSITIVE_RISK_CONCLUSION_PATTERN.test(summary) ||
+      IMAGE_QUALITY_FAILURE_PATTERN.test(summary) ||
+      !isDetailedSafeSummary(summary) ||
       evidenceTimeline.length > 0 ||
       detectionBoxes.length > 0 ||
       !safeBreakdown
-    )
-  ) {
-    return null
+    ) {
+      return null
+    }
+
+    const hasSafeConclusion = SAFE_CHINESE_CONCLUSION_PATTERN.test(summary) ||
+      SAFE_ENGLISH_CONCLUSION_PATTERN.test(summary)
+    if (!hasSafeConclusion) {
+      summary = appendSafeConclusion(summary)
+    }
   }
 
   const analysis: VlmAnalysis = {

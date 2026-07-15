@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
+  VLM_CONNECTION_ERROR_MESSAGE,
+  canCaptureVlmFrames,
   checkVlmConnectionStatus,
   consumeUnchangedVlmFrame,
   finalizeVlmFrame,
@@ -9,7 +11,8 @@ import {
   isRequestCanceled,
   planVlmDispatch,
   resetVlmAnalysisContext,
-  shouldHandleFrameSequence
+  shouldHandleFrameSequence,
+  shouldResetVlmStatusAfterConnectionReady
 } from './useVlmAnalysis'
 import { createCapturedFrame } from './useFrameCapture'
 import { VlmResponseError } from '@/services/llm/ollamaClient'
@@ -26,6 +29,25 @@ describe('finalizeVlmFrame', () => {
 
     expect(markConsumed).toHaveBeenCalledTimes(1)
     expect(releaseAnalysisLock).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('VLM connection and capture state', () => {
+  it('keeps connection checks enabled while camera capture is unavailable', () => {
+    expect(canCaptureVlmFrames(true, false, true)).toBe(false)
+    expect(canCaptureVlmFrames(true, true, true)).toBe(true)
+    expect(canCaptureVlmFrames(false, true, true)).toBe(false)
+  })
+
+  it('clears only connection-originated errors when a ready status is observed', () => {
+    expect(shouldResetVlmStatusAfterConnectionReady(
+      'error',
+      VLM_CONNECTION_ERROR_MESSAGE,
+      false
+    )).toBe(true)
+    expect(shouldResetVlmStatusAfterConnectionReady('error', 'VLM 接口请求超时', false)).toBe(false)
+    expect(shouldResetVlmStatusAfterConnectionReady('error', '旧连接错误', true)).toBe(true)
+    expect(shouldResetVlmStatusAfterConnectionReady('response-error', '格式异常', true)).toBe(false)
   })
 })
 

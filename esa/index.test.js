@@ -179,14 +179,14 @@ describe('ESA Pages API config', () => {
     });
   });
 
-  it('infers the generic profile for a configured BigModel visual endpoint', () => {
+  it('infers JSON object mode for a configured BigModel visual endpoint', () => {
     expect(loadPagesApiConfig({
       QWEN_BASE_URL: 'https://open.bigmodel.cn/api/paas/v4/',
       QWEN_API_KEY: 'sk-test'
     })).toMatchObject({
       baseUrl: 'https://open.bigmodel.cn/api/paas/v4',
       chatCompletionsUrl: 'https://open.bigmodel.cn/api/paas/v4/chat/completions',
-      apiProfile: 'generic'
+      apiProfile: 'json-object'
     });
   });
 
@@ -229,16 +229,17 @@ describe('ESA Pages VLM request normalization', () => {
     });
   });
 
-  it('omits text-only structured output options for the BigModel visual endpoint', () => {
+  it('uses JSON object mode for the BigModel visual endpoint', () => {
     expect(buildVlmApiRequestBody({
       stream: false,
       response_format: { type: 'json_schema', schema: { type: 'object' } },
       chat_template_kwargs: { enable_thinking: false },
       messages: [{ role: 'user', content: 'JSON only' }]
-    }, 'glm-4v-flash', 'generic', 800)).toEqual({
+    }, 'glm-4v-flash', 'json-object', 800)).toEqual({
       model: 'glm-4v-flash',
       max_tokens: 800,
       stream: true,
+      response_format: { type: 'json_object' },
       messages: [{ role: 'user', content: 'JSON only' }]
     });
   });
@@ -375,6 +376,44 @@ describe('ESA Pages API routes', () => {
     });
   });
 
+  it('returns JSON headers and leading whitespace before upstream response headers arrive', async () => {
+    const request = buildChatRequest({
+      messages: [{ role: 'user', content: 'Return JSON' }]
+    });
+    vi.stubGlobal('fetch', vi.fn(() => new Promise(() => {})));
+    vi.stubGlobal('AbortController', undefined);
+
+    const response = await handleRequest(request, {
+      ...runtimeEnv,
+      QWEN_TIMEOUT: '15000'
+    });
+    const reader = response.body.getReader();
+    const firstChunk = await reader.read();
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('content-type')).toContain('application/json');
+    expect(response.headers.get('x-vlm-source')).toBe('cloud');
+    expect(new TextDecoder().decode(firstChunk.value)).toBe('\n');
+
+    await reader.cancel('test complete');
+  });
+
+  it('does not require the ReadableStream constructor in the ESA runtime', async () => {
+    const request = buildChatRequest({
+      messages: [{ role: 'user', content: 'Return JSON' }]
+    });
+    vi.stubGlobal('fetch', vi.fn(() => new Promise(() => {})));
+    vi.stubGlobal('AbortController', undefined);
+    vi.stubGlobal('ReadableStream', undefined);
+
+    const response = await handleRequest(request, runtimeEnv);
+    const reader = response.body.getReader();
+    const firstChunk = await reader.read();
+
+    expect(new TextDecoder().decode(firstChunk.value)).toBe('\n');
+    await reader.cancel('test complete');
+  });
+
   it('calls a deployment-configured provider without a source-code endpoint allowlist', async () => {
     const fetchMock = vi.fn().mockResolvedValue(buildSseResponse('{"provider":"custom"}'));
     vi.stubGlobal('fetch', fetchMock);
@@ -419,7 +458,7 @@ describe('ESA Pages API routes', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it('preserves an upstream error status and bounded JSON body', async () => {
+  it('returns an upstream error as a bounded JSON body after streaming starts', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({
       error: { message: 'quota exceeded', type: 'rate_limit' }
     }), {
@@ -431,27 +470,89 @@ describe('ESA Pages API routes', () => {
       messages: [{ role: 'user', content: 'Return JSON' }]
     }), runtimeEnv);
 
-    expect(response.status).toBe(429);
+    expect(response.status).toBe(200);
     expect(response.headers.get('x-vlm-source')).toBe('cloud');
     expect(await response.json()).toMatchObject({
       error: { message: 'quota exceeded' }
     });
   });
 
-  it('returns 504 when the upstream does not provide response headers in time', async () => {
+  it('allows upstream response headers to take longer than eight seconds within the total timeout', async () => {
     vi.useFakeTimers();
-    vi.stubGlobal('fetch', vi.fn(() => new Promise(() => {})));
-    const responsePromise = handleRequest(buildChatRequest({
+    let resolveFetch;
+    vi.stubGlobal('fetch', vi.fn(() => new Promise((resolve) => {
+      resolveFetch = resolve;
+    })));
+    const response = await handleRequest(buildChatRequest({
       messages: [{ role: 'user', content: 'Return JSON' }]
-    }), runtimeEnv);
+    }), {
+      ...runtimeEnv,
+      QWEN_TIMEOUT: '15000'
+    });
+    const responseTextPromise = response.text();
 
-    await vi.advanceTimersByTimeAsync(8000);
-    const response = await responsePromise;
+    await vi.advanceTimersByTimeAsync(12000);
+    resolveFetch(buildSseResponse('{"hasRisk":false,"summary":"late but valid"}'));
+    await vi.advanceTimersByTimeAsync(0);
 
-    expect(response.status).toBe(504);
-    expect(await response.json()).toMatchObject({
+    expect(response.status).toBe(200);
+    expect(JSON.parse(await responseTextPromise)).toMatchObject({
+      choices: [{
+        message: { content: '{"hasRisk":false,"summary":"late but valid"}' }
+      }]
+    });
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('returns one JSON error body when the configured total timeout expires', async () => {
+    vi.useFakeTimers();
+    const request = buildChatRequest({
+      messages: [{ role: 'user', content: 'Return JSON' }]
+    });
+    vi.stubGlobal('fetch', vi.fn(() => new Promise(() => {})));
+    vi.stubGlobal('AbortController', undefined);
+    const response = await handleRequest(request, {
+      ...runtimeEnv,
+      QWEN_TIMEOUT: '15000'
+    });
+    const responseTextPromise = response.text();
+
+    await vi.advanceTimersByTimeAsync(15000);
+
+    expect(response.status).toBe(200);
+    expect(JSON.parse(await responseTextPromise)).toMatchObject({
       error: { type: 'timeout_error' }
     });
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('keeps timeout classification when aborting a pending fetch', async () => {
+    vi.useFakeTimers();
+    let capturedSignal;
+    vi.stubGlobal('fetch', vi.fn((_url, init) => new Promise((_resolve, reject) => {
+      capturedSignal = init.signal;
+      capturedSignal.addEventListener('abort', () => {
+        const error = new Error('aborted');
+        error.name = 'AbortError';
+        reject(error);
+      });
+    })));
+
+    const response = await handleRequest(buildChatRequest({
+      messages: [{ role: 'user', content: 'Return JSON' }]
+    }), {
+      ...runtimeEnv,
+      QWEN_TIMEOUT: '15000'
+    });
+    const responseTextPromise = response.text();
+
+    await vi.advanceTimersByTimeAsync(15000);
+
+    expect(capturedSignal.aborted).toBe(true);
+    expect(JSON.parse(await responseTextPromise)).toMatchObject({
+      error: { type: 'timeout_error' }
+    });
+    expect(vi.getTimerCount()).toBe(0);
   });
 
   it('closes a stalled SSE body with one valid JSON error envelope', async () => {
@@ -481,6 +582,35 @@ describe('ESA Pages API routes', () => {
     expect(responseJson).toMatchObject({
       error: { type: 'timeout_error' }
     });
+  });
+
+  it('closes a stalled JSON body with one valid JSON error envelope', async () => {
+    vi.useFakeTimers();
+    const upstreamResponse = new Response(new ReadableStream({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode('{"partial":'));
+      }
+    }), {
+      status: 200,
+      headers: { 'content-type': 'application/json' }
+    });
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(upstreamResponse));
+
+    const response = await handleRequest(buildChatRequest({
+      messages: [{ role: 'user', content: 'Return JSON' }]
+    }), {
+      ...runtimeEnv,
+      QWEN_TIMEOUT: '15000'
+    });
+    const responseTextPromise = response.text();
+
+    await vi.advanceTimersByTimeAsync(15000);
+
+    expect(response.status).toBe(200);
+    expect(JSON.parse(await responseTextPromise)).toMatchObject({
+      error: { type: 'timeout_error' }
+    });
+    expect(vi.getTimerCount()).toBe(0);
   });
 
   it('converts an upstream stream failure into JSON and clears its timeout', async () => {
@@ -545,6 +675,78 @@ describe('ESA Pages API routes', () => {
     expect(vi.getTimerCount()).toBe(0);
   });
 
+  it('clears the timeout and cancels a late response when the browser leaves before headers arrive', async () => {
+    vi.useFakeTimers();
+    const request = buildChatRequest({
+      messages: [{ role: 'user', content: 'Return JSON' }]
+    });
+    vi.stubGlobal('AbortController', undefined);
+    let resolveFetch;
+    let upstreamCanceled = false;
+    vi.stubGlobal('fetch', vi.fn(() => new Promise((resolve) => {
+      resolveFetch = resolve;
+    })));
+
+    const response = await handleRequest(request, {
+      ...runtimeEnv,
+      QWEN_TIMEOUT: '15000'
+    });
+    const reader = response.body.getReader();
+    await reader.read();
+    await reader.cancel('browser navigation');
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(vi.getTimerCount()).toBe(0);
+
+    resolveFetch(new Response(new ReadableStream({
+      cancel() {
+        upstreamCanceled = true;
+      }
+    }), {
+      status: 200,
+      headers: { 'content-type': 'application/json' }
+    }));
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(upstreamCanceled).toBe(true);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('handles cancellation before the client reads the queued first byte', async () => {
+    vi.useFakeTimers();
+    const request = buildChatRequest({
+      messages: [{ role: 'user', content: 'Return JSON' }]
+    });
+    vi.stubGlobal('AbortController', undefined);
+    let resolveFetch;
+    let upstreamCanceled = false;
+    vi.stubGlobal('fetch', vi.fn(() => new Promise((resolve) => {
+      resolveFetch = resolve;
+    })));
+
+    const response = await handleRequest(request, {
+      ...runtimeEnv,
+      QWEN_TIMEOUT: '15000'
+    });
+    await response.body.cancel('browser left before read');
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(vi.getTimerCount()).toBe(0);
+
+    resolveFetch(new Response(new ReadableStream({
+      cancel() {
+        upstreamCanceled = true;
+      }
+    }), {
+      status: 200,
+      headers: { 'content-type': 'application/json' }
+    }));
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(upstreamCanceled).toBe(true);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
   it('rejects an upstream response whose declared size exceeds the configured cap', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('{}', {
       status: 200,
@@ -561,7 +763,7 @@ describe('ESA Pages API routes', () => {
       MAX_UPSTREAM_RESPONSE_BYTES: '1024'
     });
 
-    expect(response.status).toBe(502);
+    expect(response.status).toBe(200);
     expect(await response.json()).toMatchObject({
       error: { type: 'upstream_response_too_large' }
     });

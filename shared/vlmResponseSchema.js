@@ -27,10 +27,11 @@ export const VLM_RESPONSE_SCHEMA = {
     summary: {
       type: 'string',
       minLength: 1,
-      description: '使用“画面描述、判断依据、风险结论”结构给出 2-4 句中文说明，基于图像中的可见事实，不得只回答是否有风险'
+      description: '必须是单一字符串而非对象或数组；用 2-4 句中文依次说明画面情况、可见判断依据和风险结论，不得只回答是否有风险'
     },
     evidenceTimeline: {
       type: 'array',
+      description: '无风险时必须为空数组；有风险时仅记录当前帧可见证据',
       items: { type: 'string', minLength: 1 }
     },
     breakdown: {

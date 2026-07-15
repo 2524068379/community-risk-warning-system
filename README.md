@@ -266,9 +266,9 @@ ESA_VLM_API_PROFILE=generic
 
 `ESA_VLM_API_PROFILE` 支持 `dashscope`（转换为 `json_object` 并关闭思考）、`json-object`（仅使用标准 JSON mode）和 `generic`（删除厂商可能不支持的结构化输出参数，依靠提示词与前端严格校验）。若厂商的完整路径不是 `<base>/chat/completions`，可改用 `ESA_VLM_CHAT_COMPLETIONS_URL`。地址只来自受信任的部署环境变量，不接受浏览器请求体传入；运行时校验公网 HTTPS 域名形态，拒绝 localhost、IP 字面量、内部域名后缀、URL 凭据、查询参数、片段与 HTTP 重定向。ESA Runtime 不提供部署前 DNS 解析校验，因此域名解析安全仍由部署者负责。
 
-`/api/ollama/chat/completions` 在 ESA Pages 上会被边缘函数转发到所配置的云端 VLM，以保持前端调用路径不变。智谱 `glm-4v-flash` 等不支持视觉结构化输出的接口应使用 `generic` profile。
+`/api/ollama/chat/completions` 在 ESA Pages 上会被边缘函数转发到所配置的云端 VLM，以保持前端调用路径不变。智谱 `open.bigmodel.cn` 会自动使用 `json-object` profile（JSON object mode，不发送完整 JSON Schema），以降低 `glm-4v-flash` 生成重复字段或错误字段类型的概率；仅在上游明确不支持 JSON mode 时使用 `generic`。
 
-ESA 边缘函数会限制请求体、消息数、输出 token 和上游响应大小，但 CORS 不是服务端鉴权，也不能阻止脚本直接调用公开接口。上线前必须在 ESA 控制台为 `/api/*/chat/completions` 配置频控/WAF 和用量告警；不要把固定访问令牌放进 SPA。边缘代理会请求上游流式输出，并在 ESA 要求的 10 秒内发送 JSON 合法前置空白，最终仍向前端返回单一 OpenAI-compatible JSON 对象。
+ESA 边缘函数会限制请求体、消息数、输出 token 和上游响应大小，但 CORS 不是服务端鉴权，也不能阻止脚本直接调用公开接口。上线前必须在 ESA 控制台为 `/api/*/chat/completions` 配置频控/WAF 和用量告警；不要把固定访问令牌放进 SPA。边缘代理会立即发送 JSON 合法前置空白，再在配置的总超时内等待并聚合上游流式输出，最终仍向前端返回单一 OpenAI-compatible JSON 对象。由于响应已提前开始，后续上游超时、限流或代理错误会保持 HTTP 200，并通过正文中的 `error.type` 与 `error.message` 表达；请求校验阶段的 4xx/5xx 状态码不变。
 
 ## API 路由
 
@@ -448,7 +448,7 @@ Dependabot 配置位于 `.github/dependabot.yml`，npm 和 GitHub Actions 依赖
 | 现象 | 排查 |
 |------|------|
 | 500 配置错误 | ESA 检查 `ESA_VLM_API_BASE_URL`/`ESA_VLM_API_KEY`；本地 Express 检查兼容的 `QWEN_*` 配置 |
-| 504 超时 | 确认上游能在 8 秒内返回流式响应头；`ESA_VLM_TIMEOUT` 可在 15-110 秒之间调整，且不能突破 ESA 120 秒执行上限 |
+| VLM 接口请求超时 | `ESA_VLM_TIMEOUT` 可在 15-110 秒之间调整，覆盖等待响应头和响应体的总时长，且不能突破 ESA 120 秒执行上限 |
 | 429 限流 | 调整 `CHAT_REQUESTS_PER_MINUTE`，或降低前端请求频率 |
 
 ## 相关资源

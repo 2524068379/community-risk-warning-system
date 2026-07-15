@@ -61,7 +61,8 @@ export function OverviewPage() {
     analysisTimestamp,
     analysisValidity,
     setActiveCamera,
-    vlmStatus
+    vlmStatus,
+    vlmError
   } = useAppStore();
   const videoRef = useRef<HTMLVideoElement>(null);
   const { stream, loading, error, retry } = useLocalCamera(videoRef);
@@ -70,7 +71,7 @@ export function OverviewPage() {
     videoRef,
     cameraId: 'LOCAL',
     scene: '本地摄像头演示源',
-    enabled: !!stream
+    captureEnabled: !!stream
   });
 
   const statusCfg = getVlmStatusView(vlmStatus, 'overview');
@@ -122,6 +123,7 @@ export function OverviewPage() {
             variant="compact"
             validity={analysisValidity}
             modelSource={analysisContext?.modelSource}
+            errorMessage={vlmError}
           />
         </div>
       </div>

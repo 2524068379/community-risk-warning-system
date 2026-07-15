@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { useAppStore } from '@/store/useAppStore'
+import { useAppStore, type VlmStatus } from '@/store/useAppStore'
 import { VlmResponseError, analyzeFrameWithOllama } from '@/services/llm/ollamaClient'
 import { useFrameCapture } from './useFrameCapture'
 import { detect, getDetectorStatus } from '@/services/detection/objectDetector'
@@ -39,7 +39,10 @@ interface VlmAnalysisOptions {
   videoRef: React.RefObject<HTMLVideoElement | null>
   cameraId: string
   scene: string
+  /** Whether to check and use the VLM service. */
   enabled?: boolean
+  /** Whether frames may be captured; connection checks remain active when false. */
+  captureEnabled?: boolean
   /** Fast capture interval when motion detected (ms) */
   activeIntervalMs?: number
   /** Slow capture interval when scene is idle (ms) */
@@ -81,6 +84,28 @@ interface PlanVlmDispatchOptions {
 interface VlmDispatchPlan {
   shouldSendVlm: boolean
   reason: 'detector-failed' | 'object' | 'fallback' | 'skip'
+}
+
+export const VLM_CONNECTION_ERROR_MESSAGE = 'VLM 服务未连接，请确保后端服务已启动且模型已加载'
+
+export function canCaptureVlmFrames(
+  enabled: boolean,
+  captureEnabled: boolean,
+  serverReady: boolean
+): boolean {
+  return enabled && captureEnabled && serverReady
+}
+
+export function shouldResetVlmStatusAfterConnectionReady(
+  status: VlmStatus,
+  error: string | null,
+  recoveredFromConnectionFailure: boolean
+): boolean {
+  return status === 'loading' || (
+    status === 'error' && (
+      recoveredFromConnectionFailure || error === VLM_CONNECTION_ERROR_MESSAGE
+    )
+  )
 }
 
 export function finalizeVlmFrame(options: FinalizeVlmFrameOptions): void {
@@ -254,6 +279,7 @@ export function useVlmAnalysis(options: VlmAnalysisOptions) {
     cameraId,
     scene,
     enabled = true,
+    captureEnabled = enabled,
     activeIntervalMs = 500,
     idleIntervalMs = 5000,
     fallbackIntervalMs = FALLBACK_INTERVAL_MS,
@@ -271,7 +297,7 @@ export function useVlmAnalysis(options: VlmAnalysisOptions) {
   const analysisRunRef = useRef(0)
   const lastHandledSequenceRef = useRef(0)
 
-  const shouldCapture = enabled && serverReady
+  const shouldCapture = canCaptureVlmFrames(enabled, captureEnabled, serverReady)
 
   const { frameDataUrl, frameSequence, capturedAt, hasChanged, markConsumed } = useFrameCapture(videoRef, {
     activeIntervalMs,
@@ -303,7 +329,7 @@ export function useVlmAnalysis(options: VlmAnalysisOptions) {
     nextDetectorRetryAtRef.current = 0
     // Never relabel a frame captured under the previous camera context.
     lastHandledSequenceRef.current = frameSequence
-  }, [cameraId, scene, enabled, markConsumed])
+  }, [cameraId, scene, enabled, captureEnabled, markConsumed])
 
   useEffect(() => {
     if (!enabled) {
@@ -338,10 +364,15 @@ export function useVlmAnalysis(options: VlmAnalysisOptions) {
       if (stopped) return
 
       if (connection.ready) {
+        const recoveredFromConnectionFailure = failCountRef.current > 0
         setServerReady(true)
         failCountRef.current = 0
         const store = useAppStore.getState()
-        if (store.vlmStatus === 'loading' || store.vlmStatus === 'error') {
+        if (shouldResetVlmStatusAfterConnectionReady(
+          store.vlmStatus,
+          store.vlmError,
+          recoveredFromConnectionFailure
+        )) {
           store.setVlmStatus('idle')
         }
       } else if (connection.status === 'starting' || connection.status === 'loading') {
@@ -358,7 +389,7 @@ export function useVlmAnalysis(options: VlmAnalysisOptions) {
         } else if (failCountRef.current >= FAIL_THRESHOLD) {
           useAppStore.getState().setVlmStatus(
             'error',
-            'VLM 服务未连接，请确保后端服务已启动且模型已加载'
+            VLM_CONNECTION_ERROR_MESSAGE
           )
         }
       }

@@ -55,7 +55,7 @@ const waitingAnalysis: VlmAnalysis = {
   level: 'C',
   hasRisk: false,
   confidence: 0,
-  summary: '等待 VLM 模型连接...',
+  summary: '等待摄像头画面与首次分析...',
   evidenceTimeline: [],
   breakdown: [],
   trend: []
@@ -135,7 +135,9 @@ export const useAppStore = create<AppState>((set, get) => ({
       vlmError: error ?? null,
       analysisValidity: status === 'error' || status === 'response-error'
         ? state.analysisTimestamp === null ? 'error' : 'stale'
-        : state.analysisValidity
+        : (status === 'idle' || status === 'loading' || status === 'analyzing') && state.analysisTimestamp === null
+          ? 'unknown'
+          : state.analysisValidity
     })),
 
   setDetectorStatus: (detectorStatus) => set({ detectorStatus }),

@@ -32,7 +32,7 @@ export function MonitorPage() {
     videoRef,
     cameraId: 'LOCAL',
     scene: '本地摄像头演示源',
-    enabled: !!stream
+    captureEnabled: !!stream
   });
 
   useEffect(() => {

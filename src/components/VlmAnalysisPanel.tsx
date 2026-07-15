@@ -2,12 +2,14 @@ import { useMemo } from 'react';
 import { Progress, Space, Tag } from 'antd';
 import type { AnalysisValidity, VlmAnalysis, VlmModelSource } from '@/types';
 import { riskGradeColorMap } from '@/utils/risk';
+import { getVlmDisplayedSummary } from '@/utils/vlmAnalysisView';
 
 interface VlmAnalysisPanelProps {
   analysis: VlmAnalysis;
   variant?: 'full' | 'compact' | 'summary';
   validity?: AnalysisValidity;
   modelSource?: VlmModelSource;
+  errorMessage?: string | null;
 }
 
 const sourceLabels: Record<VlmModelSource, string> = {
@@ -21,7 +23,8 @@ export function VlmAnalysisPanel({
   analysis,
   variant = 'full',
   validity = 'unknown',
-  modelSource = 'unknown'
+  modelSource = 'unknown',
+  errorMessage
 }: VlmAnalysisPanelProps) {
   const hasResult = validity === 'valid' || validity === 'stale';
   const resultStatus = validity === 'valid'
@@ -34,6 +37,7 @@ export function VlmAnalysisPanel({
       : validity === 'error'
         ? { color: 'error', label: '结果不可用' }
         : { color: 'default', label: '等待分析' };
+  const displayedSummary = getVlmDisplayedSummary(analysis.summary, validity, errorMessage);
 
   const insightItems = useMemo(() => [
     { label: '是否存在风险', value: hasResult ? (analysis.hasRisk ? '是' : '否') : '待分析' },
@@ -85,7 +89,7 @@ export function VlmAnalysisPanel({
           ))}
           <div className="vlm-summary-box">
             <span>模型摘要</span>
-            <p>{analysis.summary}</p>
+            <p>{displayedSummary}</p>
           </div>
         </div>
       </div>
@@ -131,7 +135,7 @@ export function VlmAnalysisPanel({
           ))}
           <div className="vlm-summary-box">
             <span>模型摘要</span>
-            <p>{analysis.summary}</p>
+            <p>{displayedSummary}</p>
           </div>
         </div>
       </div>

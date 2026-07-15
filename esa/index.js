@@ -10,7 +10,6 @@ const JSON_CONTENT_TYPE = 'application/json; charset=utf-8';
 const SSE_CONTENT_TYPE = 'text/event-stream';
 const DEFAULT_QWEN_TIMEOUT_MS = 60000;
 const MAX_QWEN_TIMEOUT_MS = 110000;
-const UPSTREAM_HEADER_TIMEOUT_MS = 8000;
 const DEFAULT_REQUEST_BODY_BYTES = 2 * 1024 * 1024;
 const DEFAULT_MAX_CHAT_MESSAGES = 16;
 const DEFAULT_MAX_CHAT_TOKENS = 2048;
@@ -127,6 +126,9 @@ function normalizeVlmApiProfile(rawProfile, baseUrl) {
     const hostname = new URL(baseUrl).hostname.toLowerCase();
     if (hostname === 'dashscope.aliyuncs.com' || /^dashscope-[a-z0-9-]+\.aliyuncs\.com$/.test(hostname)) {
       return VLM_API_PROFILES.DASHSCOPE;
+    }
+    if (hostname === 'open.bigmodel.cn') {
+      return VLM_API_PROFILES.JSON_OBJECT;
     }
   }
 
@@ -400,41 +402,69 @@ export function buildVlmApiRequestBody(
 }
 
 function createTimeoutError() {
-  const error = new Error('VLM upstream response header timeout');
+  const error = new Error('VLM upstream request timeout');
   error.name = 'TimeoutError';
   return error;
 }
 
-async function fetchConfiguredVlmEndpoint(url, init, timeoutMs) {
+function createConfiguredVlmFetch(url, init, timeoutMs) {
   const safeUrl = normalizePublicHttpsUrl(url);
   if (!safeUrl) {
     throw new Error('Unsupported VLM upstream endpoint');
   }
 
+  const abortController = typeof AbortController === 'function'
+    ? new AbortController()
+    : null;
   const fetchPromise = fetch(safeUrl, {
     ...init,
     // Do not let a public endpoint redirect the edge subrequest to an internal host.
-    redirect: 'error'
+    redirect: 'error',
+    ...(abortController ? { signal: abortController.signal } : {})
   });
   let timer;
+  let canceled = false;
+
+  const cancelLateResponse = (reason) => {
+    fetchPromise
+      .then((response) => response.body?.cancel?.(reason))
+      .catch(() => {});
+  };
+
   const timeoutPromise = new Promise((_, reject) => {
-    timer = setTimeout(() => reject(createTimeoutError()), timeoutMs);
+    timer = setTimeout(() => {
+      const error = createTimeoutError();
+      canceled = true;
+      // Settle the timeout branch before aborting so an AbortError cannot win the
+      // race and be misreported as a generic proxy failure.
+      reject(error);
+      try {
+        abortController?.abort(error);
+      } catch {
+        // Older edge runtimes may expose AbortController without abort reasons.
+        abortController?.abort();
+      }
+      cancelLateResponse(error);
+    }, timeoutMs);
   });
 
-  try {
-    return await Promise.race([fetchPromise, timeoutPromise]);
-  } catch (error) {
-    if (error instanceof Error && error.name === 'TimeoutError') {
+  return {
+    response: Promise.race([fetchPromise, timeoutPromise])
+      .finally(() => clearTimeout(timer)),
+    cancel(reason) {
+      if (canceled) return;
+      canceled = true;
+      clearTimeout(timer);
+      try {
+        abortController?.abort(reason);
+      } catch {
+        abortController?.abort();
+      }
       // ESA does not document AbortController. Drain a late response when possible so
-      // the request does not retain a response body after the local deadline.
-      fetchPromise
-        .then((response) => response.body?.cancel?.())
-        .catch(() => {});
+      // cancellation does not retain an unread upstream response body.
+      cancelLateResponse(reason);
     }
-    throw error;
-  } finally {
-    clearTimeout(timer);
-  }
+  };
 }
 
 function createBodyLimitError(message, type) {
@@ -848,7 +878,7 @@ function buildUpstreamResponse(request, upstreamResponse, config, env, elapsedMs
   const upstreamContentType = upstreamResponse.headers.get('content-type') || JSON_CONTENT_TYPE;
   const isSuccessfulSse = upstreamResponse.ok &&
     upstreamContentType.toLowerCase().includes(SSE_CONTENT_TYPE);
-  const remainingTimeoutMs = Math.max(1000, config.timeoutMs - elapsedMs);
+  const remainingTimeoutMs = Math.max(1, config.timeoutMs - elapsedMs);
   const transform = isSuccessfulSse
     ? createSseAggregationTransform(remainingTimeoutMs, config.maxUpstreamResponseBytes)
     : createBufferedResponseTransform(remainingTimeoutMs, config.maxUpstreamResponseBytes);
@@ -857,6 +887,131 @@ function buildUpstreamResponse(request, upstreamResponse, config, env, elapsedMs
     status: upstreamResponse.status,
     headers: {
       'content-type': isSuccessfulSse ? JSON_CONTENT_TYPE : upstreamContentType,
+      'cache-control': 'no-store',
+      'x-vlm-source': 'cloud',
+      ...buildCorsHeaders(request, env)
+    }
+  });
+}
+
+function buildDeferredUpstreamResponse(request, requestBody, config, env) {
+  const encoder = new TextEncoder();
+  let settled = false;
+  let fetchOperation;
+  let upstreamReader;
+  const output = new TransformStream();
+  const writer = output.writable.getWriter();
+
+  const cancelUpstream = (reason) => {
+    fetchOperation?.cancel(reason);
+    if (upstreamReader) {
+      upstreamReader.cancel(reason).catch(() => {});
+    }
+  };
+
+  // ESA implements TransformStream but not the ReadableStream constructor.
+  // Do not await this first write: its readable side cannot drain until the
+  // Response has been returned to the runtime.
+  const firstWrite = writer.write(encoder.encode('\n'));
+  // The client can cancel before reading the queued byte. Observe that write's
+  // rejection immediately; later success/error paths still await the original.
+  void firstWrite.catch(() => {});
+
+  const finishWithError = async (message, type, reason) => {
+    if (settled) return;
+    settled = true;
+    cancelUpstream(reason);
+    try {
+      await firstWrite;
+      await writer.write(encoder.encode(createStreamingErrorPayload(message, type)));
+      await writer.close();
+    } catch {
+      // A simultaneous browser cancellation may have already closed the stream.
+    }
+  };
+
+  void writer.closed.catch((reason) => {
+    if (settled) return;
+    settled = true;
+    cancelUpstream(reason);
+  });
+
+  let startedAt;
+  try {
+    startedAt = Date.now();
+    fetchOperation = createConfiguredVlmFetch(config.chatCompletionsUrl, {
+      method: 'POST',
+      headers: {
+        'content-type': JSON_CONTENT_TYPE,
+        authorization: `Bearer ${config.apiKey}`
+      },
+      body: JSON.stringify(buildVlmApiRequestBody(
+        requestBody,
+        config.model,
+        config.apiProfile,
+        config.maxChatTokens
+      ))
+    }, config.timeoutMs);
+  } catch (error) {
+    void finishWithError('VLM 代理请求失败', 'proxy_error', error);
+  }
+
+  if (fetchOperation) {
+    void (async () => {
+      try {
+        const upstreamResponse = await fetchOperation.response;
+        if (settled) {
+          upstreamResponse.body?.cancel?.().catch(() => {});
+          return;
+        }
+
+        const transformedResponse = buildUpstreamResponse(
+          request,
+          upstreamResponse,
+          config,
+          env,
+          Date.now() - startedAt
+        );
+        if (!transformedResponse.body) {
+          throw new Error('VLM transformed response body is empty');
+        }
+
+        upstreamReader = transformedResponse.body.getReader();
+        const decoder = new TextDecoder();
+        let responseText = '';
+        while (true) {
+          const { done, value } = await upstreamReader.read();
+          if (done) break;
+          responseText += decoder.decode(value, { stream: true });
+        }
+        responseText += decoder.decode();
+
+        if (settled) return;
+        const payload = JSON.parse(responseText);
+        if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+          throw new Error('VLM upstream response must be one JSON object');
+        }
+
+        settled = true;
+        await firstWrite;
+        await writer.write(encoder.encode(JSON.stringify(payload)));
+        await writer.close();
+      } catch (error) {
+        if (settled) return;
+        const isTimeout = error instanceof Error && error.name === 'TimeoutError';
+        await finishWithError(
+          isTimeout ? 'VLM 接口请求超时' : 'VLM 代理请求失败',
+          isTimeout ? 'timeout_error' : 'proxy_error',
+          error
+        );
+      }
+    })();
+  }
+
+  return new Response(output.readable, {
+    status: 200,
+    headers: {
+      'content-type': JSON_CONTENT_TYPE,
       'cache-control': 'no-store',
       'x-vlm-source': 'cloud',
       ...buildCorsHeaders(request, env)
@@ -903,38 +1058,7 @@ async function handleChatCompletions(request, config, env) {
     }, 400, {}, env);
   }
 
-  try {
-    const startedAt = Date.now();
-    const upstreamResponse = await fetchConfiguredVlmEndpoint(config.chatCompletionsUrl, {
-      method: 'POST',
-      headers: {
-        'content-type': JSON_CONTENT_TYPE,
-        authorization: `Bearer ${config.apiKey}`
-      },
-      body: JSON.stringify(buildVlmApiRequestBody(
-        body,
-        config.model,
-        config.apiProfile,
-        config.maxChatTokens
-      ))
-    }, Math.min(config.timeoutMs, UPSTREAM_HEADER_TIMEOUT_MS));
-
-    return buildUpstreamResponse(
-      request,
-      upstreamResponse,
-      config,
-      env,
-      Date.now() - startedAt
-    );
-  } catch (error) {
-    const isTimeout = error instanceof Error && error.name === 'TimeoutError';
-    return jsonResponse(request, {
-      error: {
-        message: isTimeout ? 'VLM 接口请求超时' : 'VLM 代理请求失败',
-        type: isTimeout ? 'timeout_error' : 'proxy_error'
-      }
-    }, isTimeout ? 504 : 500, { 'x-vlm-source': 'cloud' }, env);
-  }
+  return buildDeferredUpstreamResponse(request, body, config, env);
 }
 
 function handleHealth(request, config, env) {

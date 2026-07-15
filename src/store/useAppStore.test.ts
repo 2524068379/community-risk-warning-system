@@ -116,6 +116,24 @@ describe('useAppStore', () => {
     expect(useAppStore.getState().analysisValidity).toBe('error');
   });
 
+  it('returns to a neutral pending result while retrying the first failed analysis', () => {
+    useAppStore.getState().setVlmStatus('response-error', 'VLM 响应格式异常');
+    useAppStore.getState().setVlmStatus('analyzing');
+
+    expect(useAppStore.getState().vlmStatus).toBe('analyzing');
+    expect(useAppStore.getState().vlmError).toBeNull();
+    expect(useAppStore.getState().analysisValidity).toBe('unknown');
+  });
+
+  it('returns to waiting-for-analysis after a recovered connection before the first result', () => {
+    useAppStore.getState().setVlmStatus('error', 'Connection failed');
+    useAppStore.getState().setVlmStatus('idle');
+
+    expect(useAppStore.getState().vlmStatus).toBe('idle');
+    expect(useAppStore.getState().vlmError).toBeNull();
+    expect(useAppStore.getState().analysisValidity).toBe('unknown');
+  });
+
   it('marks an existing analysis stale and clears boxes without rewriting its summary', () => {
     const analysis = {
       ...useAppStore.getState().analysis,
