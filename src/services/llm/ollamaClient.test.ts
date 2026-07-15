@@ -10,6 +10,8 @@ import {
 import { DEFAULT_VLM_MODEL_ALIAS } from '../../../shared/vlmModelConfig.js'
 import { VLM_RESPONSE_FIELDS, VLM_RESPONSE_FORMAT } from '../../../shared/vlmResponseSchema.js'
 
+const DETAILED_SAFE_SUMMARY = '画面描述：小区入口光线清晰，可见两名居民正常通行，消防通道保持畅通。判断依据：未见明火、烟雾、人员跌倒或异常聚集。风险结论：未发现明显社区安全风险。'
+
 function completePayload(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
     hasRisk: false,
@@ -19,7 +21,7 @@ function completePayload(overrides: Record<string, unknown> = {}): Record<string
     hasLoitering: false,
     hasGathering: false,
     hasFallen: false,
-    summary: '画面正常',
+    summary: DETAILED_SAFE_SUMMARY,
     evidenceTimeline: [],
     breakdown: [{ label: '正常', value: 100 }],
     detectionBoxes: [],
@@ -47,6 +49,10 @@ describe('ollamaClient model configuration', () => {
 describe('ollamaClient request payload', () => {
   it('requests schema-constrained JSON with Qwen thinking disabled', () => {
     const body = buildOllamaChatRequestBody('data:image/jpeg;base64,abc', 'cam-1', '入口')
+    const messages = body.messages as Array<{ role: string; content: unknown }>
+    const systemPrompt = String(messages.find((message) => message.role === 'system')?.content ?? '')
+    const userContent = messages.find((message) => message.role === 'user')?.content as Array<{ type: string; text?: string }>
+    const userPrompt = String(userContent.find((item) => item.type === 'text')?.text ?? '')
 
     expect(body).toMatchObject({
       response_format: VLM_RESPONSE_FORMAT,
@@ -55,6 +61,18 @@ describe('ollamaClient request payload', () => {
     })
     expect(VLM_RESPONSE_FORMAT.schema.required).toEqual(VLM_RESPONSE_FIELDS)
     expect(VLM_RESPONSE_FORMAT.schema.additionalProperties).toBe(false)
+    expect(VLM_RESPONSE_FORMAT.schema.properties.summary).toMatchObject({
+      description: expect.stringContaining('画面描述')
+    })
+    expect(systemPrompt).toContain('画面描述：')
+    expect(systemPrompt).toContain('判断依据：')
+    expect(systemPrompt).toContain('风险结论：')
+    expect(systemPrompt).toContain('只能描述当前图像中实际可见的内容')
+    expect(systemPrompt).toContain('画面全白、全黑、严重过曝')
+    expect(systemPrompt).toContain('严禁输出无风险')
+    expect(systemPrompt).not.toContain('画面正常，未发现风险。')
+    expect(userPrompt).toContain('先逐项观察画面')
+    expect(userPrompt).toContain('不得复用固定的“画面正常”式短句')
     expect(JSON.stringify(body)).not.toContain('/no_think')
   })
 })
@@ -141,9 +159,9 @@ describe('parseVlmResponse', () => {
   })
 
   it('parses JSON wrapped in a markdown code fence with a language identifier', () => {
-    const raw = `\`\`\`json\n${JSON.stringify(completePayload({ riskScore: 10, confidence: 0.7, summary: '正常' }))}\n\`\`\``
+    const raw = `\`\`\`json\n${JSON.stringify(completePayload({ riskScore: 10, confidence: 0.7 }))}\n\`\`\``
     const result = parseVlmResponse(raw)
-    expect(result.analysis.summary).toBe('正常')
+    expect(result.analysis.summary).toBe(DETAILED_SAFE_SUMMARY)
     expect(result.analysis.riskScore).toBe(10)
   })
 
@@ -165,7 +183,7 @@ describe('parseVlmResponse', () => {
   })
 
   it('recovers from trailing commas in JSON arrays and objects', () => {
-    const raw = '{"hasRisk":false,"riskScore":5,"level":"C","confidence":0.9,"summary":"正常","evidenceTimeline":[],"breakdown":[{"label":"正常","value":100,}],"detectionBoxes":[],"hasLoitering":false,"hasGathering":false,"hasFallen":false,}'
+    const raw = `{"hasRisk":false,"riskScore":5,"level":"C","confidence":0.9,"summary":${JSON.stringify(DETAILED_SAFE_SUMMARY)},"evidenceTimeline":[],"breakdown":[{"label":"正常","value":100,}],"detectionBoxes":[],"hasLoitering":false,"hasGathering":false,"hasFallen":false,}`
     const result = parseVlmResponse(raw)
     expect(result.analysis.riskScore).toBe(5)
     expect(result.analysis.breakdown).toEqual([{ label: '正常', value: 100 }])
@@ -260,9 +278,9 @@ describe('parseVlmResponse', () => {
   })
 
   it('accepts a JSON array only when it contains one structured result', () => {
-    const raw = JSON.stringify([completePayload({ riskScore: 8, summary: '正常' })])
+    const raw = JSON.stringify([completePayload({ riskScore: 8 })])
     const result = parseVlmResponse(raw)
-    expect(result.analysis.summary).toBe('正常')
+    expect(result.analysis.summary).toBe(DETAILED_SAFE_SUMMARY)
     expect(result.analysis.riskScore).toBe(8)
   })
 
@@ -396,6 +414,34 @@ describe('parseVlmResponse', () => {
     }
   ])('rejects textual or boxed risk evidence inside a no-risk payload: %o', (overrides) => {
     expect(() => parseVlmResponse(JSON.stringify(completePayload(overrides)))).toThrow(VlmResponseError)
+  })
+
+  it('accepts a detailed no-risk summary with visible observations and supporting evidence', () => {
+    const result = parseVlmResponse(JSON.stringify(completePayload()))
+
+    expect(result.analysis.hasRisk).toBe(false)
+    expect(result.analysis.summary).toBe(DETAILED_SAFE_SUMMARY)
+  })
+
+  it('accepts a detailed risk summary with location, evidence, and severity', () => {
+    const summary = '画面描述：楼道右侧停放一辆电动自行车，车身旁可见电线连接至墙面插座。判断依据：车辆占用部分通行区域，线缆连接方式存在违规充电迹象。风险结论：存在中等级别消防风险，建议立即人工核查并移除车辆。'
+    const result = parseVlmResponse(JSON.stringify(completePayload({
+      hasRisk: true,
+      riskScore: 55,
+      level: 'B',
+      summary,
+      evidenceTimeline: ['当前帧：楼道右侧可见电动自行车及连接线缆'],
+      breakdown: [{ label: '消防', value: 100 }]
+    })))
+
+    expect(result.analysis.hasRisk).toBe(true)
+    expect(result.analysis.summary).toBe(summary)
+  })
+
+  it('rejects a positive risk description followed by a contradictory safe conclusion', () => {
+    expect(() => parseVlmResponse(JSON.stringify(completePayload({
+      summary: '画面描述：发现一名人员跌倒在道路中央。判断依据：该人员呈倒地姿态，需要立即救助。风险结论：未发现明显社区安全风险。'
+    })))).toThrow(VlmResponseError)
   })
 
   it('rejects raw risk evidence even when the box geometry itself is invalid', () => {

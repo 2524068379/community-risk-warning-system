@@ -24,7 +24,11 @@ export const VLM_RESPONSE_SCHEMA = {
     hasLoitering: { type: 'boolean' },
     hasGathering: { type: 'boolean' },
     hasFallen: { type: 'boolean' },
-    summary: { type: 'string', minLength: 1 },
+    summary: {
+      type: 'string',
+      minLength: 1,
+      description: '使用“画面描述、判断依据、风险结论”结构给出 2-4 句中文说明，基于图像中的可见事实，不得只回答是否有风险'
+    },
     evidenceTimeline: {
       type: 'array',
       items: { type: 'string', minLength: 1 }

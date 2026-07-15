@@ -8,8 +8,9 @@ const OLLAMA_PROXY_PATH = OLLAMA_CHAT_COMPLETIONS_ROUTE
 export const OLLAMA_MODEL = DEFAULT_VLM_MODEL_ALIAS
 const MIN_SAFE_NO_RISK_CONFIDENCE = 0.5
 const UNCERTAIN_CONCLUSION_PATTERN = /(?:无法(?:判断|识别|确认|分析)|画面(?:模糊|不清)|看不清|信息不足|cannot determine|unable to (?:determine|identify)|unclear|insufficient)/i
-const SAFE_CHINESE_CONCLUSION_PATTERN = /^(?:(?:当前)?(?:画面|场景)(?:整体)?(?:正常|安全)(?:[，,；;：:\s]*(?:未发现|没有发现|暂无|无)(?:明显|相关)?(?:社区)?(?:安全)?风险)?|正常|安全|(?:未发现|没有发现|暂无|无)(?:明显|相关)?(?:社区)?(?:安全)?风险)[。.!！\s]*$/i
-const SAFE_ENGLISH_CONCLUSION_PATTERN = /^(?:(?:the )?(?:scene|image|frame)(?: is)? (?:normal|safe)(?:[,; ]+no (?:obvious )?risk(?: detected)?)?|normal|safe|no (?:obvious )?risk(?: detected)?)[.!\s]*$/i
+const SAFE_CHINESE_CONCLUSION_PATTERN = /(?:(?:风险判断|风险结论)[：:\s]*)?(?:(?:当前)?(?:画面|场景)(?:中|内|整体)?(?:正常|安全)[，,；;：:\s]*)?(?:未发现|没有发现|暂无|无)(?:明显|相关)?(?:社区)?(?:安全)?风险[。.!！\s]*$/i
+const SAFE_ENGLISH_CONCLUSION_PATTERN = /(?:(?:risk (?:assessment|conclusion))[:\s]*)?(?:(?:the )?(?:scene|image|frame)(?: is)? (?:normal|safe)[,; ]*)?no (?:obvious )?risk(?: detected)?[.!\s]*$/i
+const POSITIVE_RISK_CONCLUSION_PATTERN = /(?:^|[。.!！；;，,：:\s])(?:发现|检测到|观察到|出现|存在|疑似|可见|看到).{0,24}(?:跌倒|倒地|明火|火灾|烟雾|浓烟|堵塞|占用|飞线|违规充电|闯入|徘徊|异常聚集|打斗|冲突|求助|积水|破损|损坏|遮挡|设备异常)|(?:^|[。.!！；;，,：:\s])需要(?:立即|尽快).{0,12}(?:救助|处置|疏散|报警)|(?:^|[.!;,\s])(?:detected|observed|shows?|contains?|suspected).{0,40}(?:fall|fire|smoke|blocked|charging|intrusion|loitering|gathering|fight|flood|damage|obstruction)/i
 const SAFE_BREAKDOWN_LABEL_PATTERN = /^(?:正常|安全|无风险|未发现风险|normal|safe|no risk)$/i
 const ALLOWED_VLM_PAYLOAD_FIELDS = new Set(VLM_RESPONSE_FIELDS)
 const VLM_ENVELOPE_FIELDS = [
@@ -36,10 +37,10 @@ const ALLOWED_CHAT_RESPONSE_FIELDS = new Set([
 const ALLOWED_CHAT_CHOICE_FIELDS = new Set(['index', 'message', 'finish_reason', 'logprobs'])
 const ALLOWED_CHAT_MESSAGE_FIELDS = new Set(['role', 'content', 'refusal', 'reasoning_content'])
 
-const SYSTEM_PROMPT = `你是社区安全监控系统的结构化分析模块。必须使用非思考模式，禁止输出思考过程。你的输出会被程序直接 JSON.parse，因此必须严格遵守以下规则：
+const SYSTEM_PROMPT = `你是社区安全监控系统的结构化视觉分析模块。必须先观察图像，再基于图像中的可见事实进行判断。必须使用非思考模式，禁止输出思考过程。你的输出会被程序直接 JSON.parse，因此必须严格遵守以下规则：
 
 1. 仅输出一段合法 JSON，不要输出任何解释、前言、markdown 代码块（\`\`\`）、思考过程（<think>）、注释或多余空白。
-2. 不要在 JSON 前后添加任何自然语言；如果无法判断，也必须按字段给出低置信度 JSON。
+2. 不要在 JSON 前后添加任何自然语言。只能描述当前图像中实际可见的内容，不得编造身份、意图、持续时长、运动轨迹、画面外事件或先后过程。
 3. JSON 顶层字段及类型（全部必填）：
    - hasRisk: boolean
    - riskScore: integer，范围 0-100
@@ -48,19 +49,20 @@ const SYSTEM_PROMPT = `你是社区安全监控系统的结构化分析模块。
    - hasLoitering: boolean（同一人员是否在同一区域反复徘徊或异常滞留）
    - hasGathering: boolean（是否存在非正常的人员聚集或围观）
    - hasFallen: boolean（是否有人员跌倒并持续未起身）
-   - summary: 字符串，1-2 句中文概述
-   - evidenceTimeline: 字符串数组
+   - summary: 字符串，使用 2-4 句中文作具体说明，并依次包含“画面描述：”“判断依据：”“风险结论：”三部分。画面描述应说明场景环境、可见人员/车辆/物体及其数量、动作或位置关系；判断依据应指出支持结论的可见事实；风险结论应说明具体风险类型和程度，或明确未发现明显社区安全风险。不得只写“画面正常”“有风险”“无风险”等模板化短句
+   - evidenceTimeline: 字符串数组。当前请求只有单帧，只能写“当前帧：……”形式的可见证据，不得虚构时间点、持续时间或事件过程
    - breakdown: 对象数组，每个对象含 label(字符串) 与 value(整数 0-100)，所有 value 之和必须等于 100
    - detectionBoxes: 对象数组，每个对象含 x,y,width,height(均为 0-1 归一化浮点数)、label(字符串)、confidence(0-1)、risk(boolean)
 4. 分数、等级和风险必须严格一致：0-29 对应 level="C" 且 hasRisk=false；30-69 对应 level="B" 且 hasRisk=true；70-100 对应 level="A" 且 hasRisk=true。
-5. hasRisk=false 时必须同时满足：confidence>=0.5；summary 只给出总体正常/安全结论；evidenceTimeline 与 detectionBoxes 必须为空；breakdown 必须为 [{"label":"正常","value":100}]。
+5. hasRisk=false 只适用于画面内容清晰且信息足以判断的情况，并且必须同时满足：confidence>=0.5；summary 仍须具体描述画面和判断依据，并以“风险结论：未发现明显社区安全风险。”收尾；evidenceTimeline 与 detectionBoxes 必须为空；breakdown 必须为 [{"label":"正常","value":100}]。
 6. 风险分类：消防(通道堵塞/电动车违规)、治安(徘徊/聚集/闯入)、救助(摔倒/求助)、环境(积水/损坏)、设备(遮挡/异常)。
-7. 无法可靠判断时按“需要人工复核”的风险结果输出：hasRisk=true、riskScore=30、level="B"、confidence<0.5；不得以低置信度输出无风险结论。
-8. 示例（仅用于说明格式）：{"hasRisk":false,"riskScore":0,"level":"C","confidence":0.9,"hasLoitering":false,"hasGathering":false,"hasFallen":false,"summary":"画面正常，未发现风险。","evidenceTimeline":[],"breakdown":[{"label":"正常","value":100}],"detectionBoxes":[]}`
+7. 当前输入是单帧。仅凭单帧不能确认“反复徘徊”“持续未起身”等时序事实；若只能看到疑似姿态，应在 summary 中如实说明并给出人工复核结论，不得伪造持续时间。
+8. 画面全白、全黑、严重过曝、严重欠曝、大面积遮挡、失焦或没有有效视觉内容时，属于设备/图像质量异常，严禁输出无风险。此时必须输出 hasRisk=true、riskScore=30、level="B"、confidence<0.5，breakdown 使用设备风险 100；summary 应描述具体画质问题、无法确认的内容和复核重点，风险结论明确为“图像质量异常，需要技术或人工复核”。
+9. 其他无法可靠判断的情况同样按“需要人工复核”的风险结果输出：hasRisk=true、riskScore=30、level="B"、confidence<0.5；summary 仍要写明已看见的内容、无法确认的原因和复核重点，不得以低置信度输出无风险结论。`
 
 function buildUserPrompt(cameraId: string, scene: string): string {
   const now = new Date().toLocaleTimeString('zh-CN', { hour12: false })
-  return `这是来自摄像头 ${cameraId}（场景：${scene}）的实时画面。请分析当前画面中存在的社区安全风险，并返回结构化JSON结果。当前时间：${now}`
+  return `这是来自摄像头 ${cameraId}（场景：${scene}）的实时画面。请先逐项观察画面中的环境、人员、车辆、物体、动作和位置关系，再判断社区安全风险。summary 必须给出具体画面描述、可见判断依据和风险结论，不得复用固定的“画面正常”式短句。请返回结构化 JSON 结果。当前时间：${now}`
 }
 
 type JsonObject = Record<string, unknown>
@@ -642,6 +644,7 @@ function normalizeVlmPayload(parsed: unknown): { analysis: VlmAnalysis; boxes: D
       confidence < MIN_SAFE_NO_RISK_CONFIDENCE ||
       UNCERTAIN_CONCLUSION_PATTERN.test(summary) ||
       !(SAFE_CHINESE_CONCLUSION_PATTERN.test(summary) || SAFE_ENGLISH_CONCLUSION_PATTERN.test(summary)) ||
+      POSITIVE_RISK_CONCLUSION_PATTERN.test(summary) ||
       evidenceTimeline.length > 0 ||
       detectionBoxes.length > 0 ||
       !safeBreakdown
