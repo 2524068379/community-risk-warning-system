@@ -553,11 +553,11 @@ export function buildExpressErrorResponse(error) {
   const statusCode = Number.isInteger(statusCandidate) && statusCandidate >= 400 && statusCandidate < 600
     ? statusCandidate
     : 500;
-  const message = error instanceof Error && error.message
-    ? error.message
-    : statusCode >= 500
-      ? 'Internal server error'
-      : 'Invalid request';
+  // 5xx 不向外回传内部错误消息，避免泄露实现细节/堆栈/上游 URL。
+  // 4xx 通常是客户端错误，可以保留原始消息以便调试。
+  const message = statusCode >= 500
+    ? 'Internal server error'
+    : (error instanceof Error && error.message ? error.message : 'Invalid request');
 
   return {
     statusCode,

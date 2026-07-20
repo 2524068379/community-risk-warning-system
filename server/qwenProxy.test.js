@@ -799,11 +799,12 @@ describe('qwenProxy', () => {
       }
     });
     expect(buildExpressErrorResponse(tooLargeError).statusCode).toBe(413);
+    // 5xx 不向外回传内部错误消息，避免泄露实现细节
     expect(buildExpressErrorResponse(new Error('boom'))).toEqual({
       statusCode: 500,
       body: {
         error: {
-          message: 'boom',
+          message: 'Internal server error',
           type: 'internal_error'
         }
       }
