@@ -89,6 +89,8 @@
       "dist/main/**/*",
       "dist/preload/**/*",
       "dist/renderer/**/*",
+      "!**/*.map",
+      "!**/*.test.*",
       ".env.example"
     ],
     "win": {

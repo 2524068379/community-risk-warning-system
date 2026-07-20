@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { VLM_MODEL_FILE, VLM_MMPROJ_FILE } from './shared/vlmModelConfig.js';
 
+// 相对路径（readFileSync/existsSync）以仓库根为基准（vitest 默认 cwd）。
 const packageJson = JSON.parse(readFileSync('package.json', 'utf8'));
 
 describe('package configuration', () => {
