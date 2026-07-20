@@ -73,6 +73,9 @@ httpServer.on('error', (error) => {
 
 // 设置 5 分钟超时，防止慢客户端无限占用连接
 httpServer.timeout = 300_000
+// Node 推荐：headersTimeout 必须大于 keepAliveTimeout，且都不超过 timeout
+httpServer.keepAliveTimeout = 60_000
+httpServer.headersTimeout = 65_000
 
 let mainWindow: BrowserWindow | null = null
 let trustedRendererUrl: string | null = null
@@ -88,6 +91,9 @@ ipcMain.handle('get-api-base', async (event) => {
 
 ipcMain.handle('get-api-auth-headers', (event) => {
   assertTrustedRendererIpc(event)
+  // 注意：此 token 仅保护本地 127.0.0.1 代理免遭同机其他进程滥用；
+  // 它由 contextBridge 进入渲染进程是必要的，但意味着任何渲染端 XSS 都能拿到。
+  // 渲染端严格 CSP、拒绝远程内容、IPC sender 校验是缓解层。
   return {
     'X-Local-Proxy-Token': localProxyToken
   }
@@ -164,7 +170,13 @@ function createWindow(): void {
       preload: path.join(__dirname, '../preload/index.js'),
       sandbox: true,
       contextIsolation: true,
-      nodeIntegration: false
+      nodeIntegration: false,
+      webSecurity: true,
+      allowRunningInsecureContent: false,
+      navigateOnDragDrop: false,
+      // Renderer loads no remote content; block plugins and spellcheck for attack surface reduction.
+      plugins: false,
+      spellcheck: false
     }
   })
 
@@ -179,13 +191,22 @@ function createWindow(): void {
 }
 
 app.on('ready', async () => {
-  await apiBaseReady
-  createWindow()
-  await startOllama()
+  try {
+    await apiBaseReady
+    createWindow()
+    await startOllama()
+  } catch (error) {
+    console.error('[main] Failed to initialize application:', error)
+    app.quit()
+  }
 })
 
 app.on('window-all-closed', async () => {
-  await stopOllama()
+  try {
+    await stopOllama()
+  } catch (error) {
+    console.error('[main] Failed to stop Ollama cleanly:', error)
+  }
 
   // 等待 in-flight 请求完成，最多 5 秒
   await new Promise<void>((resolve) => {
@@ -197,5 +218,8 @@ app.on('window-all-closed', async () => {
     })
   })
 
-  app.quit()
+  // 桌面应用退出约定：Windows/Linux 全部窗口关闭即退出；macOS 通常保留在 Dock。
+  if (process.platform !== 'darwin') {
+    app.quit()
+  }
 })
