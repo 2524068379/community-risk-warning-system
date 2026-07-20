@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Badge, Button, Space, Tag } from 'antd';
+import { useShallow } from 'zustand/react/shallow';
 import { useAppStore } from '@/store/useAppStore';
 
 const levelConfig: Record<string, { color: string; label: string }> = {
@@ -15,7 +16,14 @@ const statusConfig: Record<string, { color: string; label: string }> = {
 };
 
 export function AlertsPage() {
-  const { events, selectedEventId, selectEvent, markEventStatus } = useAppStore();
+  const { events, selectedEventId, selectEvent, markEventStatus } = useAppStore(
+    useShallow((state) => ({
+      events: state.events,
+      selectedEventId: state.selectedEventId,
+      selectEvent: state.selectEvent,
+      markEventStatus: state.markEventStatus
+    }))
+  );
   const [filter, setFilter] = useState<string>('全部');
 
   const filteredEvents = useMemo(() => {
@@ -198,7 +206,7 @@ export function AlertsPage() {
                   <div className="alerts-detail-timeline">
                     <span className="alerts-detail-vlm-summary-label">证据时间线</span>
                     {selectedEvent.analysis.evidenceTimeline.map((item, index) => (
-                      <div key={index} className="timeline-item">{item}</div>
+                      <div key={`${index}-${item.slice(0, 32)}`} className="timeline-item">{item}</div>
                     ))}
                   </div>
                 )}

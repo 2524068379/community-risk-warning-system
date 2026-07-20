@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Button, Tag } from 'antd';
+import { useShallow } from 'zustand/react/shallow';
 import { useLocalCamera } from '@/hooks/useLocalCamera';
 import { useAppStore } from '@/store/useAppStore';
 import { useVlmAnalysis } from '@/hooks/useVlmAnalysis';
@@ -26,7 +27,19 @@ export function MonitorPage() {
     vlmStatus,
     vlmError,
     detectionBoxes
-  } = useAppStore();
+  } = useAppStore(
+    useShallow((state) => ({
+      cameras: state.cameras,
+      activeCameraId: state.activeCameraId,
+      analysisContext: state.analysisContext,
+      analysisFrameDataUrl: state.analysisFrameDataUrl,
+      analysisValidity: state.analysisValidity,
+      setActiveCamera: state.setActiveCamera,
+      vlmStatus: state.vlmStatus,
+      vlmError: state.vlmError,
+      detectionBoxes: state.detectionBoxes
+    }))
+  );
 
   useVlmAnalysis({
     videoRef,

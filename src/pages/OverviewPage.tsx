@@ -1,5 +1,6 @@
 import { useRef } from 'react';
 import { Button, Tag } from 'antd';
+import { useShallow } from 'zustand/react/shallow';
 import { CameraMapPanel } from '@/components/CameraMapPanel';
 import { VlmAnalysisPanel } from '@/components/VlmAnalysisPanel';
 import { useAppStore } from '@/store/useAppStore';
@@ -63,7 +64,19 @@ export function OverviewPage() {
     setActiveCamera,
     vlmStatus,
     vlmError
-  } = useAppStore();
+  } = useAppStore(
+    useShallow((state) => ({
+      cameras: state.cameras,
+      activeCameraId: state.activeCameraId,
+      analysis: state.analysis,
+      analysisContext: state.analysisContext,
+      analysisTimestamp: state.analysisTimestamp,
+      analysisValidity: state.analysisValidity,
+      setActiveCamera: state.setActiveCamera,
+      vlmStatus: state.vlmStatus,
+      vlmError: state.vlmError
+    }))
+  );
   const videoRef = useRef<HTMLVideoElement>(null);
   const { stream, loading, error, retry } = useLocalCamera(videoRef);
 
