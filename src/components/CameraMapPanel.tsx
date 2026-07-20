@@ -13,12 +13,6 @@ interface CameraMapPanelProps {
   mode?: 'interactive' | 'display';
 }
 
-const mapAk = (import.meta.env.VITE_BAIDU_MAP_AK || '').trim();
-const mapStyleId = import.meta.env.VITE_BAIDU_MAP_STYLE_ID;
-const mapCenterLng = Number(import.meta.env.VITE_BAIDU_MAP_CENTER_LNG || 118.796877);
-const mapCenterLat = Number(import.meta.env.VITE_BAIDU_MAP_CENTER_LAT || 32.060255);
-const mapZoom = Number(import.meta.env.VITE_BAIDU_MAP_ZOOM || 16);
-
 export function CameraMapPanel({
   cameras,
   activeCameraId,
@@ -29,12 +23,21 @@ export function CameraMapPanel({
   const [mapType, setMapType] = useState<'标准路网' | '卫星图'>('标准路网');
   const isDisplayMode = mode === 'display';
 
+  // 将环境变量读取放入组件内，便于测试时替换 import.meta.env。
+  const mapConfig = useMemo(() => ({
+    ak: (import.meta.env.VITE_BAIDU_MAP_AK || '').trim(),
+    styleId: import.meta.env.VITE_BAIDU_MAP_STYLE_ID,
+    centerLng: Number(import.meta.env.VITE_BAIDU_MAP_CENTER_LNG || 118.796877),
+    centerLat: Number(import.meta.env.VITE_BAIDU_MAP_CENTER_LAT || 32.060255),
+    zoom: Number(import.meta.env.VITE_BAIDU_MAP_ZOOM || 16)
+  }), []);
+
   const { containerRef, instance, ready: mapReady, error: mapError } = useBaiduMap({
-    ak: mapAk,
-    centerLng: mapCenterLng,
-    centerLat: mapCenterLat,
-    zoom: mapZoom,
-    styleId: mapStyleId,
+    ak: mapConfig.ak,
+    centerLng: mapConfig.centerLng,
+    centerLat: mapConfig.centerLat,
+    zoom: mapConfig.zoom,
+    styleId: mapConfig.styleId,
     interactive: !isDisplayMode,
     mapType
   });
