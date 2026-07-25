@@ -54,7 +54,7 @@
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.4",
-    "concurrently": "^10.0.3",
+    "concurrently": "^10.0.4",
     "electron": "^43.2.0",
     "electron-builder": "^26.15.3",
     "electron-vite": "^6.0.0-beta.1",
@@ -75,8 +75,14 @@
     "temp": {
       "rimraf": "^6.0.0"
     },
+    "app-builder-lib": {
+      "@electron/universal": "^3.0.6"
+    },
+    "jake": {
+      "filelist": "^2.0.2"
+    },
     "minimatch@10.2.5": {
-      "brace-expansion": "^5.0.6"
+      "brace-expansion": "^5.0.8"
     }
   },
   "build": {
