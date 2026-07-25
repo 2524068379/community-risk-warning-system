@@ -76,8 +76,11 @@
       "rimraf": "^6.0.0"
     },
     "minimatch@10.2.5": {
-      "brace-expansion": "^5.0.6"
-    }
+      "brace-expansion": "^5.0.7"
+    },
+    "brace-expansion": "5.0.7",
+    "shell-quote": "1.9.0",
+    "js-yaml": "4.3.0"
   },
   "build": {
     "appId": "com.community-risk-warning.app",
