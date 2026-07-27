@@ -1,6 +1,11 @@
-export function toGrayscale(rgba: Uint8ClampedArray): Uint8ClampedArray {
+export function toGrayscale(
+  rgba: Uint8ClampedArray,
+  targetBuffer?: Uint8ClampedArray
+): Uint8ClampedArray {
   const pixelCount = rgba.length / 4
-  const gray = new Uint8ClampedArray(pixelCount)
+  const gray = targetBuffer && targetBuffer.length >= pixelCount
+    ? targetBuffer
+    : new Uint8ClampedArray(pixelCount)
   for (let i = 0; i < pixelCount; i++) {
     const offset = i * 4
     gray[i] = Math.round(

@@ -1,4 +1,4 @@
-import { useRef } from 'react';
+import { useMemo, useRef } from 'react';
 import { Button, Tag } from 'antd';
 import { useShallow } from 'zustand/react/shallow';
 import { CameraMapPanel } from '@/components/CameraMapPanel';
@@ -88,7 +88,10 @@ export function OverviewPage() {
   });
 
   const statusCfg = getVlmStatusView(vlmStatus, 'overview');
-  const riskBreakdownData = analysis.breakdown.filter((item) => Number.isFinite(item.value) && item.value > 0);
+  const riskBreakdownData = useMemo(
+    () => analysis.breakdown.filter((item) => Number.isFinite(item.value) && item.value > 0),
+    [analysis.breakdown]
+  );
   const hasRiskBreakdownData = analysisValidity === 'valid' && analysisTimestamp !== null && riskBreakdownData.length > 0;
 
   return (

@@ -16,36 +16,3 @@ export async function callQwenChat(
 
   return response.data;
 }
-
-/**
- * 多模态示例：
- * messages: [
- *   {
- *     role: 'user',
- *     content: [
- *       { type: 'text', text: '请分析这张图片中的社区风险。' },
- *       { type: 'image_url', image_url: { url: 'https://example.com/demo.jpg' } }
- *     ]
- *   }
- * ]
- */
-export async function analyzeCommunityRiskFromImage(imageUrl: string) {
-  return callQwenChat({
-    temperature: 0.2,
-    max_tokens: 1024,
-    messages: [
-      {
-        role: 'system',
-        content:
-          '你是社区风险预警智能体，请识别社区场景中的消防、治安、人员求助、异常聚集、电动车违规充电等风险，并返回结构化结论。'
-      },
-      {
-        role: 'user',
-        content: [
-          { type: 'text', text: '请分析这张图片中的社区风险，并给出风险等级、原因和建议处置措施。' },
-          { type: 'image_url', image_url: { url: imageUrl } }
-        ]
-      }
-    ]
-  });
-}

@@ -15,13 +15,4 @@ function parseInteger(value, fallback, min = 1) {
   return parsed;
 }
 
-function parseFloatInRange(value, fallback, min, max) {
-  const parsed = Number(value);
-  if (!Number.isFinite(parsed) || parsed < min || parsed > max) {
-    return fallback;
-  }
-
-  return parsed;
-}
-
-export { parseBoolean, parseFloatInRange, parseInteger };
+export { parseBoolean, parseInteger };

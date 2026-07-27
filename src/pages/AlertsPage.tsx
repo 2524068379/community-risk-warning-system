@@ -35,7 +35,10 @@ export function AlertsPage() {
       });
   }, [events, filter]);
 
-  const selectedEvent = events.find((event) => event.id === selectedEventId);
+  const selectedEvent = useMemo(
+    () => events.find((event) => event.id === selectedEventId),
+    [events, selectedEventId]
+  );
 
   return (
     <div className="alerts-layout">
