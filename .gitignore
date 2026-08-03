@@ -46,3 +46,7 @@ resources/vlm/*.exe
 resources/vlm/*.dll
 resources/vlm/*.zip
 resources/vlm/.llama-cpp-runtime-version
+
+# ARIS research artifacts (kept local, not versioned)
+research-wiki/
+benchmark/
