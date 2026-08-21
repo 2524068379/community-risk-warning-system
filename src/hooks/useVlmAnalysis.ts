@@ -302,9 +302,9 @@ export function useVlmAnalysis(options: VlmAnalysisOptions) {
   const { frameDataUrl, frameSequence, capturedAt, hasChanged, markConsumed } = useFrameCapture(videoRef, {
     activeIntervalMs,
     idleIntervalMs,
-    quality: 0.7,
-    maxWidth: 640,
-    maxHeight: 480,
+    quality: 0.6,
+    maxWidth: 480,
+    maxHeight: 360,
     enabled: shouldCapture
   })
 

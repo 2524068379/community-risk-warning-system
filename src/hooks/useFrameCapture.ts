@@ -59,9 +59,9 @@ export function useFrameCapture(
   options: FrameCaptureOptions = {}
 ): FrameCaptureResult {
   const {
-    quality = 0.7,
-    maxWidth = 640,
-    maxHeight = 480,
+    quality = 0.6,
+    maxWidth = 480,
+    maxHeight = 360,
     enabled = true,
     frameDiffThreshold = 0.05,
     activeIntervalMs = 500,
@@ -83,6 +83,7 @@ export function useFrameCapture(
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const diffCanvasRef = useRef<HTMLCanvasElement | null>(null)
   const prevGrayRef = useRef<Uint8ClampedArray | null>(null)
+  const lastDataUrlRef = useRef<string | null>(null)
   const enabledRef = useRef(enabled)
   enabledRef.current = enabled
 
@@ -152,6 +153,24 @@ export function useFrameCapture(
           }
         }
 
+        const capturedAt = Date.now()
+        if (!changed && lastDataUrlRef.current) {
+          // Idle scene: reuse the last encoded frame instead of re-encoding a JPEG.
+          // Keep incrementing frameSequence so consumers (e.g. the VLM idle probe)
+          // are still scheduled on every capture tick.
+          isProcessingRef.current = true
+          setIsProcessing(true)
+          setCapturedFrame((previous) => ({
+            frameDataUrl: lastDataUrlRef.current,
+            frameSequence: previous.frameSequence + 1,
+            capturedAt,
+            hasChanged: false
+          }))
+          setCaptureCount((c) => c + 1)
+          setError(null)
+          return
+        }
+
         const vw = video.videoWidth
         const vh = video.videoHeight
         if (!vw || !vh) return
@@ -167,7 +186,7 @@ export function useFrameCapture(
 
         ctx.drawImage(video, 0, 0, w, h)
         const dataUrl = canvas.toDataURL('image/jpeg', quality)
-        const capturedAt = Date.now()
+        lastDataUrlRef.current = dataUrl
 
         isProcessingRef.current = true
         setIsProcessing(true)

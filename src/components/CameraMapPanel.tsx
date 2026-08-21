@@ -1,6 +1,6 @@
 import { Alert, Button, Input, Segmented, Tag } from 'antd';
 import { SearchOutlined } from '@ant-design/icons';
-import { useMemo, useState } from 'react';
+import { memo, useMemo, useState } from 'react';
 import type { CameraPoint } from '@/types';
 import { useBaiduMap } from '@/hooks/useBaiduMap';
 import { useCameraMarkers } from '@/hooks/useCameraMarkers';
@@ -13,7 +13,7 @@ interface CameraMapPanelProps {
   mode?: 'interactive' | 'display';
 }
 
-export function CameraMapPanel({
+export const CameraMapPanel = memo(function CameraMapPanel({
   cameras,
   activeCameraId,
   onSelect,
@@ -105,4 +105,4 @@ export function CameraMapPanel({
       </div>
     </div>
   );
-}
+})

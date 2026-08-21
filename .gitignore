@@ -50,3 +50,7 @@ resources/vlm/.llama-cpp-runtime-version
 # ARIS research artifacts (kept local, not versioned)
 research-wiki/
 benchmark/
+
+# Competition materials (kept local, not versioned)
+competition/
+test.txt
