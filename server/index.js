@@ -1,11 +1,15 @@
 import dotenv from 'dotenv';
 import { createQwenProxyApp, loadQwenProxyConfig } from './qwenProxy.js';
+import { createTasksIngestRouter } from './tasksIngest.js';
 
 // 加载项目根目录统一 .env；系统环境变量保持更高优先级。
 dotenv.config({ path: '.env', override: false });
 
 const config = loadQwenProxyConfig();
 const app = createQwenProxyApp(config);
+
+// 比赛任务结果回传通道（D4，只读聚合代理；与风险流水线隔离）
+app.use('/api/tasks', createTasksIngestRouter());
 
 const server = app.listen(config.port, config.host, () => {
   console.log(`Qwen proxy server is running at http://${config.host}:${config.port}`);

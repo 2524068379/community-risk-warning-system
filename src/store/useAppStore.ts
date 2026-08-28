@@ -11,10 +11,23 @@ import type {
   VlmAnalysisContext,
   VlmModelSource
 } from '@/types';
+import type {
+  CompetitionTaskEnvelope,
+  CompetitionTaskId,
+  CompetitionTaskRun
+} from '@/types/taskResults';
 
 export type VlmStatus = 'idle' | 'loading' | 'analyzing' | 'ready' | 'response-error' | 'error';
 
 const MAX_TREND_POINTS = 30;
+
+/** D6：比赛任务结果切片（赛题结果只进本切片，不加顶层字段）。 */
+export interface TaskRunState {
+  status: 'idle' | 'running' | 'done';
+  currentTaskId?: CompetitionTaskId;
+  startedAt?: number;
+  completedAt?: number;
+}
 
 interface AppState {
   cameras: CameraPoint[];
@@ -31,6 +44,9 @@ interface AppState {
   analysisTimestamp: number | null;
   detectorStatus: 'idle' | 'loading' | 'ready' | 'error';
   detectedObjects: DetectionResult[];
+  /** D6：比赛任务结果切片（taskId → 最新信封）。 */
+  taskResults: Partial<Record<CompetitionTaskId, CompetitionTaskEnvelope>>;
+  taskRun: TaskRunState;
   setActiveCamera: (cameraId: string) => void;
   selectEvent: (eventId?: string) => void;
   markEventStatus: (eventId: string, status: RiskEvent['status']) => void;
@@ -48,6 +64,8 @@ interface AppState {
   setVlmStatus: (status: VlmStatus, error?: string) => void;
   setDetectorStatus: (status: 'idle' | 'loading' | 'ready' | 'error') => void;
   setDetectedObjects: (objects: DetectionResult[]) => void;
+  applyTaskResult: (envelope: CompetitionTaskEnvelope) => void;
+  setTaskRun: (run: Pick<CompetitionTaskRun, 'status'> & Partial<CompetitionTaskRun>) => void;
 }
 
 const waitingAnalysis: VlmAnalysis = {
@@ -79,6 +97,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   analysisTimestamp: null,
   detectorStatus: 'idle' as const,
   detectedObjects: [],
+  taskResults: {},
+  taskRun: { status: 'idle' } as TaskRunState,
 
   setActiveCamera: (cameraId) => {
     set({
@@ -141,5 +161,26 @@ export const useAppStore = create<AppState>((set, get) => ({
     })),
 
   setDetectorStatus: (detectorStatus) => set({ detectorStatus }),
-  setDetectedObjects: (detectedObjects) => set({ detectedObjects })
+  setDetectedObjects: (detectedObjects) => set({ detectedObjects }),
+
+  // D6：比赛任务结果切片。只 upsert 该 taskId 的最新信封，不触碰风险流水线状态。
+  applyTaskResult: (envelope) =>
+    set((state) => ({
+      taskResults: { ...state.taskResults, [envelope.taskId]: envelope },
+      taskRun: {
+        ...state.taskRun,
+        status: state.taskRun.status === 'idle' ? 'running' : state.taskRun.status,
+        currentTaskId: envelope.taskId
+      }
+    })),
+
+  setTaskRun: (run) =>
+    set((state) => ({
+      taskRun: {
+        ...state.taskRun,
+        ...run,
+        startedAt: run.startedAt ?? (run.status === 'running' ? state.taskRun.startedAt ?? Date.now() : state.taskRun.startedAt),
+        completedAt: run.status === 'done' ? run.completedAt ?? Date.now() : state.taskRun.completedAt
+      }
+    }))
 }));

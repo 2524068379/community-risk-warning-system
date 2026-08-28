@@ -1627,3 +1627,51 @@ a {
   flex-shrink: 0;
 }
 
+
+/* ============ 比赛任务结果面板（D6） ============ */
+.task-result-panel {
+  margin-top: 10px;
+  padding: 10px 12px;
+}
+
+.task-result-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+.task-result-item {
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  border-radius: 6px;
+  padding: 6px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.task-result-item-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.task-result-item-name {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.task-result-item-time {
+  font-size: 11px;
+  opacity: 0.65;
+}
+
+.task-result-item-value {
+  font-size: 12px;
+}
+
+.task-result-item-announce {
+  font-size: 11px;
+  opacity: 0.75;
+}

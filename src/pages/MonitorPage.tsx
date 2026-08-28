@@ -2,8 +2,10 @@ import { useEffect, useRef, useState } from 'react';
 import { Button, Tag } from 'antd';
 import { useShallow } from 'zustand/react/shallow';
 import { useLocalCamera } from '@/hooks/useLocalCamera';
+import { useTaskResults } from '@/hooks/useTaskResults';
 import { useAppStore } from '@/store/useAppStore';
 import { useVlmAnalysis } from '@/hooks/useVlmAnalysis';
+import { TaskResultPanel } from '@/components/TaskResultPanel';
 import { riskColorMap, riskLevelTextMap } from '@/utils/risk';
 import { getVlmStatusView } from '@/utils/vlmStatusView';
 import {
@@ -16,6 +18,8 @@ export function MonitorPage() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const { stream, loading, error, retry } = useLocalCamera(videoRef);
   const [timestamp, setTimestamp] = useState(() => new Date().toLocaleString());
+  // 比赛任务结果轮询（D4/D6）：与风险流水线隔离，失败静默
+  useTaskResults();
 
   const {
     cameras,
@@ -166,6 +170,9 @@ export function MonitorPage() {
             </button>
           ))}
         </div>
+
+        {/* 比赛任务结果（D6）：无机器人回传时不渲染 */}
+        <TaskResultPanel />
       </div>
     </div>
   );
