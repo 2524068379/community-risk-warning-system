@@ -66,6 +66,26 @@ describe('validateTaskEnvelope', () => {
     expect(validateTaskEnvelope({ ...validEnvelope, result: { task: 'traffic_light' } }).ok).toBe(false);
     expect(validateTaskEnvelope({ ...validEnvelope, boxes: 'nope' }).ok).toBe(false);
   });
+
+  it('拒绝超长字段与超限 boxes（内存放大防护）', () => {
+    expect(validateTaskEnvelope({
+      ...validEnvelope,
+      location: 'x'.repeat(201)
+    }).ok).toBe(false);
+    expect(validateTaskEnvelope({
+      ...validEnvelope,
+      result: { ...validEnvelope.result, announcement: 'x'.repeat(4001) }
+    }).ok).toBe(false);
+    expect(validateTaskEnvelope({
+      ...validEnvelope,
+      boxes: Array.from({ length: 101 }, () => ({ x: 0, y: 0, width: 1, height: 1, label: 'a', confidence: 1 }))
+    }).ok).toBe(false);
+    expect(validateTaskEnvelope({
+      ...validEnvelope,
+      // 各字段本身合规，但任意额外字段把总负载顶破字节预算
+      padding: 'x'.repeat(33 * 1024)
+    }).ok).toBe(false);
+  });
 });
 
 describe('validateRunEvent', () => {

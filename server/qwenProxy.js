@@ -45,6 +45,9 @@ const QWEN_ENDPOINT_KEYS = {
   BIGMODEL: 'bigmodel'
 };
 
+/** 比赛任务回传通道挂载前缀（server/index.js 与 tasksIngest 约定）。 */
+const TASKS_ROUTE_PREFIX = '/api/tasks';
+
 const QWEN_ENDPOINTS = {
   LOCAL_LM_STUDIO: {
     key: QWEN_ENDPOINT_KEYS.LOCAL_LM_STUDIO,
@@ -230,6 +233,7 @@ export function loadQwenProxyConfig(env = process.env) {
     chatRequestsPerMinute: parseInteger(env.CHAT_REQUESTS_PER_MINUTE, 30, 0),
     authAttemptsPerMinute: parseInteger(env.AUTH_ATTEMPTS_PER_MINUTE, 20, 0),
     statusRequestsPerMinute: parseInteger(env.STATUS_REQUESTS_PER_MINUTE, 60, 0),
+    tasksRequestsPerMinute: parseInteger(env.TASKS_REQUESTS_PER_MINUTE, 120, 0),
     maxChatMessages: parseInteger(env.MAX_CHAT_MESSAGES, 16),
     maxChatTokens: parseInteger(env.MAX_CHAT_TOKENS, 2048),
     maxUpstreamResponseBytes: parseInteger(
@@ -346,11 +350,9 @@ export function buildProxyErrorResponse(error, options) {
     statusCode: isAbortError ? 504 : 500,
     body: {
       error: {
-        message: isAbortError
-          ? options.timeoutMessage
-          : error instanceof Error
-            ? error.message
-            : options.fallbackMessage,
+        // 与 buildExpressErrorResponse 的掩码策略一致：5xx 不回传内部错误细节
+        //（如 connect ECONNREFUSED 会暴露上游地址），仅在服务端日志可见。
+        message: isAbortError ? options.timeoutMessage : options.fallbackMessage,
         type: isAbortError ? options.timeoutType : options.fallbackType
       }
     }
@@ -470,6 +472,19 @@ function requestLocalOllamaText(config, options) {
     }, (upstreamResponse) => {
       upstreamResponse.setEncoding('utf8');
 
+      // 上游在响应头之后过早断开时，必须 fail fast，否则 promise 会悬挂到
+      // 外层 AbortController 超时（默认 120s）才释放。
+      const settleFromResponse = (error) => {
+        if (settled) {
+          return;
+        }
+
+        settled = true;
+        reject(error);
+      };
+      upstreamResponse.on('error', settleFromResponse);
+      upstreamResponse.on('aborted', () => settleFromResponse(new Error('Upstream response aborted')));
+
       let text = '';
       let totalBytes = 0;
       upstreamResponse.on('data', (chunk) => {
@@ -515,11 +530,17 @@ function requestLocalOllamaText(config, options) {
 }
 
 export function isLocalProxyTokenProtectedPath(pathname) {
-  return pathname === QWEN_CHAT_COMPLETIONS_ROUTE || pathname === OLLAMA_CHAT_COMPLETIONS_ROUTE;
+  return pathname === QWEN_CHAT_COMPLETIONS_ROUTE
+    || pathname === OLLAMA_CHAT_COMPLETIONS_ROUTE
+    || pathname.startsWith(TASKS_ROUTE_PREFIX);
 }
 
-export function isLocalProxyTokenAuthorized(pathname, token, config = loadQwenProxyConfig()) {
-  if (!config.localProxyToken || !isLocalProxyTokenProtectedPath(pathname)) {
+/**
+ * 当代理配置了 LOCAL_PROXY_TOKEN（非回环部署强制）时校验令牌；
+ * 未配置令牌（默认回环部署）时放行，保持原有行为。
+ */
+export function isLocalProxyTokenPresent(token, config = loadQwenProxyConfig()) {
+  if (!config.localProxyToken) {
     return true;
   }
 
@@ -532,10 +553,23 @@ export function isLocalProxyTokenAuthorized(pathname, token, config = loadQwenPr
   return actual.length === expected.length && timingSafeEqual(actual, expected);
 }
 
-function createLocalProxyTokenGuard(config) {
+export function isLocalProxyTokenAuthorized(pathname, token, config = loadQwenProxyConfig()) {
+  if (!config.localProxyToken || !isLocalProxyTokenProtectedPath(pathname)) {
+    return true;
+  }
+
+  return isLocalProxyTokenPresent(token, config);
+}
+
+function createLocalProxyTokenGuard(config, { protectAll = false } = {}) {
   return (req, res, next) => {
     const token = req.get(LOCAL_PROXY_TOKEN_HEADER);
-    if (isLocalProxyTokenAuthorized(req.path, token, config)) {
+    const authorized = protectAll
+      // 挂载在路由前缀下的 guard 收到的 req.path 是去前缀的相对路径，
+      // 因此 tasks 路由整段视为受保护路径，只看令牌本身。
+      ? isLocalProxyTokenPresent(token, config)
+      : isLocalProxyTokenAuthorized(req.path, token, config);
+    if (authorized) {
       return next();
     }
 
@@ -666,7 +700,7 @@ function createChatRateLimiter(config) {
   });
 }
 
-function createAuthAttemptRateLimiter(config) {
+function createAuthAttemptRateLimiter(config, { protectAll = false } = {}) {
   if (!config.localProxyToken || !config.authAttemptsPerMinute) {
     return createDisabledRateLimiter();
   }
@@ -676,11 +710,13 @@ function createAuthAttemptRateLimiter(config) {
     limit: config.authAttemptsPerMinute,
     standardHeaders: true,
     legacyHeaders: false,
-    skip: (req) => isLocalProxyTokenAuthorized(
-      req.path,
-      req.get(LOCAL_PROXY_TOKEN_HEADER),
-      config
-    ),
+    skip: (req) => protectAll
+      ? isLocalProxyTokenPresent(req.get(LOCAL_PROXY_TOKEN_HEADER), config)
+      : isLocalProxyTokenAuthorized(
+        req.path,
+        req.get(LOCAL_PROXY_TOKEN_HEADER),
+        config
+      ),
     handler: (_req, res) => res.status(429).json({
       error: {
         message: '未授权请求过于频繁，请稍后再试',
@@ -703,6 +739,25 @@ function createStatusRateLimiter(config) {
     handler: (_req, res) => res.status(429).json({
       error: {
         message: '状态查询过于频繁，请稍后再试',
+        type: 'rate_limit'
+      }
+    })
+  });
+}
+
+function createTasksRateLimiter(config) {
+  if (!config.tasksRequestsPerMinute) {
+    return createDisabledRateLimiter();
+  }
+
+  return rateLimit({
+    windowMs: 60_000,
+    limit: config.tasksRequestsPerMinute,
+    standardHeaders: true,
+    legacyHeaders: false,
+    handler: (_req, res) => res.status(429).json({
+      error: {
+        message: '任务通道请求过于频繁，请稍后再试',
         type: 'rate_limit'
       }
     })
@@ -887,7 +942,7 @@ function createOllamaChatHandler(config) {
   };
 }
 
-export function createQwenProxyApp(config = loadQwenProxyConfig()) {
+export function createQwenProxyApp(config = loadQwenProxyConfig(), { tasksRouter } = {}) {
   assertQwenProxySecurityConfig(config);
   const app = express();
   const chatRateLimiter = resolveChatRateLimiter(config);
@@ -917,7 +972,7 @@ export function createQwenProxyApp(config = loadQwenProxyConfig()) {
     statusRateLimiter
   );
 
-  app.get(API_HEALTH_ROUTE, (_req, res) => {
+  app.get(API_HEALTH_ROUTE, statusRateLimiter, (_req, res) => {
     res.json({
       ok: true,
       service: 'community-risk-warning-proxy',
@@ -937,6 +992,18 @@ export function createQwenProxyApp(config = loadQwenProxyConfig()) {
     chatPayloadValidator,
     createQwenChatHandler(config)
   );
+
+  // 比赛任务回传通道：与 chat 路由共用令牌守卫（protectAll，见 createLocalProxyTokenGuard），
+  // 必须挂在全局错误处理器之前，否则 JSON 解析错误会落到 Express 默认 HTML 错误页泄漏堆栈。
+  if (tasksRouter) {
+    app.use(
+      TASKS_ROUTE_PREFIX,
+      createAuthAttemptRateLimiter(config, { protectAll: true }),
+      createLocalProxyTokenGuard(config, { protectAll: true }),
+      createTasksRateLimiter(config),
+      tasksRouter
+    );
+  }
 
   // 全局错误处理，避免 Express 返回 HTML 500 页面
   app.use((err, _req, res, _next) => {

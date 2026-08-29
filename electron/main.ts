@@ -6,6 +6,7 @@ import fs from 'node:fs'
 import crypto from 'node:crypto'
 import dotenv from 'dotenv'
 import { createQwenProxyApp, loadQwenProxyConfig } from '../server/qwenProxy.js'
+import { createTasksIngestRouter } from '../server/tasksIngest.js'
 import {
   startOllama,
   stopOllama,
@@ -43,7 +44,7 @@ const proxyConfig = {
   localProxyToken,
   isLocalVlmTrusted: () => isOllamaReady()
 }
-const server = createQwenProxyApp(proxyConfig)
+const server = createQwenProxyApp(proxyConfig, { tasksRouter: createTasksIngestRouter() })
 
 let apiPort = 0
 let resolveApiBase!: (apiBase: string) => void
@@ -67,7 +68,7 @@ const httpServer = server.listen(0, proxyConfig.host, () => {
   rejectApiBase(new Error('Qwen proxy server did not expose a TCP address'))
 })
 
-httpServer.on('error', (error) => {
+httpServer.on('error', (error: Error) => {
   rejectApiBase(error)
 })
 
@@ -212,6 +213,8 @@ app.on('window-all-closed', async () => {
   await new Promise<void>((resolve) => {
     const forceExit = setTimeout(() => resolve(), 5000)
     forceExit.unref()
+    // 空闲 keep-alive 连接不会等 close 回调，主动断开避免拖满 5 秒
+    httpServer.closeIdleConnections?.()
     httpServer.close(() => {
       clearTimeout(forceExit)
       resolve()

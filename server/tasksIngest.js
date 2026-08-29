@@ -29,6 +29,14 @@ export const COMPETITION_TASK_IDS = Object.freeze([
 
 const KNOWN_RUN_STATUSES = new Set(['running', 'done']);
 
+// 字段长度与信封总字节预算：未鉴权写入者不能靠超长字段放大内存
+// （maxResults=200 条 × 上限 ≈ 6.4MB 堆，而不是 200 × 1MB body = 200MB）。
+const MAX_LOCATION_LENGTH = 200;
+const MAX_ANNOUNCEMENT_LENGTH = 4000;
+const MAX_BOXES = 100;
+const MAX_ENVELOPE_JSON_LENGTH = 32 * 1024;
+const MAX_RUN_JSON_LENGTH = 8 * 1024;
+
 /**
  * 校验任务结果信封（TaskAnalysisResult）。返回 { ok, error?, envelope? }。
  * 宽松校验：结构必须是任务信封（type/taskId/location/capturedAt/result/boxes），
@@ -47,6 +55,9 @@ export function validateTaskEnvelope(payload) {
   if (typeof payload.location !== 'string' || !payload.location) {
     return { ok: false, error: 'location 必须为非空字符串' };
   }
+  if (payload.location.length > MAX_LOCATION_LENGTH) {
+    return { ok: false, error: `location 长度不能超过 ${MAX_LOCATION_LENGTH}` };
+  }
   if (!Number.isFinite(payload.capturedAt)) {
     return { ok: false, error: 'capturedAt 必须为数字时间戳' };
   }
@@ -60,8 +71,19 @@ export function validateTaskEnvelope(payload) {
   if (typeof result.announcement !== 'string') {
     return { ok: false, error: 'result.announcement 必须为字符串' };
   }
-  if (payload.boxes !== undefined && !Array.isArray(payload.boxes)) {
-    return { ok: false, error: 'boxes 必须为数组' };
+  if (result.announcement.length > MAX_ANNOUNCEMENT_LENGTH) {
+    return { ok: false, error: `announcement 长度不能超过 ${MAX_ANNOUNCEMENT_LENGTH}` };
+  }
+  if (payload.boxes !== undefined) {
+    if (!Array.isArray(payload.boxes)) {
+      return { ok: false, error: 'boxes 必须为数组' };
+    }
+    if (payload.boxes.length > MAX_BOXES) {
+      return { ok: false, error: `boxes 数量不能超过 ${MAX_BOXES}` };
+    }
+  }
+  if (JSON.stringify(payload).length > MAX_ENVELOPE_JSON_LENGTH) {
+    return { ok: false, error: '信封负载超过大小限制' };
   }
   return { ok: true, envelope: payload };
 }
@@ -76,6 +98,9 @@ export function validateRunEvent(payload) {
   }
   if (!KNOWN_RUN_STATUSES.has(payload.status)) {
     return { ok: false, error: `status 必须为 ${[...KNOWN_RUN_STATUSES].join('|')}` };
+  }
+  if (JSON.stringify(payload).length > MAX_RUN_JSON_LENGTH) {
+    return { ok: false, error: '运行事件负载超过大小限制' };
   }
   return { ok: true, event: payload };
 }

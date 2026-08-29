@@ -24,6 +24,7 @@ import {
 import { resolveOllamaHealthStatus } from './ollamaHealthStatus.js';
 import { DEFAULT_QWEN_VLM_API_MODEL } from '../shared/vlmModelConfig.js';
 import { VLM_RESPONSE_FORMAT } from '../shared/vlmResponseSchema.js';
+import { createTasksIngestRouter } from './tasksIngest.js';
 
 const testServers = [];
 
@@ -367,6 +368,8 @@ describe('qwenProxy', () => {
 
     expect(isLocalProxyTokenProtectedPath('/api/qwen/chat/completions')).toBe(true);
     expect(isLocalProxyTokenProtectedPath('/api/ollama/chat/completions')).toBe(true);
+    expect(isLocalProxyTokenProtectedPath('/api/tasks/ingest')).toBe(true);
+    expect(isLocalProxyTokenProtectedPath('/api/tasks/results')).toBe(true);
     expect(isLocalProxyTokenProtectedPath('/api/health')).toBe(false);
 
     expect(isLocalProxyTokenAuthorized('/api/qwen/chat/completions', 'secret', config)).toBe(true);
@@ -495,6 +498,69 @@ describe('qwenProxy', () => {
     }, { 'x-local-proxy-token': 'wrong' });
 
     expect(response.status).toBe(403);
+  });
+
+  it('guards the mounted tasks router with the local proxy token when configured', async () => {
+    const app = createQwenProxyApp(loadQwenProxyConfig({
+      LOCAL_PROXY_TOKEN: 'secret'
+    }), { tasksRouter: createTasksIngestRouter() });
+    const port = await listen(http.createServer(app));
+
+    const withoutToken = await requestGetJson(port, '/api/tasks/results');
+    const withWrongToken = await requestGetJson(port, '/api/tasks/results', {
+      'x-local-proxy-token': 'wrong'
+    });
+    const withToken = await requestGetJson(port, '/api/tasks/results', {
+      'x-local-proxy-token': 'secret'
+    });
+
+    expect(withoutToken.status).toBe(403);
+    expect(withWrongToken.status).toBe(403);
+    expect(withToken.status).toBe(200);
+    expect(withToken.body).toEqual({ ok: true, count: 0, results: [] });
+  });
+
+  it('serves tasks routes without a token on the default loopback deployment', async () => {
+    const app = createQwenProxyApp(loadQwenProxyConfig({}), {
+      tasksRouter: createTasksIngestRouter()
+    });
+    const port = await listen(http.createServer(app));
+
+    const response = await requestGetJson(port, '/api/tasks/results');
+    expect(response.status).toBe(200);
+    expect(response.body.count).toBe(0);
+  });
+
+  it('returns a JSON 400 instead of an HTML stack-trace page for malformed tasks JSON', async () => {
+    const app = createQwenProxyApp(loadQwenProxyConfig({}), {
+      tasksRouter: createTasksIngestRouter()
+    });
+    const port = await listen(http.createServer(app));
+
+    const raw = await new Promise((resolve, reject) => {
+      const request = http.request({
+        hostname: '127.0.0.1',
+        port,
+        path: '/api/tasks/ingest',
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      }, (response) => {
+        response.setEncoding('utf8');
+        let responseText = '';
+        response.on('data', (chunk) => { responseText += chunk; });
+        response.on('end', () => resolve({ status: response.statusCode, body: responseText }));
+      });
+      request.on('error', reject);
+      request.end('{"type":"task",broken');
+    });
+
+    expect(raw.status).toBe(400);
+    const parsed = JSON.parse(raw.body);
+    expect(parsed.error.type).toBe('invalid_request');
+    // 不是 Express 默认 HTML 错误页，也不带多行堆栈/内部模块路径
+    expect(raw.body).not.toMatch(/<!DOCTYPE|<html/i);
+    expect(raw.body).not.toMatch(/\n\s*at /);
+    expect(raw.body).not.toContain('node:internal');
   });
 
   it('injects the configured max_tokens limit before proxying to local VLM', async () => {
@@ -758,7 +824,8 @@ describe('qwenProxy', () => {
       statusCode: 500,
       body: {
         error: {
-          message: 'network down',
+          // 5xx 不回传内部错误细节（如 connect ECONNREFUSED 泄露上游地址）
+          message: '代理请求失败',
           type: 'proxy_error'
         }
       }

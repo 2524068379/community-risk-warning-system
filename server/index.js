@@ -1,15 +1,19 @@
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import dotenv from 'dotenv';
 import { createQwenProxyApp, loadQwenProxyConfig } from './qwenProxy.js';
 import { createTasksIngestRouter } from './tasksIngest.js';
 
+const serverDir = path.dirname(fileURLToPath(import.meta.url));
+
 // 加载项目根目录统一 .env；系统环境变量保持更高优先级。
-dotenv.config({ path: '.env', override: false });
+// 按 server/ 所在目录解析，避免从其他 CWD 启动时静默读不到配置。
+dotenv.config({ path: path.resolve(serverDir, '../.env'), override: false });
 
 const config = loadQwenProxyConfig();
-const app = createQwenProxyApp(config);
-
-// 比赛任务结果回传通道（D4，只读聚合代理；与风险流水线隔离）
-app.use('/api/tasks', createTasksIngestRouter());
+// tasks 路由必须在 createQwenProxyApp 内部、全局错误处理器之前挂载：
+// 令牌守卫/限流在 qwenProxy 内统一生效，JSON 解析错误也能返回 JSON 400。
+const app = createQwenProxyApp(config, { tasksRouter: createTasksIngestRouter() });
 
 const server = app.listen(config.port, config.host, () => {
   console.log(`Qwen proxy server is running at http://${config.host}:${config.port}`);
@@ -48,6 +52,8 @@ function shutdown(signal, exitCode = 0) {
   }, 5000);
   forceExit.unref();
 
+  // 空闲 keep-alive 连接不会等 server.close 回调，主动断开避免拖满 5 秒。
+  server.closeIdleConnections?.();
   server.close(() => {
     clearTimeout(forceExit);
     process.exit(exitCode);
