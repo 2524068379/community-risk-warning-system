@@ -1,6 +1,10 @@
 {
   "compilerOptions": {
     "composite": true,
+    "strict": true,
+    "target": "ES2022",
+    "lib": ["ES2022"],
+    "types": ["node"],
     "skipLibCheck": true,
     "module": "ESNext",
     "moduleResolution": "Bundler",
@@ -13,5 +17,14 @@
       "@/*": ["src/*"]
     }
   },
-  "include": ["main.ts", "preload.ts", "ollamaManager.ts", "security.ts", "vlmResourcePath.ts"]
+  "include": [
+    "main.ts",
+    "preload.ts",
+    "ollamaManager.ts",
+    "ollamaManager.test.ts",
+    "security.ts",
+    "security.test.ts",
+    "vlmResourcePath.ts",
+    "vlmResourcePath.test.ts"
+  ]
 }
