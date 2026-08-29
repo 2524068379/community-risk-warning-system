@@ -86,12 +86,11 @@ function loadModel(): Promise<DetectorModel> {
 }
 
 async function handleDetect(id: number, bitmap: ImageBitmap): Promise<void> {
+  let input: ReturnType<typeof tf.browser.fromPixels> | null = null
   try {
     const next = await loadModel()
-    const input = tf.browser.fromPixels(bitmap)
+    input = tf.browser.fromPixels(bitmap)
     const predictions = await next.detect(input, config?.maxBoxes ?? 20, config?.minScore ?? 0.35)
-    input.dispose()
-    bitmap.close()
     post({
       type: 'detect-result',
       id,
@@ -107,6 +106,11 @@ async function handleDetect(id: number, bitmap: ImageBitmap): Promise<void> {
       error: error instanceof Error ? error.message : String(error),
       status
     })
+  } finally {
+    // Model load or inference can fail after the bitmap arrived — release both
+    // tensors regardless so repeated failures don't leak GPU/WASM memory.
+    input?.dispose()
+    bitmap.close()
   }
 }
 

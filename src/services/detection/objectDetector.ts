@@ -105,6 +105,11 @@ interface PendingRequest {
   reject: (error: unknown) => void
 }
 
+// Detect replies must arrive well within a capture tick; initialization may
+// legitimately take longer (model download + TF backend warmup).
+const DETECT_REQUEST_TIMEOUT_MS = 15_000
+const INIT_REQUEST_TIMEOUT_MS = 90_000
+
 let worker: Worker | null = null
 let workerStatus: DetectorStatus = 'idle'
 let disposed = false
@@ -113,6 +118,29 @@ let pendingRequests = new Map<number, PendingRequest>()
 let initPromise: Promise<Worker> | null = null
 let drawCanvas: HTMLCanvasElement | null = null
 let unloadListenerAttached = false
+
+/**
+ * Tear down the current worker after a crash or a stuck request so the next
+ * `detect()` call re-creates it instead of posting into a dead worker whose
+ * reply promise would never settle (which stalled the whole analysis loop).
+ */
+function failWorker(error: DetectorLoadError): void {
+  for (const pending of pendingRequests.values()) {
+    pending.reject(error)
+  }
+  pendingRequests.clear()
+
+  if (worker) {
+    try {
+      worker.terminate()
+    } catch {
+      // Worker may already be gone; ignore.
+    }
+    worker = null
+  }
+  initPromise = null
+  workerStatus = 'error'
+}
 
 function handleWorkerMessage(data: unknown): void {
   const message = data as { type?: string; id?: number; ok?: boolean; error?: string; status?: DetectorStatus; detections?: RawDetection[] }
@@ -167,14 +195,9 @@ function getWorker(): Promise<Worker> {
 
     next.onmessage = (event) => handleWorkerMessage(event.data)
     next.onerror = (event) => {
-      const error = new DetectorLoadError(
-        new Error(event?.message || 'Object detector worker crashed')
+      failWorker(
+        new DetectorLoadError(new Error(event?.message || 'Object detector worker crashed'))
       )
-      for (const pending of pendingRequests.values()) {
-        pending.reject(error)
-      }
-      pendingRequests.clear()
-      workerStatus = 'error'
     }
 
     const reply = await send(next, {
@@ -184,7 +207,7 @@ function getWorker(): Promise<Worker> {
         minScore: MIN_SCORE,
         ...(MODEL_URL ? { modelUrl: MODEL_URL } : {})
       }
-    })
+    }, undefined, INIT_REQUEST_TIMEOUT_MS)
 
     if (!reply.ok) {
       throw new DetectorLoadError(new Error(reply.error ?? 'Object detector failed to initialize'))
@@ -206,13 +229,38 @@ function requestSeqNext(): number {
   return requestSeq++
 }
 
-function send(target: Worker, message: Record<string, unknown>, transfer?: Transferable[]): Promise<WorkerReply> {
+function send(
+  target: Worker,
+  message: Record<string, unknown>,
+  transfer?: Transferable[],
+  timeoutMs: number = DETECT_REQUEST_TIMEOUT_MS
+): Promise<WorkerReply> {
   const id = requestSeqNext()
-  const reply = new Promise<WorkerReply>((resolve, reject) => {
-    pendingRequests.set(id, { resolve, reject })
+  return new Promise<WorkerReply>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      pendingRequests.delete(id)
+      failWorker(new DetectorLoadError(new Error('Object detector request timed out')))
+      reject(new DetectorLoadError(new Error('Object detector request timed out')))
+    }, timeoutMs)
+    pendingRequests.set(id, {
+      resolve: (reply) => {
+        clearTimeout(timer)
+        resolve(reply)
+      },
+      reject: (error) => {
+        clearTimeout(timer)
+        reject(error)
+      }
+    })
+
+    try {
+      target.postMessage({ ...message, id }, transfer ?? [])
+    } catch (error) {
+      clearTimeout(timer)
+      pendingRequests.delete(id)
+      reject(error instanceof Error ? error : new Error(String(error)))
+    }
   })
-  target.postMessage({ ...message, id }, transfer ?? [])
-  return reply
 }
 
 async function sourceToBitmap(source: HTMLVideoElement | HTMLCanvasElement): Promise<ImageBitmap> {
