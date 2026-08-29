@@ -11,13 +11,18 @@ import type {
   TaskResultsResponse
 } from '@/types/taskResults';
 
-export async function fetchTaskResults(since?: number): Promise<CompetitionTaskEnvelope[]> {
+type RequestConfig = { timeout?: number; signal?: AbortSignal };
+
+export async function fetchTaskResults(
+  since?: number,
+  config?: RequestConfig
+): Promise<CompetitionTaskEnvelope[]> {
   const query = since !== undefined ? `?since=${encodeURIComponent(String(since))}` : '';
-  const { data } = await http.get<TaskResultsResponse>(`/api/tasks/results${query}`);
+  const { data } = await http.get<TaskResultsResponse>(`/api/tasks/results${query}`, config);
   return data.ok ? data.results : [];
 }
 
-export async function fetchTaskRun(): Promise<CompetitionTaskRun | null> {
-  const { data } = await http.get<{ ok: boolean; run: CompetitionTaskRun | null }>('/api/tasks/run');
+export async function fetchTaskRun(config?: RequestConfig): Promise<CompetitionTaskRun | null> {
+  const { data } = await http.get<{ ok: boolean; run: CompetitionTaskRun | null }>('/api/tasks/run', config);
   return data.ok ? data.run : null;
 }

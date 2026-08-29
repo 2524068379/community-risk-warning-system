@@ -107,10 +107,14 @@ export function useBaiduMap(options: UseBaiduMapOptions) {
         setReady(true);
 
         requestAnimationFrame(() => {
+          // effect 可能已卸载并 destroy 地图，此时不能再操作实例
+          if (disposed) return;
           map.checkResize?.();
           map.centerAndZoom(point, options.zoom);
         });
       } catch (err) {
+        // SDK 加载超时可能晚于卸载触发，卸载后不再 setState
+        if (disposed) return;
         setError(err instanceof Error ? err.message : '百度地图初始化失败');
       }
     }

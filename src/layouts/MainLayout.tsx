@@ -18,7 +18,11 @@ function formatDate(date: Date) {
   return `${y}-${mo}-${d} 星期${w}`;
 }
 
-export function MainLayout() {
+/**
+ * 独立的时钟叶子组件：每秒的 setState 只重渲染它自己，
+ * 不会连带 <Outlet /> 里的路由页（图表/地图）每秒 reconciliation 一次。
+ */
+function HeaderClock() {
   const [now, setNow] = useState(new Date());
 
   useEffect(() => {
@@ -26,6 +30,15 @@ export function MainLayout() {
     return () => clearInterval(timer);
   }, []);
 
+  return (
+    <div className="header-datetime">
+      <div className="header-clock">{formatTime(now)}</div>
+      <div className="header-date">{formatDate(now)}</div>
+    </div>
+  );
+}
+
+export function MainLayout() {
   return (
     <div className="dashboard-shell">
       <header className="dashboard-header">
@@ -50,10 +63,7 @@ export function MainLayout() {
         </div>
 
         <div className="header-right">
-          <div className="header-datetime">
-            <div className="header-clock">{formatTime(now)}</div>
-            <div className="header-date">{formatDate(now)}</div>
-          </div>
+          <HeaderClock />
           <Tag color="processing" style={{ margin: 0, fontSize: 11 }}>
             本地演示模式
           </Tag>

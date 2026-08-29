@@ -9,26 +9,37 @@ import { useAppStore } from '@/store/useAppStore';
 import { fetchTaskResults, fetchTaskRun } from '@/services/taskResults';
 
 const POLL_INTERVAL_MS = 2000;
+const POLL_TIMEOUT_MS = 5000;
 
 export function useTaskResults(enabled: boolean = true): void {
-  const applyTaskResult = useAppStore((state) => state.applyTaskResult);
+  const applyTaskResults = useAppStore((state) => state.applyTaskResults);
   const setTaskRun = useAppStore((state) => state.setTaskRun);
 
   useEffect(() => {
     if (!enabled) return;
     let disposed = false;
+    let inFlight = false;
 
     const poll = async () => {
+      // 上一轮未返回时跳过本 tick，避免代理卡顿时轮询堆积
+      if (inFlight) return;
+      inFlight = true;
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), POLL_TIMEOUT_MS);
+      const requestConfig = { timeout: POLL_TIMEOUT_MS, signal: controller.signal };
       try {
-        const run = await fetchTaskRun();
+        const run = await fetchTaskRun(requestConfig);
         if (disposed) return;
         if (run) setTaskRun(run);
-        // 每轮全量拉取并 upsert（幂等），机器人重启/换任务序列时自动自愈
-        const results = await fetchTaskResults();
+        // 每轮全量拉取并批量 upsert（幂等），机器人重启/换任务序列时自动自愈
+        const results = await fetchTaskResults(undefined, requestConfig);
         if (disposed) return;
-        for (const envelope of results) applyTaskResult(envelope);
+        applyTaskResults(results);
       } catch {
         // 机器人/代理不在线：保持静默
+      } finally {
+        clearTimeout(timeout);
+        inFlight = false;
       }
     };
 
@@ -38,5 +49,5 @@ export function useTaskResults(enabled: boolean = true): void {
       disposed = true;
       clearInterval(timer);
     };
-  }, [enabled, applyTaskResult, setTaskRun]);
+  }, [enabled, applyTaskResults, setTaskRun]);
 }

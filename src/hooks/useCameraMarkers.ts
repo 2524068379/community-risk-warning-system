@@ -3,6 +3,7 @@ import type { CameraPoint } from '@/types';
 import { riskColorMap } from '@/utils/risk';
 import { buildMarkerSvg } from '@/services/map/baiduMap';
 import { buildCameraInfoHtml } from '@/services/map/cameraInfoWindow';
+import { escapeHtml } from '@/utils/escapeHtml';
 
 interface UseCameraMarkersOptions {
   map: BaiduMapInstance | null;
@@ -31,7 +32,8 @@ export function useCameraMarkers(options: UseCameraMarkersOptions) {
       const point = new BMapGL.Point(camera.mapPoint.lng, camera.mapPoint.lat);
       const icon = new BMapGL.Icon(buildMarkerSvg(riskColorMap[camera.level]), new BMapGL.Size(28, 28));
       const marker = new BMapGL.Marker(point, { icon });
-      const label = new BMapGL.Label(camera.name, {
+      // Label 内容按 HTML 渲染，与 InfoWindow 同级 sink：动态文本必须转义
+      const label = new BMapGL.Label(escapeHtml(camera.name), {
         position: point,
         offset: new BMapGL.Size(18, -12)
       });

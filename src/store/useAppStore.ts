@@ -65,6 +65,7 @@ interface AppState {
   setDetectorStatus: (status: 'idle' | 'loading' | 'ready' | 'error') => void;
   setDetectedObjects: (objects: DetectionResult[]) => void;
   applyTaskResult: (envelope: CompetitionTaskEnvelope) => void;
+  applyTaskResults: (envelopes: CompetitionTaskEnvelope[]) => void;
   setTaskRun: (run: Pick<CompetitionTaskRun, 'status'> & Partial<CompetitionTaskRun>) => void;
 }
 
@@ -173,6 +174,25 @@ export const useAppStore = create<AppState>((set, get) => ({
         currentTaskId: envelope.taskId
       }
     })),
+
+  // 轮询批量写入：单次 set，避免每条信封各触发一次订阅者重渲染
+  applyTaskResults: (envelopes) => {
+    if (envelopes.length === 0) return;
+    set((state) => {
+      const taskResults = { ...state.taskResults };
+      for (const envelope of envelopes) {
+        taskResults[envelope.taskId] = envelope;
+      }
+      return {
+        taskResults,
+        taskRun: {
+          ...state.taskRun,
+          status: state.taskRun.status === 'idle' && envelopes.length > 0 ? 'running' : state.taskRun.status,
+          currentTaskId: envelopes[envelopes.length - 1].taskId
+        }
+      };
+    });
+  },
 
   setTaskRun: (run) =>
     set((state) => ({

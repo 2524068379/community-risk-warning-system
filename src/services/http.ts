@@ -1,6 +1,6 @@
 import axios, { AxiosHeaders } from 'axios'
 
-interface ElectronApi {
+export interface ElectronApi {
   getApiBase: () => Promise<string | undefined>
   getApiAuthHeaders?: () => Promise<Record<string, string> | undefined>
   getOllamaStatus: () => Promise<{ ready: boolean; status: string; baseUrl: string; gpu: 'unknown' }>

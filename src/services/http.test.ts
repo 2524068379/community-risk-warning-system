@@ -1,16 +1,26 @@
 import { describe, expect, it } from 'vitest';
-import { createApiAuthHeaderResolver, createApiBaseResolver, extractProxyErrorMessage } from './http';
+import { createApiAuthHeaderResolver, createApiBaseResolver, extractProxyErrorMessage, type ElectronApi } from './http';
+
+/** 完整的 electronAPI stub：两个 resolver 共用，避免部分形状漂移。 */
+function electronApiStub(overrides: Partial<ElectronApi> = {}): ElectronApi {
+  return {
+    getApiBase: async () => 'http://localhost:4567',
+    getApiAuthHeaders: async () => undefined,
+    getOllamaStatus: async () => ({ ready: false, status: 'error', baseUrl: '', gpu: 'unknown' }),
+    ...overrides
+  };
+}
 
 describe('createApiBaseResolver', () => {
   it('waits for the Electron API base and caches the result', async () => {
     let calls = 0;
     const resolver = createApiBaseResolver({
-      electronApi: {
+      electronApi: electronApiStub({
         getApiBase: async () => {
           calls += 1;
           return 'http://localhost:4567';
         }
-      }
+      })
     });
 
     await expect(resolver.getApiBase()).resolves.toBe('http://localhost:4567');
@@ -22,12 +32,12 @@ describe('createApiBaseResolver', () => {
     let calls = 0;
     const resolver = createApiBaseResolver({
       envBase: 'http://localhost:8787',
-      electronApi: {
+      electronApi: electronApiStub({
         getApiBase: async () => {
           calls += 1;
           return 'http://localhost:4567';
         }
-      }
+      })
     });
 
     await expect(resolver.getApiBase()).resolves.toBe('http://localhost:8787');
@@ -37,9 +47,9 @@ describe('createApiBaseResolver', () => {
   it('does not cache an Electron API base before the proxy port is assigned', async () => {
     const bases = ['http://127.0.0.1:0', 'http://127.0.0.1:4567'];
     const resolver = createApiBaseResolver({
-      electronApi: {
+      electronApi: electronApiStub({
         getApiBase: async () => bases.shift()
-      }
+      })
     });
 
     await expect(resolver.getApiBase()).resolves.toBeUndefined();
@@ -51,22 +61,15 @@ describe('createApiAuthHeaderResolver', () => {
   it('waits for Electron auth headers and caches normalized non-empty values', async () => {
     let calls = 0;
     const resolver = createApiAuthHeaderResolver({
-      electronApi: {
-        getApiBase: async () => 'http://localhost:4567',
+      electronApi: electronApiStub({
         getApiAuthHeaders: async () => {
           calls += 1;
           return {
             ' X-Local-Proxy-Token ': ' token ',
             Empty: ''
           };
-        },
-        getOllamaStatus: async () => ({
-          ready: true,
-          status: 'ready',
-          baseUrl: 'http://127.0.0.1:11434',
-          gpu: 'unknown'
-        })
-      }
+        }
+      })
     });
 
     await expect(resolver.getApiAuthHeaders()).resolves.toEqual({
@@ -80,15 +83,7 @@ describe('createApiAuthHeaderResolver', () => {
 
   it('returns undefined when Electron does not provide auth headers', async () => {
     const resolver = createApiAuthHeaderResolver({
-      electronApi: {
-        getApiBase: async () => 'http://localhost:4567',
-        getOllamaStatus: async () => ({
-          ready: true,
-          status: 'ready',
-          baseUrl: 'http://127.0.0.1:11434',
-          gpu: 'unknown'
-        })
-      }
+      electronApi: electronApiStub()
     });
 
     await expect(resolver.getApiAuthHeaders()).resolves.toBeUndefined();

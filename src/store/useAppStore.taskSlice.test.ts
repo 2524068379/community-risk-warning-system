@@ -45,4 +45,20 @@ describe('useAppStore 比赛任务切片（D6）', () => {
     useAppStore.getState().applyTaskResult(envelope('traffic_light'));
     expect(useAppStore.getState().analysis).toBe(before);
   });
+
+  it('applyTaskResults 单次批量 upsert，currentTaskId 取最后一条', () => {
+    const { applyTaskResults } = useAppStore.getState();
+    applyTaskResults([envelope('traffic_light'), envelope('people_count'), envelope('traffic_light')]);
+    expect(Object.keys(useAppStore.getState().taskResults)).toHaveLength(2);
+    expect(useAppStore.getState().taskResults.traffic_light?.result.announcement).toBe(
+      '测试播报 traffic_light'
+    );
+    expect(useAppStore.getState().taskRun.status).toBe('running');
+    expect(useAppStore.getState().taskRun.currentTaskId).toBe('traffic_light');
+
+    // 空批量不触发任何状态变更
+    const snapshot = useAppStore.getState();
+    useAppStore.getState().applyTaskResults([]);
+    expect(useAppStore.getState()).toBe(snapshot);
+  });
 });
