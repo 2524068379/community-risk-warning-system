@@ -11,6 +11,7 @@ import {
 } from './index.js';
 
 const runtimeEnv = {
+  QWEN_BASE_URL: DEFAULT_QWEN_BASE_URL,
   QWEN_API_KEY: 'test-key',
   QWEN_MODEL: 'qwen3-vl-plus'
 };
