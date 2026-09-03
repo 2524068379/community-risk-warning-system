@@ -124,6 +124,14 @@ function handleDispose(): void {
 }
 
 self.onmessage = (event: MessageEvent) => {
+  const trustedOrigin = self.location.origin
+  const origin =
+    typeof event.origin === 'string' && event.origin.length > 0 ? event.origin : null
+
+  // Verify sender origin when it is provided by the runtime.
+  // Dedicated-worker messages may not always carry a non-empty origin.
+  if (origin !== null && origin !== trustedOrigin) return
+
   const message = event.data as {
     type?: string
     id?: number
