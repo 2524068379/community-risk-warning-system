@@ -6,6 +6,11 @@ export const OLLAMA_STATUS_ROUTE = '/api/ollama/status';
 export const DEFAULT_QWEN_BASE_URL = 'https://dashscope.aliyuncs.com/compatible-mode/v1';
 export const DEFAULT_QWEN_VLM_API_MODEL = 'qwen3-vl-plus';
 
+const ALLOWED_VLM_UPSTREAM_HOSTS = [
+  'dashscope.aliyuncs.com',
+  'open.bigmodel.cn'
+];
+
 const JSON_CONTENT_TYPE = 'application/json; charset=utf-8';
 const SSE_CONTENT_TYPE = 'text/event-stream';
 const DEFAULT_QWEN_TIMEOUT_MS = 60000;
@@ -68,6 +73,8 @@ function normalizePublicHttpsUrl(rawUrl) {
     const isIpLiteral = unbracketedHostname.includes(':') || /^\d+(?:\.\d+){0,3}$/.test(hostname);
     const isPrivateName = hostname === 'localhost' ||
       PRIVATE_HOST_SUFFIXES.some((suffix) => hostname.endsWith(suffix));
+    const isAllowedHost = ALLOWED_VLM_UPSTREAM_HOSTS.includes(hostname) ||
+      /^dashscope-[a-z0-9-]+\.aliyuncs\.com$/.test(hostname);
 
     if (
       url.protocol !== 'https:' ||
@@ -77,7 +84,8 @@ function normalizePublicHttpsUrl(rawUrl) {
       url.hash ||
       !hostname.includes('.') ||
       isIpLiteral ||
-      isPrivateName
+      isPrivateName ||
+      !isAllowedHost
     ) {
       return '';
     }
