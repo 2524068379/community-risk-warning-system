@@ -17,6 +17,7 @@
 // Declare a minimal worker scope instead of pulling the WebWorker lib in,
 // which would collide with the DOM lib used by the rest of the renderer.
 declare const self: {
+  location: { origin: string }
   onmessage: ((event: MessageEvent) => void) | null
   postMessage: (message: unknown) => void
   close: () => void
