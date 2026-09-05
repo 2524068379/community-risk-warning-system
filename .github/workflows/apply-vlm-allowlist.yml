@@ -1,0 +1,64 @@
+name: Apply VLM allowlist patch
+
+on:
+  push:
+    branches: [fix/ssrf-vlm-allowlist-v2]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Patch allowlist and tests
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          index = Path('esa/index.js')
+          text = index.read_text()
+          old = """const ALLOWED_VLM_UPSTREAM_HOSTS = [\n  'dashscope.aliyuncs.com',\n  'open.bigmodel.cn'\n];"""
+          new = """const ALLOWED_VLM_UPSTREAM_HOSTS = [\n  // China\n  'dashscope.aliyuncs.com',\n  'open.bigmodel.cn',\n  'api.deepseek.com',\n  'ark.cn-beijing.volces.com',\n  'qianfan.baidubce.com',\n  'api.hunyuan.cloud.tencent.com',\n  'api.siliconflow.cn',\n  'api-inference.modelscope.cn',\n  'api.minimax.chat',\n  'api.moonshot.cn',\n  'api.stepfun.com',\n  // International\n  'api.openai.com',\n  'api.openrouter.ai',\n  'api.groq.com',\n  'api.mistral.ai',\n  'api.together.xyz',\n  'api.fireworks.ai',\n  'api.cerebras.ai',\n  'api.deepinfra.com',\n  'api.x.ai'\n];"""
+          if old not in text:
+              raise SystemExit('allowlist block not found')
+          text = text.replace(old, new, 1)
+          old = """    const isAllowedHost = ALLOWED_VLM_UPSTREAM_HOSTS.includes(hostname) ||\n      /^dashscope-[a-z0-9-]+\\.aliyuncs\\.com$/.test(hostname);"""
+          new = """    const isAllowedHost = ALLOWED_VLM_UPSTREAM_HOSTS.includes(hostname);"""
+          if old not in text:
+              raise SystemExit('hostname check not found')
+          text = text.replace(old, new, 1)
+          index.write_text(text)
+
+          test = Path('esa/index.test.js')
+          text = test.read_text()
+          text = text.replace(
+              "https://api.vendor.example/openai/v1/",
+              "https://api.openrouter.ai/api/v1/"
+          ).replace(
+              "https://api.vendor.example/openai/v1',",
+              "https://api.openrouter.ai/api/v1',"
+          ).replace(
+              "'https://api.vendor.example/v1',",
+              "'https://api.openrouter.ai/api/v1',"
+          ).replace(
+              "'https://api.vendor.example/v1',\n      QWEN_API_KEY",
+              "'https://api.openrouter.ai/api/v1',\n      QWEN_API_KEY"
+          )
+          old = """  it('never combines a custom endpoint with credentials from another namespace', () => {"""
+          new = """  it('allows the built-in provider hosts while preserving custom paths', () => {\n    const hosts = [\n      'dashscope.aliyuncs.com', 'open.bigmodel.cn', 'api.deepseek.com',\n      'ark.cn-beijing.volces.com', 'qianfan.baidubce.com',\n      'api.hunyuan.cloud.tencent.com', 'api.siliconflow.cn',\n      'api-inference.modelscope.cn', 'api.minimax.chat', 'api.moonshot.cn',\n      'api.stepfun.com', 'api.openai.com', 'api.openrouter.ai', 'api.groq.com',\n      'api.mistral.ai', 'api.together.xyz', 'api.fireworks.ai',\n      'api.cerebras.ai', 'api.deepinfra.com', 'api.x.ai'\n    ];\n    for (const host of hosts) {\n      expect(resolveAllowedQwenBaseUrl(`https://${host}/custom/v1/`)).toBe(\n        `https://${host}/custom/v1`\n      );\n    }\n  });\n\n  it('rejects an otherwise public HTTPS host outside the built-in allowlist', () => {\n    expect(resolveAllowedQwenBaseUrl('https://api.vendor.example/v1')).toBe('');\n  });\n\n  it('never combines a custom endpoint with credentials from another namespace', () => {"""
+          if old not in text:
+              raise SystemExit('test insertion point not found')
+          text = text.replace(old, new, 1)
+          test.write_text(text)
+          PY
+      - name: Run focused tests
+        run: npm test -- --run esa/index.test.js
+      - name: Commit patched files
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add esa/index.js esa/index.test.js
+          git diff --cached --quiet || git commit -m "fix(security): expand VLM provider allowlist"
+          git push
