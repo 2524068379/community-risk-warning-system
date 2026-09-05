@@ -17,7 +17,6 @@
 // Declare a minimal worker scope instead of pulling the WebWorker lib in,
 // which would collide with the DOM lib used by the rest of the renderer.
 declare const self: {
-  location: { origin: string }
   onmessage: ((event: MessageEvent) => void) | null
   postMessage: (message: unknown) => void
   close: () => void
@@ -125,14 +124,12 @@ function handleDispose(): void {
 }
 
 self.onmessage = (event: MessageEvent) => {
-  const trustedOrigin = self.location.origin
-  const origin =
-    typeof event.origin === 'string' && event.origin.length > 0 ? event.origin : null
-
-  // Verify sender origin when it is provided by the runtime.
-  // Dedicated-worker messages may not always carry a non-empty origin.
-  if (origin !== null && origin !== trustedOrigin) return
-
+  // This is a DedicatedWorkerGlobalScope, not a Window message receiver.
+  // A dedicated worker is created by exactly one owner document, and its
+  // message port is not addressable by an unrelated cross-origin window.
+  // Dedicated-worker MessageEvents also normally expose an empty `origin`;
+  // treating that value as an origin allowlist would therefore be a no-op.
+  // Keep the explicit protocol validation below as the meaningful boundary.
   const message = event.data as {
     type?: string
     id?: number
