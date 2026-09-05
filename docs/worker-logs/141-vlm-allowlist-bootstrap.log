@@ -1,0 +1,1 @@
+2026-09-05T07:35Z — Coordinator bootstrap: PR #139 was closed and replacement PR #141 opened. A one-time CI migration is being used to apply the static VLM upstream allowlist and focused tests; it must remove its bootstrap workflow after successful verification.
