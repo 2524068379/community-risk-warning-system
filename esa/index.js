@@ -7,8 +7,28 @@ export const DEFAULT_QWEN_BASE_URL = 'https://dashscope.aliyuncs.com/compatible-
 export const DEFAULT_QWEN_VLM_API_MODEL = 'qwen3-vl-plus';
 
 const ALLOWED_VLM_UPSTREAM_HOSTS = [
+  // China
   'dashscope.aliyuncs.com',
-  'open.bigmodel.cn'
+  'open.bigmodel.cn',
+  'api.deepseek.com',
+  'ark.cn-beijing.volces.com',
+  'qianfan.baidubce.com',
+  'api.hunyuan.cloud.tencent.com',
+  'api.siliconflow.cn',
+  'api-inference.modelscope.cn',
+  'api.minimax.chat',
+  'api.moonshot.cn',
+  'api.stepfun.com',
+  // International
+  'api.openai.com',
+  'api.openrouter.ai',
+  'api.groq.com',
+  'api.mistral.ai',
+  'api.together.xyz',
+  'api.fireworks.ai',
+  'api.cerebras.ai',
+  'api.deepinfra.com',
+  'api.x.ai'
 ];
 
 const JSON_CONTENT_TYPE = 'application/json; charset=utf-8';
@@ -73,8 +93,7 @@ function normalizePublicHttpsUrl(rawUrl) {
     const isIpLiteral = unbracketedHostname.includes(':') || /^\d+(?:\.\d+){0,3}$/.test(hostname);
     const isPrivateName = hostname === 'localhost' ||
       PRIVATE_HOST_SUFFIXES.some((suffix) => hostname.endsWith(suffix));
-    const isAllowedHost = ALLOWED_VLM_UPSTREAM_HOSTS.includes(hostname) ||
-      /^dashscope-[a-z0-9-]+\.aliyuncs\.com$/.test(hostname);
+    const isAllowedHost = ALLOWED_VLM_UPSTREAM_HOSTS.includes(hostname);
 
     if (
       url.protocol !== 'https:' ||
@@ -707,8 +726,6 @@ function createSseAggregationTransform(timeoutMs, maxBytes) {
   return {
     transformer: {
       start(controller) {
-        // JSON permits leading whitespace. Sending it immediately satisfies ESA's
-        // 10-second first-byte requirement while the SSE body is aggregated.
         controller.enqueue(encoder.encode('\n'));
         timer = setTimeout(() => {
           endWithError(controller, 'VLM 接口请求超时', 'timeout_error');
@@ -718,11 +735,7 @@ function createSseAggregationTransform(timeoutMs, maxBytes) {
         if (settled) return;
         totalBytes += chunk.byteLength;
         if (totalBytes > maxBytes) {
-          endWithError(
-            controller,
-            'VLM 上游响应超过大小限制',
-            'upstream_response_too_large'
-          );
+          endWithError(controller, 'VLM 上游响应超过大小限制', 'upstream_response_too_large');
           return;
         }
 
@@ -730,11 +743,7 @@ function createSseAggregationTransform(timeoutMs, maxBytes) {
           buffer += decoder.decode(chunk, { stream: true });
           drainEvents();
         } catch (error) {
-          endWithError(
-            controller,
-            error instanceof Error ? error.message : 'VLM 流式响应无效',
-            'upstream_stream_error'
-          );
+          endWithError(controller, error instanceof Error ? error.message : 'VLM 流式响应无效', 'upstream_stream_error');
         }
       },
       flush(controller) {
@@ -746,12 +755,7 @@ function createSseAggregationTransform(timeoutMs, maxBytes) {
           controller.enqueue(encoder.encode(JSON.stringify(accumulator.buildResponse())));
           settled = true;
         } catch (error) {
-          endWithError(
-            controller,
-            error instanceof Error ? error.message : 'VLM 流式响应无效',
-            'upstream_stream_error',
-            false
-          );
+          endWithError(controller, error instanceof Error ? error.message : 'VLM 流式响应无效', 'upstream_stream_error', false);
         }
       }
     },
@@ -805,11 +809,7 @@ function createBufferedResponseTransform(timeoutMs, maxBytes) {
         if (settled) return;
         totalBytes += chunk.byteLength;
         if (totalBytes > maxBytes) {
-          endWithError(
-            controller,
-            'VLM 上游响应超过大小限制',
-            'upstream_response_too_large'
-          );
+          endWithError(controller, 'VLM 上游响应超过大小限制', 'upstream_response_too_large');
           return;
         }
         text += decoder.decode(chunk, { stream: true });
@@ -917,12 +917,7 @@ function buildDeferredUpstreamResponse(request, requestBody, config, env) {
     }
   };
 
-  // ESA implements TransformStream but not the ReadableStream constructor.
-  // Do not await this first write: its readable side cannot drain until the
-  // Response has been returned to the runtime.
   const firstWrite = writer.write(encoder.encode('\n'));
-  // The client can cancel before reading the queued byte. Observe that write's
-  // rejection immediately; later success/error paths still await the original.
   void firstWrite.catch(() => {});
 
   const finishWithError = async (message, type, reason) => {
