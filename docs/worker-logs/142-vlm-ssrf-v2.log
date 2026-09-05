@@ -1,0 +1,6 @@
+# Task 142 — VLM SSRF replacement PR
+
+- Parent: code-scanning alert #16 / supersedes PR #139.
+- PR #139 was closed without merge because its two-host allowlist was too narrow for the project's supported OpenAI-compatible VLM integrations.
+- Replacement branch starts from the reviewed #139 security fix so the SSRF boundary remains intact while the allowlist/test expansion is prepared as the next commit.
+- Acceptance: HTTPS only; no credentials/query/hash; no IP literals/private names; explicit built-in domestic/international provider hosts; existing endpoint paths and provider model/profile configuration remain functional; focused ESA tests pass.
