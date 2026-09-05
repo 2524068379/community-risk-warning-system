@@ -124,6 +124,12 @@ function handleDispose(): void {
 }
 
 self.onmessage = (event: MessageEvent) => {
+  // This is a DedicatedWorkerGlobalScope, not a Window message receiver.
+  // A dedicated worker is created by exactly one owner document, and its
+  // message port is not addressable by an unrelated cross-origin window.
+  // Dedicated-worker MessageEvents also normally expose an empty `origin`;
+  // treating that value as an origin allowlist would therefore be a no-op.
+  // Keep the explicit protocol validation below as the meaningful boundary.
   const message = event.data as {
     type?: string
     id?: number
