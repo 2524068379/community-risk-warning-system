@@ -1,0 +1,68 @@
+name: Apply VLM SSRF allowlist
+
+on:
+  pull_request:
+    types: [opened]
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref == 'fix/ssrf-vlm-allowlist'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
+
+      - name: Apply static VLM upstream allowlist and tests
+        shell: python
+        run: |
+          from pathlib import Path
+
+          index = Path('esa/index.js')
+          text = index.read_text()
+          marker = "export const DEFAULT_QWEN_VLM_API_MODEL = 'qwen3-vl-plus';\n"
+          allowlist = """\nconst ALLOWED_VLM_UPSTREAM_HOSTS = [\n  'dashscope.aliyuncs.com',\n  'dashscope-intl.aliyuncs.com',\n  'open.bigmodel.cn',\n  'api.deepseek.com',\n  'ark.cn-beijing.volces.com',\n  'qianfan.baidubce.com',\n  'api.hunyuan.cloud.tencent.com',\n  'api.siliconflow.cn',\n  'api-inference.modelscope.cn',\n  'api.minimax.chat',\n  'api.moonshot.cn',\n  'api.stepfun.com',\n  'api.openai.com',\n  'openrouter.ai',\n  'api.groq.com',\n  'api.mistral.ai',\n  'api.together.xyz',\n  'api.fireworks.ai',\n  'api.cerebras.ai',\n  'api.deepinfra.com',\n  'api.x.ai'\n];\n"""
+          if 'const ALLOWED_VLM_UPSTREAM_HOSTS' not in text:
+              text = text.replace(marker, marker + allowlist, 1)
+
+          old = """    const isPrivateName = hostname === 'localhost' ||\n      PRIVATE_HOST_SUFFIXES.some((suffix) => hostname.endsWith(suffix));\n\n    if (\n"""
+          new = """    const isPrivateName = hostname === 'localhost' ||\n      PRIVATE_HOST_SUFFIXES.some((suffix) => hostname.endsWith(suffix));\n    const isAllowedHost = ALLOWED_VLM_UPSTREAM_HOSTS.includes(hostname);\n\n    if (\n"""
+          if old not in text:
+              raise SystemExit('index.js security block not found')
+          text = text.replace(old, new, 1)
+          old = """      !hostname.includes('.') ||\n      isIpLiteral ||\n      isPrivateName\n"""
+          new = """      !hostname.includes('.') ||\n      isIpLiteral ||\n      isPrivateName ||\n      !isAllowedHost\n"""
+          if old not in text:
+              raise SystemExit('index.js validation condition not found')
+          text = text.replace(old, new, 1)
+          index.write_text(text)
+
+          test = Path('esa/index.test.js')
+          text = test.read_text()
+          text = text.replace('https://api.vendor.example', 'https://openrouter.ai', 3)
+          # Keep a deliberately unlisted public hostname as the negative SSRF case.
+          text = text.replace("'https://httpbin.org/v1'", "'https://api.vendor.example/v1'")
+          needle = """  it.each([\n    'http://api.example.com/v1',\n"""
+          replacement = """  it.each([\n    'https://dashscope.aliyuncs.com/compatible-mode/v1',\n    'https://open.bigmodel.cn/api/paas/v4',\n    'https://api.deepseek.com/v1',\n    'https://ark.cn-beijing.volces.com/api/v3',\n    'https://qianfan.baidubce.com/v2',\n    'https://api.hunyuan.cloud.tencent.com/v1',\n    'https://api.siliconflow.cn/v1',\n    'https://api-inference.modelscope.cn/v1',\n    'https://api.minimax.chat/v1',\n    'https://api.moonshot.cn/v1',\n    'https://api.stepfun.com/v1',\n    'https://api.openai.com/v1',\n    'https://openrouter.ai/api/v1',\n    'https://api.groq.com/openai/v1',\n    'https://api.mistral.ai/v1',\n    'https://api.together.xyz/v1',\n    'https://api.fireworks.ai/inference/v1',\n    'https://api.cerebras.ai/v1',\n    'https://api.deepinfra.com/v1/openai',\n    'https://api.x.ai/v1',\n  ])('accepts a built-in common VLM upstream hostname: %s', (url) => {\n    expect(resolveAllowedQwenBaseUrl(url)).toBe(url);\n  });\n\n  it.each([\n    'http://api.example.com/v1',\n"""
+          if needle not in text:
+              raise SystemExit('test URL validation block not found')
+          text = text.replace(needle, replacement, 1)
+          text = text.replace("'https://api.example.com/v1?target=internal'", "'https://api.vendor.example/v1?target=internal'", 1)
+          test.write_text(text)
+      - name: Verify tests
+        run: npm test -- --run esa/index.test.js
+      - name: Commit and remove one-time workflow
+        shell: bash
+        run: |
+          rm -f .github/workflows/_apply-vlm-allowlist.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add esa/index.js esa/index.test.js .github/workflows/_apply-vlm-allowlist.yml
+          git diff --cached --quiet && exit 0
+          git commit -m 'fix(security): expand VLM upstream allowlist'
+          git push origin HEAD:${{ github.event.pull_request.head.ref }}
